@@ -2,8 +2,8 @@ from conan import ConanFile
 from conan.tools.cmake import CMakeToolchain, CMake, cmake_layout, CMakeDeps
 from os import environ
 
-class GigamonkeyConan (ConanFile):
-    name = "Cosmos Wallet"
+class CosmosConan (ConanFile):
+    name = "cosmos_lib"
     version = "v0.0.1"
     license = "Open BSV"
     author = "Daniel Krawisz"
@@ -13,7 +13,7 @@ class GigamonkeyConan (ConanFile):
     settings = "os", "compiler", "build_type", "arch"
     options = {"shared": [True, False], "fPIC": [True, False]}
     default_options = {"shared": False, "fPIC": True}
-    exports_sources = "CMakeLists.txt", "include/*", "source/*", "test/*"
+    exports_sources = "CMakeLists.txt", "Cosmos.cpp", "include/*", "source/*", "test/*"
     requires = [
         "boost/1.80.0",
         "openssl/1.1.1t",
@@ -63,5 +63,5 @@ class GigamonkeyConan (ConanFile):
 
     def package_info (self):
 #        self.cpp_info.libdirs = ["lib"]  # Default value is 'lib'
-        self.cpp_info.libs = ["Cosmos Wallet"]
+        self.cpp_info.libs = ["cosmos_lib"]
 

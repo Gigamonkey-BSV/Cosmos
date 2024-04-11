@@ -4,8 +4,7 @@
 #include <data/tools.hpp>
 #include <data/math.hpp>
 #include <data/numbers.hpp>
-#include <gigamonkey/timechain.hpp>
-#include <gigamonkey/wif.hpp>
+#include <Gigamonkey.hpp>
 
 namespace Cosmos {
     using namespace data;

@@ -24,6 +24,7 @@ namespace Cosmos {
         Cosmos::keychain *keys ();
         Cosmos::pubkeychain *pubkeys ();
         Cosmos::txdb *txdb ();
+        SPV::database *spvdb ();
         Cosmos::account *account ();
         Cosmos::price_data *price_data ();
 
@@ -79,6 +80,7 @@ namespace Cosmos {
         error () : Code {0}, Message {} {}
         error (int code) : Code {code}, Message {} {}
         error (int code, const string &err): Code {code}, Message {err} {}
+        error (const string &err): Code {1}, Message {err} {}
     };
 
     maybe<std::string> inline &context::wallet_name () {

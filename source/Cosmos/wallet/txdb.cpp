@@ -6,129 +6,107 @@
 
 namespace Cosmos {
 
-    std::string inline write_header (const byte_array<80> &h) {
-        return encoding::hex::write (h);
-    }
-
-    byte_array<80> inline read_header (const string &j) {
-        if (j.size () != 160) throw exception {} << "invalid header size for " << j;
-        byte_array<80> p;
-        boost::algorithm::unhex (j.begin (), j.end (), p.begin ());
-        return p;
-    }
-
-    processed::operator JSON () const {
+    JSON write (const ptr<SPV::database::memory::entry> &e) {
         JSON::object_t o;
-        o["tx"] = encoding::hex::write (Transaction);
-        if (Proof != nullptr) {
-            o["block_hash"] = write (Proof->BlockHash);
-            JSON::array_t a;
-            for (const digest256 &d : Proof->Path.Digests) a.push_back (write (d));
-            o["path"] = a;
-            o["index"] = Proof->Path.Index;
+        o["height"] = write (e->Header.Key);
+        o["header"] = write (e->Header.Value);
+        o["tree"] = e->dual_tree ().serialize ();
+        return o;
+    }
+
+    ptr<SPV::database::memory::entry> read_db_entry (const JSON &j) {
+        return std::make_shared<SPV::database::memory::entry> (
+            read_N (std::string (j["height"])),
+            read_header (std::string (j["header"])),
+            Merkle::dual::deserialize (std::string (j["tree"])).Paths);
+    }
+
+    local_txdb::operator JSON () const {
+        JSON::object_t o;
+
+        JSON::object_t height;
+        for (const auto &[key, value] : this->ByHeight) height[write (key)] = write (value);
+
+        JSON::object_t txs;
+        for (const auto &[key, value] : this->Transactions) txs[write (key)] = encoding::hex::write (value->write ());
+
+        JSON::object_t addresses;
+        for (const auto &[key, value] : this->AddressIndex) {
+            JSON::array_t outpoints;
+            for (const auto &out : value) outpoints.push_back (write (out));
+            addresses[std::string (key)] = outpoints;
         }
+
+        JSON::object_t scripts;
+        for (const auto &[key, value] : this->ScriptIndex) {
+            JSON::array_t outpoints;
+            for (const auto &out : value) outpoints.push_back (write (out));
+            scripts[write (key)] = outpoints;
+        }
+
+        JSON::object_t redeems;
+        for (const auto &[key, value] : this->RedeemIndex) redeems[write (key)] = write (value);
+
+        o["height"] = height;
+        o["transactions"] = txs;
+        o["addresses"] = addresses;
+        o["scripts"] = scripts;
+        o["redeems"] = redeems;
 
         return o;
     }
 
-    processed::processed (const JSON &j) {
-        Transaction = *encoding::hex::read (std::string (j["tx"]));
-        if (j.contains ("index")) {
-            Merkle::path path;
-            digest256 hash;
-            path.Index = uint32 (j["index"]);
-            for (const JSON &a : j["path"]) path.Digests <<= read_txid (std::string (a));
-            hash = read_txid (std::string (j["block_hash"]));
-            Proof = new merkle_proof {path, hash};
-        }
-    }
+    local_txdb::local_txdb (const JSON &j) {
 
-    local_txdb::local_txdb (const JSON &j): local_txdb {} {
-        if (j == JSON (nullptr)) return;
+        for (const auto &[key, value] : j["by_height"].items ()) {
+            ptr<SPV::database::memory::entry> e = read_db_entry (value);
+            this->ByHeight[read_N (key)] = e;
+            this->ByHash[e->Header.Value.hash ()] = e;
+            this->ByRoot[e->Header.Value.MerkleRoot] = e;
+            for (const auto &m : e->Paths) this->ByTXID[m.Key] = e;
+        }
+
+        N last_height = 0;
+        ptr<SPV::database::memory::entry> last_entry {};
+        for (const auto &[key, value] : this->ByHeight) {
+            if (last_height + 1 == key) value->Last = last_entry;
+            last_height = key;
+            last_entry = value;
+        }
 
         for (const auto &[key, value] : j["transactions"].items ())
-            Transactions[read_txid (key)] = processed (value);
-
-        for (const auto &[key, value] : j["headers"].items ())
-            Headers[read_txid (key)] = read_header (value);
-
-        for (const auto &[key, value] : j["redemptions"].items ())
-            RedeemIndex[read_outpoint (std::string (key))] = inpoint {read_outpoint (std::string (value))};
-
-        for (const auto &[key, value] : j["scripts"].items ()) {
-            list <Bitcoin::outpoint> op;
-            for (const JSON &j : value) op = append (op, read_outpoint (std::string (j)));
-            ScriptIndex[read_txid (key)] = op;
-        }
+            this->Transactions[read_txid (key)] =
+                std::make_shared<const Bitcoin::transaction> (*encoding::hex::read (std::string (value)));
 
         for (const auto &[key, value] : j["addresses"].items ()) {
-            list <Bitcoin::outpoint> op;
-            for (const JSON &j : value) op = append (op, read_outpoint (std::string (j)));
-            AddressIndex[Bitcoin::address (std::string (key))] = op;
-        }
-    }
-
-    local_txdb::operator JSON () const {
-        JSON::object_t txs {};
-        for (const auto &[key, value] : Transactions)
-            txs [write (key)] = JSON (value);
-
-        JSON::object_t headers {};
-        for (const auto &[key, value] : Headers)
-            headers [write (key)] = write_header (value);
-
-        JSON::object_t redemptions {};
-        for (const auto &[key, value] : RedeemIndex)
-            redemptions [write (key)] = write (value);
-
-        JSON::object_t scripts {};
-        for (const auto &[key, value] : ScriptIndex) {
-            JSON::array_t vals;
-            for (const Bitcoin::outpoint &b : value) vals.push_back (write (b));
-            scripts [write (key)] = vals;
+            list<Bitcoin::outpoint> outpoints;
+            for (const auto &k : value) outpoints <<= read_outpoint (std::string (k));
+            this->AddressIndex[Bitcoin::address (std::string (key))] = outpoints;
         }
 
-        JSON::object_t addresses {};
-        for (const auto &[key, value] : AddressIndex) {
-            JSON::array_t vals;
-            for (const Bitcoin::outpoint &b : value) vals.push_back (write (b));
-            addresses [key] = vals;
+        for (const auto &[key, value] : j["scripts"].items ()) {
+            list<Bitcoin::outpoint> outpoints;
+            for (const auto &k : value) outpoints <<= read_outpoint (std::string (k));
+            this->ScriptIndex[read_txid (key)] = outpoints;
         }
 
-        return JSON::object_t {
-            {"transactions", txs},
-            {"headers", headers},
-            {"redemptions", redemptions},
-            {"scripts", scripts},
-            {"addresses", addresses}};
+        for (const auto &[key, value] : j["redeems"].items ())
+            this->RedeemIndex[read_outpoint (key)] = inpoint {read_outpoint (value)};
+
     }
 
-    ptr<vertex> local_txdb::operator [] (const Bitcoin::txid &id) {
-        auto t = Transactions.find (id);
-        if (t == Transactions.end ()) throw exception {} << "cannot retrieve tx " << id;
-        auto h = Headers.find (t->second.Proof->BlockHash);
-        if (h == Headers.end ()) throw exception {} << "cannot retrieve tx " << id;
-        return ptr<vertex> {new vertex {t->second, h->second}};
-    }
+    bool local_txdb::import_transaction (const Bitcoin::transaction &tx, const Merkle::path &p, const Bitcoin::header &h) {
 
-    bool processed::verify (const Bitcoin::txid &id, const byte_array<80> &h) const {
-        return this->id () == id && Bitcoin::header::valid (h) &&
-            Merkle::proof {Merkle::branch {id, Proof->Path}, Bitcoin::header::merkle_root (h)}.valid ();
-    }
+        if (!SPV::proof::valid (bytes (tx), p, h)) return false;
 
-    bool local_txdb::import_transaction (const processed &p, const byte_array<80> &h) {
+        auto txid = tx.id ();
+        auto hid = h.hash ();
 
-        if (!vertex {p, h}.valid ()) return false;
+        if (!ByHash.contains (hid)) return false;
 
-        auto txid = p.id ();
-        auto hid = Bitcoin::header::hash (h);
-
-        if (!Headers.contains (hid)) Headers[hid] = h;
         if (!Transactions.contains (txid)) {
 
-            Transactions[txid] = p;
-
-            Bitcoin::transaction tx {p.Transaction};
+            Transactions[txid] = ptr<const Bitcoin::transaction> {new Bitcoin::transaction {tx}};
 
             uint32 i = 0;
             for (const Bitcoin::input in : tx.Inputs) {
@@ -166,7 +144,7 @@ namespace Cosmos {
         auto zz = AddressIndex.find (a);
         if (zz == AddressIndex.end ()) return {};
         ordered_list<ray> n;
-        for (const Bitcoin::outpoint &o : zz->second) n = n.insert (ray {*(*this) [o.Digest], o});
+        for (const Bitcoin::outpoint &o : zz->second) n = n.insert (ray {(*this) [o.Digest], o});
         return n;
     }
 
@@ -174,7 +152,7 @@ namespace Cosmos {
         auto zz = ScriptIndex.find (x);
         if (zz == ScriptIndex.end ()) return {};
         ordered_list<ray> n;
-        for (const Bitcoin::outpoint &o : zz->second) n = n.insert (ray {*(*this) [o.Digest], o});
+        for (const Bitcoin::outpoint &o : zz->second) n = n.insert (ray {(*this) [o.Digest], o});
         return n;
     }
 
@@ -183,8 +161,7 @@ namespace Cosmos {
         if (zz == RedeemIndex.end ()) return {};
         auto p = (*this) [o.Digest];
         if (!p) return {};
-        return ptr<ray> {new ray {*(*this) [zz->second.Digest], zz->second,
-            Bitcoin::output {Bitcoin::transaction::output (p->Processed.Transaction, o.Index)}.Value}};
+        return ptr<ray> {new ray {(*this) [zz->second.Digest], zz->second, p.Transaction->Outputs[o.Index].Value}};
     }
 
     void cached_remote_txdb::import_transaction (const Bitcoin::txid &txid) {
@@ -195,15 +172,15 @@ namespace Cosmos {
         if (!proof.Proof.valid ())
             throw exception {} << "could not get Merkle proof for " << txid;
 
-        processed p {tx, Merkle::path (proof.Proof.Branch), proof.BlockHash};
-
-        auto h = Local.Headers.find (proof.BlockHash);
-        if (h != Local.Headers.end ()) Local.import_transaction (p, h->second);
+        Bitcoin::transaction decoded {tx};
+        auto h = Local.ByHash.find (proof.BlockHash);
+        if (h != Local.ByHash.end ()) Local.import_transaction (decoded, Merkle::path (proof.Proof.Branch), h->second->Header.Value);
         else {
-            byte_array<80> header = Net.WhatsOnChain.block ().get_header (proof.BlockHash);
-            if (!Bitcoin::header::valid (header)) return;
+            auto header = Net.WhatsOnChain.block ().get_header (proof.BlockHash);
+            if (!header.valid ()) return;
 
-            Local.import_transaction (p, header);
+            Local.insert (header.Height, header.Header);
+            Local.import_transaction (decoded, Merkle::path (proof.Proof.Branch), header.Header);
         }
     }
 
@@ -240,9 +217,9 @@ namespace Cosmos {
         return Local.redeeming (o);
     }
 
-    ptr<vertex> cached_remote_txdb::operator [] (const Bitcoin::txid &id) {
+    vertex cached_remote_txdb::operator [] (const Bitcoin::txid &id) {
         auto p = Local [id];
-        if (p != nullptr) return p;
+        if (!p.valid ()) return p;
         import_transaction (id);
         return Local [id];
     }

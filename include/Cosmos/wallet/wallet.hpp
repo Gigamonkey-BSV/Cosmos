@@ -54,14 +54,15 @@ namespace Cosmos {
     };
 
     struct spent {
-        bytes Transaction;
+        Bitcoin::transaction Transaction;
         wallet Wallet;
 
-        spent () : Transaction {}, Wallet {} {}
-        spent (const bytes &tx, const wallet &w) : Transaction {tx}, Wallet {w} {}
         bool valid () const {
             return data::size (Transaction) != 0 && data::valid (Wallet);
         }
+
+        spent () : Transaction {}, Wallet {} {}
+        spent (const Bitcoin::transaction &tx, const wallet &w) : Transaction {tx}, Wallet {w} {}
     };
 
     spent spend (wallet, select, make_change, redeem,

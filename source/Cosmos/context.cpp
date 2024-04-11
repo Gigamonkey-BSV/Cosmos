@@ -52,11 +52,13 @@ namespace Cosmos {
             make_change_parameters {10, 100, 1000000, .4},
             Gigamonkey::redeem_p2pkh_and_p2pk, rand, o);
 
-        std::cout << "broadcasting tx " << Bitcoin::transaction::id (z.Transaction) << std::endl;
+        std::cout << "broadcasting tx " << z.Transaction.id () << std::endl;
 
-        auto err = n.broadcast (z.Transaction);
+        bytes tx_raw = bytes (z.Transaction);
 
-        if (bool (err)) throw exception {3} << "tx broadcast failed;\n\ttx: " << encoding::hex::write (z.Transaction) << "\n\terror: " << err;
+        auto err = n.broadcast (tx_raw);
+
+        if (bool (err)) throw exception {3} << "tx broadcast failed;\n\ttx: " << encoding::hex::write (tx_raw) << "\n\terror: " << err;
 
         w = z.Wallet;
     }
@@ -176,6 +178,25 @@ namespace Cosmos {
             RemoteTXDB = new cached_remote_txdb {*n, *LocalTXDB};
             LocalTXDB = &RemoteTXDB->Local;
             return RemoteTXDB;
+
+        } else return LocalTXDB;
+    }
+
+    SPV::database *context::spvdb () {
+        if (bool (RemoteTXDB)) return &RemoteTXDB->Local;
+
+        if (!bool (LocalTXDB)) {
+            auto txf = txdb_filename ();
+            if (bool (txf)) LocalTXDB = new local_txdb {read_local_txdb_from_file (*txf)};
+            else return nullptr;
+        }
+
+        auto n = net ();
+        if (bool (n)) {
+
+            RemoteTXDB = new cached_remote_txdb {*n, *LocalTXDB};
+            LocalTXDB = &RemoteTXDB->Local;
+            return &RemoteTXDB->Local;
 
         } else return LocalTXDB;
     }

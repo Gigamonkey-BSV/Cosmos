@@ -1,12 +1,12 @@
 #ifndef COSMOS_NETWORK
 #define COSMOS_NETWORK
 
-#include <gigamonkey/mapi/mapi.hpp>
+#include <gigamonkey/pay/MAPI.hpp>
 #include <Cosmos/network/whatsonchain.hpp>
 #include <ctime>
 
 namespace Cosmos {
-    using MAPI = Gigamonkey::BitcoinAssociation::MAPI;
+    namespace MAPI = Gigamonkey::nChain::MAPI;
     using satoshi_per_byte = Gigamonkey::satoshi_per_byte;
 
     struct broadcast_error {
@@ -33,7 +33,7 @@ namespace Cosmos {
         net::asio::io_context IO;
         ptr<net::HTTP::SSL> SSL;
         whatsonchain WhatsOnChain;
-        MAPI Gorilla;
+        MAPI::client Gorilla;
         net::HTTP::client_blocking CoinGecko;
         
         network () : IO {}, SSL {std::make_shared<net::HTTP::SSL> (net::HTTP::SSL::tlsv12_client)},

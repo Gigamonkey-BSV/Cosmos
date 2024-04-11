@@ -65,7 +65,7 @@ namespace Cosmos {
         if (design.fee_rate () < fees) throw exception {3} << "failed to generate tx with sufficient fees";
 
         // redeem transaction.
-        ledger::vertex complete = design.redeem (r);
+        Bitcoin::transaction complete = design.redeem (r);
 
         if (!complete.valid ()) throw exception {3} << "invalid tx generated";
 
@@ -79,7 +79,7 @@ namespace Cosmos {
         }
 
         // return new wallet.
-        return spent {bytes (complete), {new_account, ch.Chain, w.Keys}};
+        return spent {complete, {new_account, ch.Chain, w.Keys}};
     }
 }
 

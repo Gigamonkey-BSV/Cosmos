@@ -295,7 +295,7 @@ void command_split (const arg_parser &p) {
     auto spent = Cosmos::split {int64 (*max_sats_per_output), int64 (*min_sats_per_output), *mean_sats_per_output}
         (Gigamonkey::redeem_p2pkh_and_p2pk, *e.random (), w, *hd_pub_string, outputs, 50. / 1000.);
 
-    e.net ()->broadcast (spent.Transaction);
+    e.net ()->broadcast (bytes (spent.Transaction));
     w = spent.Wallet;
 
 }

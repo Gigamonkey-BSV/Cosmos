@@ -9,69 +9,31 @@ namespace Cosmos {
     namespace Bitcoin = Gigamonkey::Bitcoin;
     namespace Merkle = Gigamonkey::Merkle;
 
-    // a transaction that has been mined into a block by the network.
-    struct processed {
-        bytes Transaction;
-
-        struct merkle_proof {
-            Merkle::path Path;
-            digest256 BlockHash;
-        };
-
-        merkle_proof *Proof;
-
-        processed (): Transaction {}, Proof {nullptr} {}
-        processed (const bytes &tx, const Merkle::path &p, const digest256 h) : Transaction {tx}, Proof {new merkle_proof {p, h}} {}
-
-        explicit operator JSON () const;
-        processed (const JSON &);
-
-        struct unmined : std::exception {
-            static constexpr char Error[] = "Unmined tx";
-            const char *what () const noexcept override {
-                return Error;
-            }
-        };
-
-        bool operator == (const processed &p) const {
-            if (Proof == nullptr) throw unmined {};
-            return Transaction == p.Transaction && Proof->Path == Proof->Path && Proof->BlockHash == Proof->BlockHash;
-        }
-
-        bool verify (const Bitcoin::txid &id, const byte_array<80> &h) const;
-
-        Bitcoin::txid id () const {
-            return Bitcoin::transaction::id (Transaction);
-        }
-
-        bool valid () const {
-            if (Proof == nullptr) throw unmined {};
-            return Transaction.size () != 0 && data::valid (Proof->Path) && Proof->BlockHash.valid ();
-        }
-
-    };
-
     // a transaction with a complete Merkle proof.
-    struct vertex {
-        const processed &Processed;
-        const byte_array<80> &Header;
+    struct vertex : SPV::database::confirmed {
+        using SPV::database::confirmed::confirmed;
+        vertex (SPV::database::confirmed &&c) : SPV::database::confirmed {std::move (c)} {}
 
         std::strong_ordering operator <=> (const vertex &tx) const {
-            auto compare_time = Bitcoin::header::timestamp (Header) <=> Bitcoin::header::timestamp (tx.Header);
-            if (compare_time == std::strong_ordering::equal) return Processed.Proof->Path.Index <=> tx.Processed.Proof->Path.Index;
-            return compare_time;
+            if (!valid ()) throw exception {} << "unconfirmed or invalid tx.";
+            return *this->Confirmation <=> *tx.Confirmation;
         }
 
-        bool operator == (const vertex &e) const {
-            return Processed == e.Processed && Header == e.Header;
+        bool operator == (const vertex &tx) const {
+            if (!valid ()) throw exception {} << "unconfirmed or invalid tx.";
+            return *this->Transaction == *tx.Transaction && *this->Confirmation == *tx.Confirmation;
         }
 
         bool valid () const {
-            return Processed.verify (Processed.id (), Header);
+            return this->Transaction != nullptr && bool (this->Confirmation);
+        }
+
+        explicit operator bool () {
+            return valid ();
         }
 
         Bitcoin::timestamp when () const {
-            return Bitcoin::header::timestamp (Header);
+            return this->Confirmation->Header.Timestamp;
         }
     };
 
@@ -82,27 +44,34 @@ namespace Cosmos {
 
     // a tx with a complete merkle proof and an indication of a specific input or output.
     struct ray {
-
+        // in our out.
+        direction Direction;
+        // output or input depending on which it is.
         bytes Put;
         Bitcoin::timestamp When;
         uint64 Index;
-        direction Direction;
         Bitcoin::outpoint Point;
         Bitcoin::satoshi Value;
 
         ray (Bitcoin::timestamp w, uint32 i, const Bitcoin::outpoint &op, const Bitcoin::output &o) :
-            Put {bytes (o)}, When {w}, Index {i}, Direction {direction::out}, Point {op}, Value {o.Value} {}
+            Direction {direction::out}, Put {bytes (o)}, When {w}, Index {i}, Point {op}, Value {o.Value} {}
 
         ray (Bitcoin::timestamp w, uint32 i, const inpoint &ip, const Bitcoin::input &in, const Bitcoin::satoshi &v) :
-            Put {bytes (in)}, When {w}, Index {i}, Direction {direction::in}, Point {ip}, Value {v} {}
+            Direction {direction::in}, Put {bytes (in)}, When {w}, Index {i}, Point {ip}, Value {v} {}
 
         ray (const vertex &t, const Bitcoin::outpoint &op):
-            Put {Bitcoin::transaction::output (t.Processed.Transaction, op.Index)}, When {t.when ()}, Index {t.Processed.Proof->Path.Index},
-            Direction {direction::out}, Point {op}, Value {Bitcoin::output::value (Put)} {}
+            Direction {direction::out},
+            Put {bytes (t.Transaction->Outputs[op.Index])},
+            When {t.when ()},
+            Index {t.Confirmation->Path.Index},
+            Point {op}, Value {Bitcoin::output::value (Put)} {}
 
         ray (const vertex &t, const inpoint &ip, const Bitcoin::satoshi &v):
-            Put {Bitcoin::transaction::input (t.Processed.Transaction, ip.Index)}, When {t.when ()}, Index {t.Processed.Proof->Path.Index},
-            Direction {direction::in}, Point {ip}, Value {v} {}
+            Direction {direction::in},
+            Put {bytes (t.Transaction->Inputs[ip.Index])},
+            When {t.when ()},
+            Index {t.Confirmation->Path.Index},
+            Point {ip}, Value {v} {}
 
         std::strong_ordering operator <=> (const ray &e) const {
             auto compare_time = When <=> e.When;
@@ -122,57 +91,57 @@ namespace Cosmos {
 
     // a database of transactions.
     struct txdb {
-        virtual ptr<vertex> operator [] (const Bitcoin::txid &) = 0;
+
+        virtual vertex operator [] (const Bitcoin::txid &id) = 0;
+        virtual ordered_list<ray> by_address (const Bitcoin::address &) = 0;
+        virtual ordered_list<ray> by_script_hash (const digest256 &) = 0;
+        virtual ptr<ray> redeeming (const Bitcoin::outpoint &) = 0;
 
         Bitcoin::output output (const Bitcoin::outpoint &p) {
-            auto tx = operator [] (p.Digest);
-            if (tx == nullptr) return {};
-            return Bitcoin::output {Bitcoin::transaction::output (tx->Processed.Transaction, p.Index)};
+            vertex tx = (*this)[p.Digest];
+            if (!tx.valid ()) return {};
+            return tx.Transaction->Outputs[p.Index];
         }
 
         Bitcoin::satoshi value (const Bitcoin::outpoint &p) {
             return output (p).Value;
         }
 
-        virtual ordered_list<ray> by_address (const Bitcoin::address &) = 0;
-        virtual ordered_list<ray> by_script_hash (const digest256 &) = 0;
-        virtual ptr<ray> redeeming (const Bitcoin::outpoint &) = 0;
-
         virtual ~txdb () {}
 
     };
 
-    struct local_txdb final : txdb {
-        std::map<Bitcoin::txid, processed> Transactions;
-        std::map<Bitcoin::txid, byte_array<80>> Headers;
+    struct local_txdb final : SPV::database::memory, txdb {
 
         std::map<Bitcoin::address, list<Bitcoin::outpoint>> AddressIndex;
         std::map<digest256, list<Bitcoin::outpoint>> ScriptIndex;
         std::map<Bitcoin::outpoint, inpoint> RedeemIndex;
 
-        bool import_transaction (const processed &p, const byte_array<80> &h);
+        bool import_transaction (const Bitcoin::transaction &, const Merkle::path &, const Bitcoin::header &h);
 
-        local_txdb (): txdb {}, Transactions {}, Headers {} {}
+        vertex operator [] (const Bitcoin::txid &id) final override {
+            return vertex {this->tx (id)};
+        }
+
+        ordered_list<ray> by_address (const Bitcoin::address &) final override;
+        ordered_list<ray> by_script_hash (const digest256 &) final override;
+        ptr<ray> redeeming (const Bitcoin::outpoint &) final override;
+
+        local_txdb (): SPV::database::memory {}, txdb {}, AddressIndex {}, ScriptIndex {}, RedeemIndex {} {}
         explicit local_txdb (const JSON &);
         explicit operator JSON () const;
-        ptr<vertex> operator [] (const Bitcoin::txid &) override;
-
-        ordered_list<ray> by_address (const Bitcoin::address &) override;
-        ordered_list<ray> by_script_hash (const digest256 &) override;
-        ptr<ray> redeeming (const Bitcoin::outpoint &) override;
     };
 
     struct cached_remote_txdb final : txdb {
         network &Net;
         local_txdb Local;
 
-        cached_remote_txdb (network &n, local_txdb &x): Net {n}, Local {x} {}
+        cached_remote_txdb (network &n, local_txdb &x): txdb {}, Net {n}, Local {x} {}
 
-        ptr<vertex> operator [] (const Bitcoin::txid &) override;
-
-        ordered_list<ray> by_address (const Bitcoin::address &) override;
-        ordered_list<ray> by_script_hash (const digest256 &) override;
-        ptr<ray> redeeming (const Bitcoin::outpoint &) override;
+        vertex operator [] (const Bitcoin::txid &id) final override;
+        ordered_list<ray> by_address (const Bitcoin::address &) final override;
+        ordered_list<ray> by_script_hash (const digest256 &) final override;
+        ptr<ray> redeeming (const Bitcoin::outpoint &) final override;
 
         void import_transaction (const Bitcoin::txid &);
     };

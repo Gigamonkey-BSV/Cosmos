@@ -4,36 +4,13 @@
 
 namespace Cosmos {
 
-    std::string write (const Bitcoin::txid &txid) {
-        std::stringstream txid_stream;
-        txid_stream << txid;
-        string txid_string = txid_stream.str ();
-        if (txid_string.size () < 73) throw string {"warning: txid string was "} + txid_string;
-        return txid_string.substr (7, 66);
-    }
-
-    std::string write (const Bitcoin::outpoint &o) {
-        std::stringstream ss;
-        ss << write (o.Digest) << ":" << o.Index;
-        return ss.str ();
-    }
-
-    Bitcoin::txid read_txid (const string &t) {
-        return Bitcoin::txid {t};
-    }
-
     Bitcoin::outpoint read_outpoint (const string &x) {
         list<string> z = data::split (x, ":");
         if (z.size () != 2) throw exception {} << "invalid outpoint format: " << x;
         Bitcoin::outpoint o;
         o.Digest = read_txid (z[0]);
-        if (!o.Digest.valid ()) throw exception {} << "invalid outpoint format: " << x;
         o.Index = strtoul (z[1].c_str (), nullptr, 10);
         return o;
-    }
-
-    Bitcoin::output read_output (const JSON &j) {
-        return Bitcoin::output {int64 (j["value"]), *encoding::hex::read (std::string (j["script"]))};
     }
 
     JSON write (const Bitcoin::output &j) {
@@ -41,6 +18,17 @@ namespace Cosmos {
         op["value"] = int64 (j.Value);
         op["script"] = encoding::hex::write (j.Script);
         return op;
+    }
+
+    std::string write (const Bitcoin::header &h) {
+        return encoding::hex::write (h.write ());
+    }
+
+    Bitcoin::header read_header (const string &j) {
+        if (j.size () != 160) throw exception {} << "invalid header size for " << j;
+        byte_array<80> p;
+        boost::algorithm::unhex (j.begin (), j.end (), p.begin ());
+        return Bitcoin::header (p);
     }
 
     void write_to_file (const JSON &j, const std::string &filename) {

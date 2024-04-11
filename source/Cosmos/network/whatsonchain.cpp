@@ -238,7 +238,7 @@ namespace Cosmos {
 
     }
 
-    byte_array<80> whatsonchain::blocks::get_header (const digest256 &hash) {
+    whatsonchain::header whatsonchain::blocks::get_header (const digest256 &hash) {
 
         string call = string {"/v1/bsv/main/block/"} + write (hash) + "/header";
 
@@ -251,18 +251,18 @@ namespace Cosmos {
         if (response.Status != net::HTTP::status::ok)
             throw net::HTTP::exception {request, response, "response status is not ok"};
 
-        JSON header = JSON::parse (response.Body);
+        JSON h = JSON::parse (response.Body);
 
-        std::string bits = std::string (header["bits"]);
+        std::string bits = std::string (h["bits"]);
 
         uint32_big j;
         boost::algorithm::unhex (bits.begin (), bits.end (), j.begin ());
         Bitcoin::target t {uint32_little {j}};
 
-        return Bitcoin::header {
-            int32 (header["version"]), read_txid (header["previousblockhash"]),
-            read_txid (header["merkleroot"]), Bitcoin::timestamp {uint32 (header["time"])},
-            t, uint32 (header["nonce"])}.write ();
+        return header {N {uint32 (h["height"])}, Bitcoin::header {
+            int32 (h["version"]), read_txid (h["previousblockhash"]),
+            read_txid (h["merkleroot"]), Bitcoin::timestamp {uint32 (h["time"])},
+            t, uint32 (h["nonce"])}};
 
     }
 }

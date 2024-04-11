@@ -86,8 +86,16 @@ namespace Cosmos {
 
         scripts script ();
 
+        struct header {
+            N Height;
+            Bitcoin::header Header;
+            header ();
+            header (const N &n, const Bitcoin::header &h);
+            bool valid () const;
+        };
+
         struct blocks {
-            byte_array<80> get_header (const digest256 &);
+            header get_header (const digest256 &);
 
             whatsonchain &API;
         };
@@ -114,6 +122,14 @@ namespace Cosmos {
 
     bool inline whatsonchain::UTXO::valid () const {
         return Value != 0;
+    }
+
+    inline whatsonchain::header::header () : Height {0}, Header {} {}
+
+    inline whatsonchain::header::header (const N &n, const Bitcoin::header &h): Height {n}, Header {h} {}
+
+    bool inline whatsonchain::header::valid () const {
+        return Header.valid ();
     }
 }
 
