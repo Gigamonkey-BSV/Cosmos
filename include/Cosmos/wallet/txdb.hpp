@@ -92,7 +92,7 @@ namespace Cosmos {
     // a database of transactions.
     struct txdb {
 
-        virtual vertex operator [] (const Bitcoin::txid &id) = 0;
+        virtual vertex operator [] (const Bitcoin::TXID &id) = 0;
         virtual ordered_list<ray> by_address (const Bitcoin::address &) = 0;
         virtual ordered_list<ray> by_script_hash (const digest256 &) = 0;
         virtual ptr<ray> redeeming (const Bitcoin::outpoint &) = 0;
@@ -119,7 +119,7 @@ namespace Cosmos {
 
         bool import_transaction (const Bitcoin::transaction &, const Merkle::path &, const Bitcoin::header &h);
 
-        vertex operator [] (const Bitcoin::txid &id) final override {
+        vertex operator [] (const Bitcoin::TXID &id) final override {
             return vertex {this->tx (id)};
         }
 
@@ -138,12 +138,12 @@ namespace Cosmos {
 
         cached_remote_txdb (network &n, local_txdb &x): txdb {}, Net {n}, Local {x} {}
 
-        vertex operator [] (const Bitcoin::txid &id) final override;
+        vertex operator [] (const Bitcoin::TXID &id) final override;
         ordered_list<ray> by_address (const Bitcoin::address &) final override;
         ordered_list<ray> by_script_hash (const digest256 &) final override;
         ptr<ray> redeeming (const Bitcoin::outpoint &) final override;
 
-        void import_transaction (const Bitcoin::txid &);
+        void import_transaction (const Bitcoin::TXID &);
     };
 
     struct price_data {

@@ -10,8 +10,8 @@ namespace Cosmos {
     namespace Bitcoin = Gigamonkey::Bitcoin;
     namespace SPV = Gigamonkey::SPV;
 
-    std::string write (const Bitcoin::txid &);
-    Bitcoin::txid read_txid (const string &);
+    std::string write (const Bitcoin::TXID &);
+    Bitcoin::TXID read_txid (const string &);
     std::string write (const Bitcoin::outpoint &);
     Bitcoin::outpoint read_outpoint (const string &);
     std::string write (const N &);
@@ -34,7 +34,7 @@ namespace Cosmos {
         return N {x};
     }
 
-    std::string inline write (const Bitcoin::txid &txid) {
+    std::string inline write (const Bitcoin::TXID &txid) {
         return encoding::hexidecimal::write (txid);
     }
 
@@ -44,8 +44,8 @@ namespace Cosmos {
         return ss.str ();
     }
 
-    Bitcoin::txid inline read_txid (const string &x) {
-        Bitcoin::txid t {x};
+    Bitcoin::TXID inline read_txid (const string &x) {
+        Bitcoin::TXID t {x};
         if (!t.valid ()) throw exception {} << "invalid txid " << x;
         return t;
     }

@@ -2,14 +2,14 @@
 
 namespace Cosmos {
 
-    std::string inline whatsonchain::write (const Bitcoin::txid &txid) {
+    std::string inline whatsonchain::write (const Bitcoin::TXID &txid) {
         std::stringstream ss;
         ss << txid;
         return ss.str ().substr (9, 64);
     }
 
-    Bitcoin::txid inline whatsonchain::read_txid (const JSON &j) {
-        return Bitcoin::txid {std::string {"0x"} + std::string (j)};
+    Bitcoin::TXID inline whatsonchain::read_txid (const JSON &j) {
+        return Bitcoin::TXID {std::string {"0x"} + std::string (j)};
     }
 
     bool whatsonchain::transactions::broadcast (const bytes &tx) {
@@ -120,7 +120,7 @@ namespace Cosmos {
         return UTXOs;
     }
 
-    list<Bitcoin::txid> whatsonchain::addresses::get_history (const Bitcoin::address& addr) {
+    list<Bitcoin::TXID> whatsonchain::addresses::get_history (const Bitcoin::address& addr) {
 
         std::stringstream call;
         call << "/v1/bsv/main/address/" + addr + "/history";
@@ -134,7 +134,7 @@ namespace Cosmos {
         if (response.Headers[networking::HTTP::header::content_type] != "application/JSON")
             throw networking::HTTP::exception{request, response, "response header content_type does not indicate application/JSON"};
         */
-        list<Bitcoin::txid> txids;
+        list<Bitcoin::TXID> txids;
 
         try {
 
@@ -148,7 +148,7 @@ namespace Cosmos {
         return txids;
     }
 
-    list<Bitcoin::txid> whatsonchain::scripts::get_history (const digest256& script_hash) {
+    list<Bitcoin::TXID> whatsonchain::scripts::get_history (const digest256& script_hash) {
         std::stringstream call;
         call << "/v1/bsv/main/script/" << write (script_hash) << "/history";
 
@@ -161,7 +161,7 @@ namespace Cosmos {
         if (response.Headers[networking::HTTP::header::content_type] != "application/JSON")
             throw networking::HTTP::exception{request, response, "response header content_type does not indicate application/JSON"};
         */
-        list<Bitcoin::txid> txids;
+        list<Bitcoin::TXID> txids;
 
         try {
 
@@ -175,7 +175,7 @@ namespace Cosmos {
         return txids;
     }
 
-    bytes whatsonchain::transactions::get_raw (const Bitcoin::txid &txid) {
+    bytes whatsonchain::transactions::get_raw (const Bitcoin::TXID &txid) {
 
         string call = string {"/v1/bsv/main/tx/"} + write (txid) + string {"/hex"};
 
@@ -193,7 +193,7 @@ namespace Cosmos {
         return *tx;
     }
 
-    JSON whatsonchain::transactions::tx_data (const Bitcoin::txid &txid) {
+    JSON whatsonchain::transactions::tx_data (const Bitcoin::TXID &txid) {
 
         string call = string {"/v1/bsv/main/tx/hash/"} + write (txid);
 
@@ -208,7 +208,7 @@ namespace Cosmos {
         return JSON::parse (response.Body);
     }
 
-    whatsonchain::merkle_proof whatsonchain::transactions::get_merkle_proof (const Bitcoin::txid &txid) {
+    whatsonchain::merkle_proof whatsonchain::transactions::get_merkle_proof (const Bitcoin::TXID &txid) {
         string call = string {"/v1/bsv/main/tx/"} + write (txid) + "/proof";
 
         auto request = API.REST.GET (call);

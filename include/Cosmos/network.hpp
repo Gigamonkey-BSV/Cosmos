@@ -43,7 +43,7 @@ namespace Cosmos {
             SSL->set_verify_mode (net::asio::ssl::verify_peer);
         }
         
-        bytes get_transaction (const Bitcoin::txid &);
+        bytes get_transaction (const Bitcoin::TXID &);
         
         satoshi_per_byte mining_fee ();
         

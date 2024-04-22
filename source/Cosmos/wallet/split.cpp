@@ -86,7 +86,7 @@ namespace Cosmos {
 
         for (const auto &o : split_outputs.Outputs) outputs <<= o.Prevout;
 
-        Bitcoin::transaction completed = redeemable_transaction {1,
+        extended_transaction completed = redeemable_transaction {1,
             for_each ([k = w.Keys] (const entry<Bitcoin::outpoint, redeemable> &e) -> redeemer {
                 return redeemer {
                     list<sigop> {sigop {k.derive (first (e.Value.Derivation))}},
@@ -105,7 +105,7 @@ namespace Cosmos {
         // replace the pubkey sequence we used with the updated one.
         w.Pubkeys.Map = w.Pubkeys.Map.remove (pubkey_name).insert (pubkey_name, pubkey {pub.Pubkey, pub.Derivation, split_outputs.Last});
 
-        Bitcoin::txid id = x.Transaction.id ();
+        Bitcoin::TXID id = x.Transaction.id ();
 
         // update account information.
         x.Wallet.Account = w.Account;

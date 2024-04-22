@@ -35,8 +35,8 @@ namespace Cosmos {
             net::HTTP::client_blocking {ssl, net::HTTP::REST {"https", "api.whatsonchain.com"}, tools::rate_limiter {3, 1}} {}
         whatsonchain (): net::HTTP::client_blocking {net::HTTP::REST {"https", "api.whatsonchain.com"}, tools::rate_limiter {3, 1}} {}
 
-        static std::string write (const Bitcoin::txid &);
-        static Bitcoin::txid read_txid (const JSON &);
+        static std::string write (const Bitcoin::TXID &);
+        static Bitcoin::TXID read_txid (const JSON &);
 
         struct addresses {
             struct balance {
@@ -46,7 +46,7 @@ namespace Cosmos {
 
             balance get_balance (const Bitcoin::address &);
 
-            list<Bitcoin::txid> get_history (const Bitcoin::address &);
+            list<Bitcoin::TXID> get_history (const Bitcoin::address &);
 
             list<UTXO> get_unspent (const Bitcoin::address &);
 
@@ -64,11 +64,11 @@ namespace Cosmos {
 
             bool broadcast (const bytes& tx);
 
-            bytes get_raw (const Bitcoin::txid &);
+            bytes get_raw (const Bitcoin::TXID &);
 
-            JSON tx_data (const Bitcoin::txid &);
+            JSON tx_data (const Bitcoin::TXID &);
 
-            merkle_proof get_merkle_proof (const Bitcoin::txid &);
+            merkle_proof get_merkle_proof (const Bitcoin::TXID &);
 
             whatsonchain &API;
         };
@@ -78,7 +78,7 @@ namespace Cosmos {
         struct scripts {
 
             list<UTXO> get_unspent (const digest256& script_hash);
-            list<Bitcoin::txid> get_history (const digest256& script_hash);
+            list<Bitcoin::TXID> get_history (const digest256& script_hash);
 
             whatsonchain &API;
 

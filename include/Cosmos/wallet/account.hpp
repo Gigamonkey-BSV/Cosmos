@@ -51,7 +51,7 @@ namespace Cosmos {
     struct events {
 
         struct event {
-            Bitcoin::txid TXID;
+            Bitcoin::TXID TXID;
             Bitcoin::timestamp When;
 
             Bitcoin::satoshi Received;

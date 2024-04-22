@@ -38,8 +38,8 @@ namespace Cosmos {
         return broadcast_gorilla || broadcast_pow_co ? broadcast_error::none : broadcast_error::unknown;
     }
 
-    bytes network::get_transaction (const Bitcoin::txid &txid) {
-        static map<Bitcoin::txid, bytes> cache;
+    bytes network::get_transaction (const Bitcoin::TXID &txid) {
+        static map<Bitcoin::TXID, bytes> cache;
 
         auto known = cache.contains (txid);
         if (known) return *known;
@@ -52,10 +52,10 @@ namespace Cosmos {
     }
 
     // transactions by txid
-    map<Bitcoin::txid, bytes> Transaction;
+    map<Bitcoin::TXID, bytes> Transaction;
 
     // script histories by script hash
-    map<digest256, list<Bitcoin::txid>> History;
+    map<digest256, list<Bitcoin::TXID>> History;
 
     satoshi_per_byte network::mining_fee () {
         std::lock_guard<std::mutex> lock (Mutex);

@@ -65,7 +65,7 @@ namespace Cosmos {
         if (design.fee_rate () < fees) throw exception {3} << "failed to generate tx with sufficient fees";
 
         // redeem transaction.
-        Bitcoin::transaction complete = design.redeem (r);
+        extended_transaction complete = design.redeem (r);
 
         if (!complete.valid ()) throw exception {3} << "invalid tx generated";
 

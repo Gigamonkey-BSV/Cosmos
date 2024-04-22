@@ -3,6 +3,9 @@
 
 #include <data/io/exception.hpp>
 #include <data/crypto/NIST_DRBG.hpp>
+
+#include <data/io/wait_for_enter.hpp>
+
 #include <gigamonkey/schema/bip_44.hpp>
 #include <gigamonkey/schema/bip_39.hpp>
 #include <gigamonkey/script/pattern/pay_to_address.hpp>
@@ -404,10 +407,10 @@ void command_restore (const arg_parser &p) {
         // words can be derived from entropy.
         maybe<string> bip_39_entropy_hex;
         p.get ("entropy", bip_39_entropy_hex);
-        maybe<bytes> bip_39_entropy = encoding::hex::read (*bip_39_entropy_hex);
-        if (bool (bip_39_entropy)) {
+        if (bool (bip_39_entropy_hex)) {
+            maybe<bytes> bip_39_entropy = encoding::hex::read (*bip_39_entropy_hex);
+            if (! bool (bip_39_entropy)) throw exception {} << "could not read entropy";
             bip_39_words = HD::BIP_39::generate (*bip_39_entropy);
-            std::cout << "generated words " << *bip_39_words << std::endl;
         } else {
             p.get ("words", bip_39_words);
             if (!bool (bip_39_words)) throw exception {} << "need to supply --words";
@@ -418,13 +421,13 @@ void command_restore (const arg_parser &p) {
         // there may be a password.
         maybe<string> bip_39_password;
         p.get ("password", bip_39_password);
+
         if (!bool (bip_39_password)) {
             if (wallet_type == restore_wallet_type::CentBee)
                 std::cout << "NOTE: password is required with CentBee but was not provided." << std::endl;
             bip_39_password = "";
-        } else if (wallet_type != restore_wallet_type::CentBee && wallet_type != restore_wallet_type::unset) {
-            std::cout << "NOTE: password is required with CentBee but was not provided." << std::endl;
-        }
+        } else if (wallet_type != restore_wallet_type::CentBee && wallet_type != restore_wallet_type::unset)
+            std::cout << "NOTE: password was provided but is not used in the specified wallet type" << std::endl;
 
         auto seed = HD::BIP_39::read (*bip_39_words, *bip_39_password);
 
@@ -441,11 +444,17 @@ void command_restore (const arg_parser &p) {
     p.get ("key_type", key_type_string);
 
     enum class master_key_type {
+        // a single sequnce of keys
         HD_sequence,
+
+        // In this case, there will be receive and change derivations.
         BIP44_account,
 
         // in this case, we also need a coin type or wallet type.
-        BIP44_master
+        BIP44_master,
+
+        // CentBee uses a non-standard derivation path.
+        CentBee_master
     } key_type = bool (key_type_string) ?
         [] (const std::string &in) -> master_key_type {
             std::string key_type_sanitized = sanitize (in);
@@ -455,14 +464,122 @@ void command_restore (const arg_parser &p) {
             if (key_type_sanitized == "bip44master") return master_key_type::BIP44_master;
             throw exception {} << "could not read key type";
         } (*key_type_string) : restored_from_words && has_secret ?
-            master_key_type::BIP44_master :
+            (wallet_type == restore_wallet_type::CentBee ? master_key_type::CentBee_master : master_key_type::BIP44_master ):
             master_key_type::HD_sequence;
 
-    std::cout << "read key " << pk
-        << "\n\tfirst address: " << pk.address ().encode ()
-        << "\nassuming this is a bip 44 account"
-        << "\n\tfirst receive address: " << pk.derive (list<uint32> {0, 0}).address ().encode ()
-        << "\n\tfirst change address: " << pk.derive (list<uint32> {1, 0}).address ().encode () << std::endl;
+    std::cout << "read key " << pk << std::endl;
+
+    // coin type is a parameter of the standard BIP 44 derivation path that we
+    // may need to determine to recover coins.
+    maybe<uint32> coin_type;
+
+    // the list of derivations we will look at to restore the wallet.
+    list<list<uint32>> derivations;
+
+    if (key_type == master_key_type::HD_sequence) {
+        std::cout << "\tfirst address: " << pk.address ().encode ();
+
+        derivations = list<list<uint32>> {list<uint32> {}};
+    } else if (key_type == master_key_type::BIP44_account) {
+        std::cout
+            << "this is a bip 44 account"
+            << "\n\tfirst receive address: " << pk.derive (list<uint32> {0, 0}).address ().encode ()
+            << "\n\tfirst change address: " << pk.derive (list<uint32> {1, 0}).address ().encode () << std::endl;
+
+        derivations = list<list<uint32>> {list<uint32> {0}, list<uint32> {1}};
+    } else if (key_type == master_key_type::BIP44_master) {
+
+        maybe<uint32> coin_type_option;
+
+        maybe<string> coin_type_string;
+        p.get ("coin_type", coin_type_string);
+
+        if (bool (coin_type_string)) coin_type_option = [] (const string &cx) -> uint32 {
+
+            // try to read as a number.
+            if (encoding::decimal::valid (cx)) {
+                uint32 coin_type_number;
+                std::stringstream ss {cx};
+                ss >> coin_type_number;
+                return coin_type_number;
+            }
+
+            string coin_type_sanitized = sanitize (cx);
+            std::cout << "coin type is " << coin_type_sanitized << std::endl;
+            if (coin_type_sanitized == "bitcoin") return HD::BIP_44::coin_type_Bitcoin;
+            if (coin_type_sanitized == "bitcoincash") return HD::BIP_44::coin_type_Bitcoin_Cash;
+            if (coin_type_sanitized == "bitcoinsv") return HD::BIP_44::coin_type_Bitcoin_SV;
+
+            throw exception {} << "could not read coin type";
+        } (*coin_type_string);
+
+        maybe<uint32> coin_type_wallet;
+        if (wallet_type != restore_wallet_type::unset) coin_type_wallet = [] (restore_wallet_type w) -> uint32 {
+            switch (w) {
+                case (restore_wallet_type::RelayX) : return HD::BIP_44::relay_x_coin_type;
+                case (restore_wallet_type::Simply_Cash) : return HD::BIP_44::simply_cash_coin_type;
+                case (restore_wallet_type::Electrum_SV) : return HD::BIP_44::simply_cash_coin_type;
+                case (restore_wallet_type::CentBee) : return HD::BIP_44::centbee_coin_type;
+                default: return HD::BIP_44::coin_type_Bitcoin;
+            }
+        } (wallet_type);
+
+        // coin type as derived in these different ways must match.
+        if (bool (coin_type_option)) {
+            if (bool (coin_type_wallet) && *coin_type_option != *coin_type_wallet)
+                std::cout << "NOTE: coin type as determined from wallet type does not match that provided by user." <<
+                    "Using user provided coin type." << std::endl;
+            coin_type = coin_type_option;
+        } else if (bool (coin_type_wallet)) coin_type = coin_type_wallet;
+
+        if (coin_type) {
+
+            derivations = key_type == master_key_type::CentBee_master ?
+                list<list<uint32>> {
+                    list<uint32> {HD::BIP_44::purpose, 0, 0, 0},
+                    list<uint32> {HD::BIP_44::purpose, 0, 0, 1}}:
+                list<list<uint32>> {
+                    list<uint32> {HD::BIP_44::purpose, *coin_type, HD::BIP_32::harden (0), 0},
+                    list<uint32> {HD::BIP_44::purpose, *coin_type, HD::BIP_32::harden (0), 1}};
+
+            std::cout
+                << "\nthis is a bip 44 master, coin type " << *coin_type
+                << "\n\tfirst receive address: "
+                << sk.derive (derivations[0]).to_public ().address ().encode ()
+                << "\n\tfirst change address: "
+                << sk.derive (derivations[1]).to_public ().address ().encode ();
+        } else {
+
+            std::cout
+                << "coin type could not be determined."
+                << "\nassuming this is a bip 44 master, coin type Bitcoin "
+                << "\n\tfirst receive address: "
+                << sk.derive (HD::BIP_44::derivation_path (0, false, 0, HD::BIP_44::coin_type_Bitcoin)).to_public ().address ().encode ()
+                << "\n\tfirst change address: "
+                << sk.derive (HD::BIP_44::derivation_path (0, true, 0, HD::BIP_44::coin_type_Bitcoin)).to_public ().address ().encode ()
+                << "\nassuming this is a bip 44 master, coin type Bitcoin Cash"
+                << "\n\tfirst receive address: "
+                << sk.derive (HD::BIP_44::derivation_path (0, false, 0, HD::BIP_44::coin_type_Bitcoin_Cash)).to_public ().address ().encode ()
+                << "\n\tfirst change address: "
+                << sk.derive (HD::BIP_44::derivation_path (0, true, 0, HD::BIP_44::coin_type_Bitcoin_Cash)).to_public ().address ().encode ()
+                << "\nassuming this is a bip 44 master, coin type Bitcoin SV"
+                << "\n\tfirst receive address: "
+                << sk.derive (HD::BIP_44::derivation_path (0, false, 0, HD::BIP_44::coin_type_Bitcoin_SV)).to_public ().address ().encode ()
+                << "\n\tfirst change address: "
+                << sk.derive (HD::BIP_44::derivation_path (0, true, 0, HD::BIP_44::coin_type_Bitcoin_SV)).to_public ().address ().encode ()
+                << std::endl;
+
+            derivations = list<list<uint32>> {
+                list<uint32> {HD::BIP_44::purpose, HD::BIP_44::coin_type_Bitcoin, HD::BIP_32::harden (0), 0},
+                list<uint32> {HD::BIP_44::purpose, HD::BIP_44::coin_type_Bitcoin, HD::BIP_32::harden (0), 1},
+                list<uint32> {HD::BIP_44::purpose, HD::BIP_44::coin_type_Bitcoin_Cash, HD::BIP_32::harden (0), 0},
+                list<uint32> {HD::BIP_44::purpose, HD::BIP_44::coin_type_Bitcoin_Cash, HD::BIP_32::harden (0), 1},
+                list<uint32> {HD::BIP_44::purpose, HD::BIP_44::coin_type_Bitcoin_SV, HD::BIP_32::harden (0), 0},
+                list<uint32> {HD::BIP_44::purpose, HD::BIP_44::coin_type_Bitcoin_SV, HD::BIP_32::harden (0), 1}};
+        }
+    }
+
+    wait_for_enter ();
 
     context e {};
 
@@ -496,39 +613,6 @@ void command_restore (const arg_parser &p) {
         receive_derivation = list<uint32> {0};
         change_derivation = list<uint32> {1};
     } else {
-        maybe<uint32> coin_type_option;
-
-        maybe<string> coin_type_string;
-        p.get ("coin_type", coin_type_string);
-
-        if (bool (coin_type_string)) coin_type_option = [] (const string &cx) -> uint32 {
-            string coin_type_sanitized = sanitize (cx);
-            std::cout << "coin type is " << coin_type_sanitized << std::endl;
-            if (coin_type_sanitized == "bitcoin") return HD::BIP_44::coin_type_Bitcoin;
-            if (coin_type_sanitized == "bitcoincash") return HD::BIP_44::coin_type_Bitcoin_Cash;
-            if (coin_type_sanitized == "bitcoinsv") return HD::BIP_44::coin_type_Bitcoin_SV;
-            throw exception {} << "could not read coin type";
-        } (*coin_type_string);
-
-        maybe<uint32> coin_type_wallet;
-        if (wallet_type != restore_wallet_type::unset) coin_type_wallet = [] (restore_wallet_type w) -> uint32 {
-            switch (w) {
-                case (restore_wallet_type::RelayX) : return HD::BIP_44::relay_x_coin_type;
-                case (restore_wallet_type::Simply_Cash) : return HD::BIP_44::simply_cash_coin_type;
-                case (restore_wallet_type::Electrum_SV) : return HD::BIP_44::simply_cash_coin_type;
-                case (restore_wallet_type::CentBee) : return HD::BIP_44::centbee_coin_type;
-                default: return HD::BIP_44::coin_type_Bitcoin;
-            }
-        } (wallet_type);
-
-        maybe<uint32> coin_type;
-        // coin type as derived in these different ways must match.
-        if (bool (coin_type_option)) {
-            if (bool (coin_type_wallet) && *coin_type_option != *coin_type_wallet)
-                std::cout << "NOTE: coin type as determined from wallet type does not match that provided by user." <<
-                    "Using user provided coin type." << std::endl;
-            coin_type = coin_type_option;
-        } else if (bool (coin_type_wallet)) coin_type = coin_type_wallet;
 
         if (coin_type) {
             std::cout
@@ -541,25 +625,6 @@ void command_restore (const arg_parser &p) {
             receive_derivation = list<uint32> {HD::BIP_44::purpose, *coin_type, HD::BIP_32::harden (0), 0};
             change_derivation = list<uint32> {HD::BIP_44::purpose, *coin_type, HD::BIP_32::harden (0), 1};
         } else {
-
-            std::cout
-                << "coin type could not be determined."
-                << "\nassuming this is a bip 44 master, coin type Bitcoin "
-                << "\n\tfirst receive address: "
-                << sk.derive (HD::BIP_44::derivation_path (0, false, 0, HD::BIP_44::coin_type_Bitcoin)).to_public ().address ().encode ()
-                << "\n\tfirst change address: "
-                << sk.derive (HD::BIP_44::derivation_path (0, true, 0, HD::BIP_44::coin_type_Bitcoin)).to_public ().address ().encode ()
-                << "\nassuming this is a bip 44 master, coin type Bitcoin Cash"
-                << "\n\tfirst receive address: "
-                << sk.derive (HD::BIP_44::derivation_path (0, false, 0, HD::BIP_44::coin_type_Bitcoin_Cash)).to_public ().address ().encode ()
-                << "\n\tfirst change address: "
-                << sk.derive (HD::BIP_44::derivation_path (0, true, 0, HD::BIP_44::coin_type_Bitcoin_Cash)).to_public ().address ().encode ()
-                << "\nassuming this is a bip 44 master, coin type Bitcoin SV"
-                << "\n\tfirst receive address: "
-                << sk.derive (HD::BIP_44::derivation_path (0, false, 0, HD::BIP_44::coin_type_Bitcoin_SV)).to_public ().address ().encode ()
-                << "\n\tfirst change address: "
-                << sk.derive (HD::BIP_44::derivation_path (0, true, 0, HD::BIP_44::coin_type_Bitcoin_SV)).to_public ().address ().encode ()
-                << std::endl;
 
             throw exception {} << "Could not determine coin type. Check the addresses above to see if any has some BSV";
         }
@@ -656,7 +721,9 @@ void help (method meth) {
                 "\n\t(--max_look_ahead=)<integer> (= 25)"
                 "\n\t(--key_type=\"HD_sequence\"|\"BIP44_account\"|\"BIP44_master\") (= \"HD_sequence\")"
                 "\n\t(--coin_type=\"Bitcoin\"|\"BitcoinCash\"|\"BitcoinSV\"|<integer>)"
-                "\n\t(--wallet_type=<string>)" << std::endl;
+                "\n\t(--wallet_type=\"RelayX\"|\"ElectrumSV\"|\"SimplyCash\"|\"CentBee\"|<string>)"
+                "\n\t(--words=<string>)"
+                "\n\t(--entropy=<string>)" << std::endl;
         } break;
         case method::SPLIT : {
             std::cout << "arguments for method split not yet available." << std::endl;

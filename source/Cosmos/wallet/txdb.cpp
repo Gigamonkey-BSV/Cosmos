@@ -1,6 +1,7 @@
 #include <Cosmos/wallet/txdb.hpp>
 #include <Cosmos/wallet/write.hpp>
 #include <gigamonkey/script/pattern/pay_to_address.hpp>
+#include <gigamonkey/merkle/BUMP.hpp>
 #include <filesystem>
 #include <fstream>
 
@@ -8,17 +9,14 @@ namespace Cosmos {
 
     JSON write (const ptr<SPV::database::memory::entry> &e) {
         JSON::object_t o;
-        o["height"] = write (e->Header.Key);
         o["header"] = write (e->Header.Value);
-        o["tree"] = e->dual_tree ().serialize ();
+        o["tree"] = JSON (e->BUMP ());
         return o;
     }
 
     ptr<SPV::database::memory::entry> read_db_entry (const JSON &j) {
-        return std::make_shared<SPV::database::memory::entry> (
-            read_N (std::string (j["height"])),
-            read_header (std::string (j["header"])),
-            Merkle::dual::deserialize (std::string (j["tree"])).Paths);
+        Merkle::BUMP bump (j["tree"]);
+        return std::make_shared<SPV::database::memory::entry> (N (bump.BlockHeight), read_header (std::string (j["header"])), bump.paths ());
     }
 
     local_txdb::operator JSON () const {
@@ -164,7 +162,7 @@ namespace Cosmos {
         return ptr<ray> {new ray {(*this) [zz->second.Digest], zz->second, p.Transaction->Outputs[o.Index].Value}};
     }
 
-    void cached_remote_txdb::import_transaction (const Bitcoin::txid &txid) {
+    void cached_remote_txdb::import_transaction (const Bitcoin::TXID &txid) {
         auto tx = Net.get_transaction (txid);
         if (tx.size () == 0) throw exception {} << "transaction " << txid << " does not exist.";
         auto proof = Net.WhatsOnChain.transaction ().get_merkle_proof (txid);
@@ -191,7 +189,7 @@ namespace Cosmos {
         auto ids = Net.WhatsOnChain.address ().get_history (a);
 
         int i = 0;
-        for (const Bitcoin::txid &txid : ids) {
+        for (const Bitcoin::TXID &txid : ids) {
             import_transaction (txid);
             i++;
         }
@@ -205,7 +203,7 @@ namespace Cosmos {
 
         auto ids = Net.WhatsOnChain.script ().get_history (z);
 
-        for (const Bitcoin::txid &txid : ids) import_transaction (txid);
+        for (const Bitcoin::TXID &txid : ids) import_transaction (txid);
 
         return Local.by_script_hash (z);
     }
@@ -217,7 +215,7 @@ namespace Cosmos {
         return Local.redeeming (o);
     }
 
-    vertex cached_remote_txdb::operator [] (const Bitcoin::txid &id) {
+    vertex cached_remote_txdb::operator [] (const Bitcoin::TXID &id) {
         auto p = Local [id];
         if (!p.valid ()) return p;
         import_transaction (id);

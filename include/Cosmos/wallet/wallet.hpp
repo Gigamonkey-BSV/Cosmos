@@ -11,6 +11,7 @@
 namespace Cosmos {
 
     using redeem = Gigamonkey::redeem;
+    using extended_transaction = Gigamonkey::extended::transaction;
 
     struct watch_wallet {
         account Account;
@@ -54,7 +55,7 @@ namespace Cosmos {
     };
 
     struct spent {
-        Bitcoin::transaction Transaction;
+        extended_transaction Transaction;
         wallet Wallet;
 
         bool valid () const {
@@ -62,7 +63,7 @@ namespace Cosmos {
         }
 
         spent () : Transaction {}, Wallet {} {}
-        spent (const Bitcoin::transaction &tx, const wallet &w) : Transaction {tx}, Wallet {w} {}
+        spent (const extended_transaction &tx, const wallet &w) : Transaction {tx}, Wallet {w} {}
     };
 
     spent spend (wallet, select, make_change, redeem,
