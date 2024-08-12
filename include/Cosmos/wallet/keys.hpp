@@ -105,9 +105,9 @@ namespace Cosmos {
         bool operator == (const hd_pubkey_sequence &x) const;
     };
 
-    struct pubkey : std::variant<derived_pubkey, hd_pubkey_sequence> {
+    struct pubkey : either<derived_pubkey, hd_pubkey_sequence> {
         bool valid () const;
-        using std::variant<derived_pubkey, hd_pubkey_sequence>::variant;
+        using either<derived_pubkey, hd_pubkey_sequence>::either;
         pubkey (HD::BIP_32::pubkey s, const derivation &p, uint32 l = 0);
 
         Bitcoin::pubkey derive (HD::BIP_32::path) const;

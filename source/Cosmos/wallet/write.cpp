@@ -5,11 +5,11 @@
 namespace Cosmos {
 
     Bitcoin::outpoint read_outpoint (const string &x) {
-        list<string> z = data::split (x, ":");
+        list<string_view> z = data::split (x, ":");
         if (z.size () != 2) throw exception {} << "invalid outpoint format: " << x;
         Bitcoin::outpoint o;
         o.Digest = read_txid (z[0]);
-        o.Index = strtoul (z[1].c_str (), nullptr, 10);
+        o.Index = strtoul (std::string {z[1]}.c_str (), nullptr, 10);
         return o;
     }
 

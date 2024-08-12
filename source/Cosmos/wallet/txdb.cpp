@@ -95,7 +95,7 @@ namespace Cosmos {
 
     bool local_txdb::import_transaction (const Bitcoin::transaction &tx, const Merkle::path &p, const Bitcoin::header &h) {
 
-        if (!SPV::proof::valid (bytes (tx), p, h)) return false;
+        if (!SPV::proof::valid (tx, p, h)) return false;
 
         auto txid = tx.id ();
         auto hid = h.hash ();
