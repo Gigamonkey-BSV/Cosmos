@@ -4,12 +4,15 @@
 #include <gigamonkey/timechain.hpp>
 #include <data/crypto/random.hpp>
 #include <Cosmos/wallet/account.hpp>
+#include <Cosmos/wallet/keys/sequence.hpp>
 
 namespace Cosmos {
 
     struct change {
         list<redeemable> Change;
-        pubkeychain Chain;
+
+        // last key used (+1)
+        uint32 Last;
 
         list<Bitcoin::output> outputs () const {
             list<Bitcoin::output> o;
@@ -19,7 +22,7 @@ namespace Cosmos {
     };
 
     // construct a set of change outputs.
-    using make_change = data::function<change (const pubkeychain &, Bitcoin::satoshi, satoshi_per_byte fees, data::crypto::random &)>;
+    using make_change = data::function<change (address_sequence, Bitcoin::satoshi, satoshi_per_byte fees, data::crypto::random &)>;
 
     // default make_change function
     struct make_change_parameters {
@@ -38,7 +41,7 @@ namespace Cosmos {
         double ExpectedSplitFraction;
 
         // construct a set of change outputs.
-        change operator () (const pubkeychain &, Bitcoin::satoshi, satoshi_per_byte fees, data::crypto::random &) const;
+        change operator () (address_sequence, Bitcoin::satoshi, satoshi_per_byte fees, data::crypto::random &) const;
     };
 }
 

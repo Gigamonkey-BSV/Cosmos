@@ -3,6 +3,8 @@
 
 #include <Cosmos/wallet/write.hpp>
 #include <Cosmos/wallet/account.hpp>
+#include <Cosmos/wallet/keys/chain.hpp>
+#include <Cosmos/wallet/keys/secret.hpp>
 #include <Cosmos/wallet/select.hpp>
 #include <Cosmos/wallet/change.hpp>
 #include <gigamonkey/redeem.hpp>
@@ -39,7 +41,8 @@ namespace Cosmos {
         keychain Keys;
 
         wallet (): watch_wallet {}, Keys {} {}
-        wallet (const account &acc, const pubkeychain &p, const keychain &k) : watch_wallet {acc, p}, Keys {k} {}
+        wallet (const keychain &k, const account &acc, const pubkeychain &p) :
+            watch_wallet {acc, p}, Keys {k} {}
 
         wallet &operator = (const wallet &w) {
             watch_wallet::operator = (static_cast<const watch_wallet &> (w));

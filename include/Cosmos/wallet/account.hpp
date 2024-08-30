@@ -1,7 +1,7 @@
 #ifndef COSMOS_WALLET_ACCOUNT
 #define COSMOS_WALLET_ACCOUNT
 
-#include <Cosmos/wallet/keys.hpp>
+#include <Cosmos/wallet/keys/sequence.hpp>
 #include <Cosmos/wallet/txdb.hpp>
 
 namespace Cosmos {
@@ -13,6 +13,7 @@ namespace Cosmos {
         redeemable (): signing {}, Prevout {} {}
         redeemable (const Bitcoin::output &p, list<derivation> d, uint64 ez, const bytes &script_code = {}) :
             signing {d, ez, script_code}, Prevout {p} {}
+        redeemable (const Bitcoin::output &p, const signing &x) : signing {x}, Prevout {p} {}
 
         explicit operator JSON () const;
         redeemable (const JSON &);
@@ -77,21 +78,6 @@ namespace Cosmos {
         // all events muust be later than Latest.
         events &operator <<= (ordered_list<ray> e);
     };
-
-    // result of a restored wallet
-    struct restored {
-        ordered_list<ray> History;
-        std::map<Bitcoin::outpoint, redeemable> Account;
-
-        // last key used (+1)
-        uint32 Last;
-
-        Bitcoin::satoshi value () const {
-            return account {Account}.value ();
-        }
-    };
-
-    restored restore (txdb &TXDB, hd_pubkey pubkey, uint32 max_look_ahead);
 
     account inline read_account_from_file (const std::string &filename) {
         return account (read_from_file (filename));

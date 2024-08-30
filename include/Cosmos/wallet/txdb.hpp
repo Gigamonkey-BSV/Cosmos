@@ -49,6 +49,7 @@ namespace Cosmos {
         // output or input depending on which it is.
         bytes Put;
         Bitcoin::timestamp When;
+        // the index of the transaction in the block.
         uint64 Index;
         Bitcoin::outpoint Point;
         Bitcoin::satoshi Value;
@@ -88,6 +89,10 @@ namespace Cosmos {
         }
 
     };
+
+    std::ostream inline &operator << (std::ostream &o, const ray &r) {
+        return o << "\n\t" << r.Value << " " << (r.Direction == direction::in ? "received in " : "spent from ") << r.Point << std::endl;
+    }
 
     // a database of transactions.
     struct txdb {

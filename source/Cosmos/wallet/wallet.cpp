@@ -3,9 +3,8 @@
 namespace Cosmos {
 
     void wallet::import_output (const Bitcoin::prevout &p, const Bitcoin::secret &x, uint64 expected_size, const bytes &script_code) {
-        string addr (x.address ());
-        Account.Account[p.Key] = redeemable {p.Value, list<derivation> {derivation {addr, {}}}, expected_size};
-        Keys = Keys.insert (addr, x);
+        Account.Account[p.Key] = redeemable {p.Value, list<derivation> {derivation {x.to_public (), {}}}, expected_size};
+        Keys = Keys.insert (secret {x});
     }
 
     spent spend (wallet w, select s, make_change c, redeem r,
@@ -51,7 +50,7 @@ namespace Cosmos {
             {floor (double (int64 (fee_rate_before_change.Satoshis)) - double (fees) * fee_rate_before_change.Bytes)};
 
         // make change outputs.
-        change ch = c (w.Pubkeys, change_amount, fees, rand);
+        change ch = c (w.Pubkeys.Sequences[w.Pubkeys.Change], change_amount, fees, rand);
 
         auto change_outputs = ch.outputs ();
 
@@ -79,7 +78,7 @@ namespace Cosmos {
         }
 
         // return new wallet.
-        return spent {complete, {new_account, ch.Chain, w.Keys}};
+        return spent {complete, {w.Keys, new_account, w.Pubkeys.update (w.Pubkeys.Change, ch.Last)}};
     }
 }
 

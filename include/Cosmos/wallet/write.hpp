@@ -2,6 +2,7 @@
 #define COSMOS_WALLET_WRITE
 
 #include <gigamonkey/timechain.hpp>
+#include <gigamonkey/schema/hd.hpp>
 #include <data/net/JSON.hpp>
 #include <Cosmos/network.hpp>
 
@@ -9,6 +10,7 @@ namespace Cosmos {
     using namespace data;
     namespace Bitcoin = Gigamonkey::Bitcoin;
     namespace SPV = Gigamonkey::SPV;
+    namespace HD = Gigamonkey::HD;
 
     std::string write (const Bitcoin::TXID &);
     Bitcoin::TXID read_txid (string_view);

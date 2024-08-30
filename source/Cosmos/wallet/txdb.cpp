@@ -1,6 +1,5 @@
 #include <Cosmos/wallet/txdb.hpp>
 #include <Cosmos/wallet/write.hpp>
-#include <gigamonkey/script/pattern/pay_to_address.hpp>
 #include <gigamonkey/merkle/BUMP.hpp>
 #include <filesystem>
 #include <fstream>
@@ -54,7 +53,8 @@ namespace Cosmos {
         return o;
     }
 
-    local_txdb::local_txdb (const JSON &j) {
+    local_txdb::local_txdb (const JSON &j) : local_txdb {} {
+        if (j == nullptr) return;
 
         for (const auto &[key, value] : j["by_height"].items ()) {
             ptr<SPV::database::memory::entry> e = read_db_entry (value);
@@ -123,7 +123,7 @@ namespace Cosmos {
                     else ScriptIndex[script_hash] = list<Bitcoin::outpoint> {op};
                 }
 
-                Gigamonkey::pay_to_address ppp {out.Script};
+                pay_to_address ppp {out.Script};
                 if (ppp.valid ()) {
                     Bitcoin::address addr {Bitcoin::address {Bitcoin::address::main, ppp.Address}};
                     auto v = AddressIndex.find (addr);

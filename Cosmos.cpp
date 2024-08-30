@@ -13,6 +13,7 @@
 #include <Cosmos/network.hpp>
 #include <Cosmos/context.hpp>
 #include <Cosmos/wallet/split.hpp>
+#include <Cosmos/wallet/restore.hpp>
 
 using namespace data;
 
@@ -169,13 +170,13 @@ void command_generate (const arg_parser &p) {
 void command_value (const arg_parser &p) {
     Cosmos::context e {};
     Cosmos::read_account_and_txdb_options (e, p);
-    return Cosmos::display_value (*e.watch_wallet ());
+    return Cosmos::display_value (*e.update ().watch_wallet ());
 }
 
 void command_receive (const arg_parser &p) {
     Cosmos::context e {};
     Cosmos::read_pubkeychain_options (e, p);
-    return Cosmos::generate_new_address (*e.pubkeys ());
+    return Cosmos::generate_new_xpub (*e.update ().pubkeys ());
 }
 
 void command_import (const arg_parser &p) {
@@ -206,10 +207,10 @@ void command_import (const arg_parser &p) {
 
     Bitcoin::outpoint outpoint {txid, *index};
 
-    auto &w = *e.wallet ();
+    auto &w = *e.update ().wallet ();
     w.import_output (
-        Bitcoin::prevout {outpoint, e.txdb ()->output (outpoint)},
-        key, pay_to_address::redeem_expected_size (key.Compressed),
+        Bitcoin::prevout {outpoint, e.update ().txdb ()->output (outpoint)},
+        key, Gigamonkey::pay_to_address::redeem_expected_size (key.Compressed),
         bool (script_code) ? *script_code : bytes {});
 }
 
@@ -224,8 +225,9 @@ void command_send (const arg_parser &p) {
     if (!bool (address_string))
         throw exception {2} << "could not read address.";
 
+    HD::BIP_32::pubkey xpub {*address_string};
     Bitcoin::address address {*address_string};
-    if (!address.valid ())
+    if (!address.valid () && !xpub.valid ())
         throw exception {2} << "could not read address.";
 
     maybe<int64> value;
@@ -233,8 +235,14 @@ void command_send (const arg_parser &p) {
     if (!bool (value))
         throw exception {2} << "could not read value to send.";
 
-    Cosmos::send_to (*e.net (), *e.wallet (), *e.random (),
+    if (address.valid ()) Cosmos::send_to (*e.net (), *e.update ().wallet (), *e.random (),
         {Bitcoin::output {Bitcoin::satoshi {*value}, pay_to_address::script (address.decode ().Digest)}});
+
+    auto &rand = *e.random ();
+    Cosmos::send_to (*e.net (), *e.update ().wallet (), rand,
+        for_each ([] (const redeemable &m) -> Bitcoin::output {
+            return m.Prevout;
+        }, Cosmos::split {} (rand, address_sequence {xpub, {}, 0}, Bitcoin::satoshi {*value}, .001).Outputs));
 }
 
 void command_boost (const arg_parser &p) {
@@ -263,16 +271,12 @@ void command_split (const arg_parser &p) {
     Cosmos::read_wallet_options (e, p);
     Cosmos::read_random_options (e, p);
 
-    auto &w = *e.wallet ();
-    auto &TXDB = *e.txdb ();
+    auto &w = *e.update ().wallet ();
+    auto &TXDB = *e.update ().txdb ();
 
     maybe<string> address_string;
     p.get (3, "address", address_string);
     if (!bool (address_string)) throw exception {1} << "could not read address to split";
-
-    maybe<string> hd_pub_string;
-    p.get (3, "pubkey", hd_pub_string);
-    if (!bool (hd_pub_string)) throw exception {2} << "could not read address to split";
 
     Bitcoin::address addr {*address_string};
     if (!addr.valid ()) throw exception {5} << "invalid address";
@@ -297,7 +301,7 @@ void command_split (const arg_parser &p) {
     p.get ("mean_sats", mean_sats_per_output);
 
     auto spent = Cosmos::split {int64 (*max_sats_per_output), int64 (*min_sats_per_output), *mean_sats_per_output}
-        (Gigamonkey::redeem_p2pkh_and_p2pk, *e.random (), w, *hd_pub_string, outputs, 50. / 1000.);
+        (Gigamonkey::redeem_p2pkh_and_p2pk, *e.random (), w, outputs, 50. / 1000.);
 
     e.net ()->broadcast (bytes (spent.Transaction));
     w = spent.Wallet;
@@ -352,25 +356,17 @@ std::ostream &operator << (std::ostream &o, const top_events_event &e) {
 void command_restore (const arg_parser &p) {
     using namespace Cosmos;
 
-    // 12 words may have been provided
-    // entropy may have been provided
-    // in these cases it is definitely bip 44.
-
-    // a master key may have been provided.
-    // a master public key may have been provided.
-
     // somehow we need to get this key to be valid.
-    // if a public key has been provided, then it's
-    // definitely not a bip 44 master. It could be
-    // a bip 44 account.
     HD::BIP_32::pubkey pk;
 
-    // if a secret key is provided, then this could be
-    // a bip 44 master.
-    HD::BIP_32::secret sk;
-    bool has_secret = false;
-    bool restored_from_words = false;
+    // we may have a secret key provided.
+    maybe<HD::BIP_32::secret> sk;
 
+    // enables restoring from 12 words or from the entropy string.
+    bool use_bip_39 = false;
+
+    // if the user simply tells us what kind of wallet this is,
+    // that makes things a lot easier.
     maybe<string> wallet_type_string;
     p.get ("wallet_type", wallet_type_string);
 
@@ -379,7 +375,10 @@ void command_restore (const arg_parser &p) {
         RelayX,
         Simply_Cash,
         Electrum_SV,
-        CentBee         // this is the only one that uses a password. (PIN)
+
+        // centbee wallets do not use a standard bip44 derivation path and
+        // is the only wallet type to use a password, which is called the PIN.
+        CentBee
     } wallet_type = bool (wallet_type_string) ?
         [] (const std::string &in) -> restore_wallet_type {
             std::string wallet_type_sanitized = sanitize (in);
@@ -395,12 +394,14 @@ void command_restore (const arg_parser &p) {
     maybe<string> master_human;
     p.get (3, "key", master_human);
     if (bool (master_human)) {
-        sk = HD::BIP_32::secret {*master_human};
-        has_secret = sk.valid ();
-        pk = has_secret ? sk.to_public () : HD::BIP_32::pubkey {*master_human};
+        HD::BIP_32::secret maybe_secret {*master_human};
+        if (maybe_secret.valid ()) {
+            sk = maybe_secret;
+            pk = sk->to_public ();
+        } else pk = HD::BIP_32::pubkey {*master_human};
     } else {
         std::cout << "attempting to restore from words " << std::endl;
-        restored_from_words = true;
+        use_bip_39 = true;
         // next we will try to derive these words.
         maybe<string> bip_39_words;
 
@@ -416,7 +417,7 @@ void command_restore (const arg_parser &p) {
             if (!bool (bip_39_words)) throw exception {} << "need to supply --words";
         }
 
-        if (!HD::BIP_39::valid (*bip_39_words)) throw exception {} << "words are not valid";
+        if (! HD::BIP_39::valid (*bip_39_words)) throw exception {} << "words are not valid";
 
         // there may be a password.
         maybe<string> bip_39_password;
@@ -433,18 +434,21 @@ void command_restore (const arg_parser &p) {
 
         // try to generate key.
         sk = HD::BIP_32::secret::from_seed (seed, HD::BIP_32::main);
-        has_secret = true;
-        pk = sk.to_public ();
+        pk = sk->to_public ();
 
     }
 
     if (!pk.valid ()) throw exception {} << "could not read key";
 
+    std::cout << "read key " << pk << std::endl;
+
+    // in addition, the user may tell us what type of HD key we are using.
     maybe<string> key_type_string;
     p.get ("key_type", key_type_string);
 
     enum class master_key_type {
-        // a single sequnce of keys
+        // a single sequnce of keys. This could be from any wallet but
+        // is not a complete wallet.
         HD_sequence,
 
         // In this case, there will be receive and change derivations.
@@ -463,30 +467,103 @@ void command_restore (const arg_parser &p) {
             if (key_type_sanitized == "bip44account") return master_key_type::BIP44_account;
             if (key_type_sanitized == "bip44master") return master_key_type::BIP44_master;
             throw exception {} << "could not read key type";
-        } (*key_type_string) : restored_from_words && has_secret ?
+        } (*key_type_string) : use_bip_39 && bool (sk) ?
             (wallet_type == restore_wallet_type::CentBee ? master_key_type::CentBee_master : master_key_type::BIP44_master ):
             master_key_type::HD_sequence;
 
-    std::cout << "read key " << pk << std::endl;
+    if (wallet_type == restore_wallet_type::CentBee && key_type != master_key_type::CentBee_master)
+        throw exception {} << "wallet type cent bee must go along with key type cent bee. ";
+
+    // look for contradictions between key type and wallet type.
+    if (wallet_type != restore_wallet_type::unset && key_type != master_key_type::BIP44_master)
+        throw exception {} << "incompatible wallet type and key type ";
+
+    if (!bool (sk) && key_type == master_key_type::BIP44_master)
+        throw exception {} << "need private key for BIP44 master key.";
 
     // coin type is a parameter of the standard BIP 44 derivation path that we
     // may need to determine to recover coins.
     maybe<uint32> coin_type;
 
+    {
+        // try to read coin type as an option from the command line.
+        maybe<uint32> coin_type_option;
+
+        maybe<string> coin_type_string;
+        p.get ("coin_type", coin_type_string);
+
+        if (bool (coin_type_string)) coin_type_option = [] (const string &cx) -> uint32 {
+
+            // try to read as a number.
+            if (encoding::decimal::valid (cx)) {
+                uint32 coin_type_number;
+                std::stringstream ss {cx};
+                ss >> coin_type_number;
+                return coin_type_number;
+            }
+
+            string coin_type_sanitized = sanitize (cx);
+            std::cout << "coin type is " << coin_type_sanitized << std::endl;
+            if (coin_type_sanitized == "bitcoin") return HD::BIP_44::coin_type_Bitcoin;
+            if (coin_type_sanitized == "bitcoincash") return HD::BIP_44::coin_type_Bitcoin_Cash;
+            if (coin_type_sanitized == "bitcoinsv") return HD::BIP_44::coin_type_Bitcoin_SV;
+
+            throw exception {} << "could not read coin type";
+        } (*coin_type_string);
+
+        // try to infer coin type from the other information we have.
+        maybe<uint32> coin_type_wallet;
+        if (wallet_type != restore_wallet_type::unset) coin_type_wallet = [] (restore_wallet_type w) -> uint32 {
+            switch (w) {
+                case (restore_wallet_type::RelayX) : return HD::BIP_44::relay_x_coin_type;
+                case (restore_wallet_type::Simply_Cash) : return HD::BIP_44::simply_cash_coin_type;
+                case (restore_wallet_type::Electrum_SV) : return HD::BIP_44::simply_cash_coin_type;
+                case (restore_wallet_type::CentBee) : return HD::BIP_44::centbee_coin_type;
+                default: return HD::BIP_44::coin_type_Bitcoin;
+            }
+        } (wallet_type);
+
+        // coin types as derived in these different ways must match.
+        if (bool (coin_type_option)) {
+            if (bool (coin_type_wallet) && *coin_type_option != *coin_type_wallet)
+                throw exception {} << "coin type as determined from wallet type does not match that provided by user." <<
+                    "Using user provided coin type.";
+            coin_type = coin_type_option;
+        } else if (bool (coin_type_wallet)) coin_type = coin_type_wallet;
+
+    }
+
+    enum class derivation_style {
+        BIP_44,
+        CentBee
+    };
+
+    maybe<derivation_style> style;
+
+    if (wallet_type == restore_wallet_type::CentBee) style = derivation_style::CentBee;
+    else if (wallet_type != restore_wallet_type::unset || key_type == master_key_type::BIP44_master) style = derivation_style::BIP_44;
+
+    // right now we only use 0. However, this should be a command line option later on.
+    maybe<uint32> bip_44_account;
+    if (wallet_type != restore_wallet_type::unset || key_type == master_key_type::BIP44_master) bip_44_account = 0;
+
+    // at this point we have enough informaiton to generate a key and derivation paths to generate addresses
+    // to check.
+
     // the list of derivations we will look at to restore the wallet.
-    list<list<uint32>> derivations;
+    pubkeychain derivations;
 
     if (key_type == master_key_type::HD_sequence) {
-        std::cout << "\tfirst address: " << pk.address ().encode ();
+        std::cout << "\tfirst address: " << pk.derive (HD::BIP_32::path {0}).address () << std::endl;
 
-        derivations = list<list<uint32>> {list<uint32> {}};
+        derivations = pubkeychain {{{pk, {pk, {}}}}, {{"receive", {pk, {}}}}, "receive", "receive"};
     } else if (key_type == master_key_type::BIP44_account) {
         std::cout
             << "this is a bip 44 account"
-            << "\n\tfirst receive address: " << pk.derive (list<uint32> {0, 0}).address ().encode ()
-            << "\n\tfirst change address: " << pk.derive (list<uint32> {1, 0}).address ().encode () << std::endl;
+            << "\n\tfirst receive address: " << pk.derive (HD::BIP_32::path {0, 0}).address ()
+            << "\n\tfirst change address: " << pk.derive (HD::BIP_32::path {1, 0}).address () << std::endl;
 
-        derivations = list<list<uint32>> {list<uint32> {0}, list<uint32> {1}};
+        derivations = pubkeychain {{{pk, {pk, {}}}}, {{"receive", {pk, {0}}}, {"change", {pk, {1}}}}, "receive", "change"};
     } else if (key_type == master_key_type::BIP44_master) {
 
         maybe<uint32> coin_type_option;
@@ -534,57 +611,73 @@ void command_restore (const arg_parser &p) {
 
         if (coin_type) {
 
+            auto construct_derivation = []
+            (const HD::BIP_32::secret &master, list<uint32> to_account_master, list<uint32> to_receive, list<uint32> to_change) ->pubkeychain {
+                HD::BIP_32::pubkey account_master = master.derive (to_account_master).to_public ();
+                return pubkeychain {
+                    {{account_master, {master.to_public (), to_account_master}}},
+                    {{"receive", {account_master, to_receive}}, {"change", {account_master, to_change}}}, "receive", "change"};
+            };
+
             derivations = key_type == master_key_type::CentBee_master ?
-                list<list<uint32>> {
-                    list<uint32> {HD::BIP_44::purpose, 0, 0, 0},
-                    list<uint32> {HD::BIP_44::purpose, 0, 0, 1}}:
-                list<list<uint32>> {
-                    list<uint32> {HD::BIP_44::purpose, *coin_type, HD::BIP_32::harden (0), 0},
-                    list<uint32> {HD::BIP_44::purpose, *coin_type, HD::BIP_32::harden (0), 1}};
+                construct_derivation (*sk, {HD::BIP_44::purpose}, {0, 0, 0}, {0, 0, 1}) :
+                construct_derivation (*sk, {HD::BIP_44::purpose, *coin_type, HD::BIP_32::harden (0)}, {0}, {1});
+
+            auto first_receive = derivations.last ("receive").Key;
+            auto first_change = derivations.last ("change").Key;
 
             std::cout
                 << "\nthis is a bip 44 master, coin type " << *coin_type
-                << "\n\tfirst receive address: "
-                << sk.derive (derivations[0]).to_public ().address ().encode ()
-                << "\n\tfirst change address: "
-                << sk.derive (derivations[1]).to_public ().address ().encode ();
+                << "\n\tfirst receive address: " << first_receive
+                << "\n\tfirst change address: " << first_change;
+
         } else {
+            HD::BIP_32::path bitcoin_to_account_master {HD::BIP_44::purpose, HD::BIP_44::coin_type_Bitcoin, HD::BIP_32::harden (0)};
+            HD::BIP_32::path bitcoin_cash_to_account_master {HD::BIP_44::purpose, HD::BIP_44::coin_type_Bitcoin_Cash, HD::BIP_32::harden (0)};
+            HD::BIP_32::path bitcoin_sv_to_account_master {HD::BIP_44::purpose, HD::BIP_44::coin_type_Bitcoin_SV, HD::BIP_32::harden (0)};
+            HD::BIP_32::path centbee_to_account_master {HD::BIP_44::purpose};
+            HD::BIP_32::pubkey bitcoin_account_master = sk->derive (bitcoin_to_account_master).to_public ();
+            HD::BIP_32::pubkey bitcoin_cash_account_master = sk->derive (bitcoin_cash_to_account_master).to_public ();
+            HD::BIP_32::pubkey bitcoin_sv_account_master = sk->derive (bitcoin_sv_to_account_master).to_public ();
+            HD::BIP_32::pubkey centbee_account_master = sk->derive (centbee_to_account_master).to_public ();
+
+            // there is a problem because the receive and change address sequences will be set incorrectly.
+            // I'm not sure how to fix this right now.
+            derivations = pubkeychain {{
+                {bitcoin_account_master, {pk, bitcoin_to_account_master}},
+                {bitcoin_cash_account_master, {pk, bitcoin_cash_to_account_master}},
+                {bitcoin_sv_account_master, {pk, bitcoin_sv_to_account_master}},
+                {centbee_account_master, {pk, centbee_to_account_master}}}, {
+                {"receiveBitcoin", {bitcoin_account_master, {0}}},
+                {"changeBitcoin", {bitcoin_account_master, {1}}},
+                {"receiveBitcoinCash", {bitcoin_cash_account_master, {0}}},
+                {"changeBitcoinCash", {bitcoin_cash_account_master, {1}}},
+                {"receiveBitcoinSV", {bitcoin_sv_account_master, {0}}},
+                {"changeBitcoinSV", {bitcoin_sv_account_master, {1}}},
+                {"receiveCentBee", {centbee_account_master, {0}}},
+                {"changeCentBee", {centbee_account_master, {1}}}}, "receive", "change"};
 
             std::cout
                 << "coin type could not be determined."
                 << "\nassuming this is a bip 44 master, coin type Bitcoin "
                 << "\n\tfirst receive address: "
-                << sk.derive (HD::BIP_44::derivation_path (0, false, 0, HD::BIP_44::coin_type_Bitcoin)).to_public ().address ().encode ()
+                << derivations.last ("receiveBitcoin").Key
                 << "\n\tfirst change address: "
-                << sk.derive (HD::BIP_44::derivation_path (0, true, 0, HD::BIP_44::coin_type_Bitcoin)).to_public ().address ().encode ()
+                << derivations.last ("changeBitcoin").Key
                 << "\nassuming this is a bip 44 master, coin type Bitcoin Cash"
                 << "\n\tfirst receive address: "
-                << sk.derive (HD::BIP_44::derivation_path (0, false, 0, HD::BIP_44::coin_type_Bitcoin_Cash)).to_public ().address ().encode ()
+                << derivations.last ("receiveBitcoinCash").Key
                 << "\n\tfirst change address: "
-                << sk.derive (HD::BIP_44::derivation_path (0, true, 0, HD::BIP_44::coin_type_Bitcoin_Cash)).to_public ().address ().encode ()
+                << derivations.last ("changeBitcoin").Key
                 << "\nassuming this is a bip 44 master, coin type Bitcoin SV"
                 << "\n\tfirst receive address: "
-                << sk.derive (HD::BIP_44::derivation_path (0, false, 0, HD::BIP_44::coin_type_Bitcoin_SV)).to_public ().address ().encode ()
+                << derivations.last ("receiveBitcoinSV").Key
                 << "\n\tfirst change address: "
-                << sk.derive (HD::BIP_44::derivation_path (0, true, 0, HD::BIP_44::coin_type_Bitcoin_SV)).to_public ().address ().encode ()
+                << derivations.last ("changeBitcoin").Key
                 << std::endl;
 
-            derivations = list<list<uint32>> {
-                list<uint32> {HD::BIP_44::purpose, HD::BIP_44::coin_type_Bitcoin, HD::BIP_32::harden (0), 0},
-                list<uint32> {HD::BIP_44::purpose, HD::BIP_44::coin_type_Bitcoin, HD::BIP_32::harden (0), 1},
-                list<uint32> {HD::BIP_44::purpose, HD::BIP_44::coin_type_Bitcoin_Cash, HD::BIP_32::harden (0), 0},
-                list<uint32> {HD::BIP_44::purpose, HD::BIP_44::coin_type_Bitcoin_Cash, HD::BIP_32::harden (0), 1},
-                list<uint32> {HD::BIP_44::purpose, HD::BIP_44::coin_type_Bitcoin_SV, HD::BIP_32::harden (0), 0},
-                list<uint32> {HD::BIP_44::purpose, HD::BIP_44::coin_type_Bitcoin_SV, HD::BIP_32::harden (0), 1}};
         }
     }
-
-    wait_for_enter ();
-
-    context e {};
-
-    if (has_secret) read_wallet_options (e, p);
-    else read_watch_wallet_options (e, p);
 
     maybe<uint32> max_look_ahead;
     p.get (4, "max_look_ahead", max_look_ahead);
@@ -592,65 +685,30 @@ void command_restore (const arg_parser &p) {
 
     std::cout << "max look ahead is " << *max_look_ahead << std::endl;
 
-    if (!has_secret && key_type == master_key_type::BIP44_master) throw exception {} << "need private key for BIP44 master key.";
+    restore rr {*max_look_ahead};
 
     std::cout << "loading wallet" << std::endl;
-    auto w = e.watch_wallet ();
+    wait_for_enter ();
+
+    context e {};
+
+    if (bool (sk)) read_wallet_options (e, p);
+    else read_watch_wallet_options (e, p);
+    auto *w = e.update ().watch_wallet ();
     if (!w) throw exception {} << "could not load wallet";
+    w->Pubkeys = derivations;
 
-    if (key_type == master_key_type::HD_sequence) {
-        std::cout << "restoring hd sequence" << std::endl;
-        auto key = hd_pubkey {pk, {"master", {}}};
-        restored r = restore (*e.txdb (), key, *max_look_ahead);
-        *w = watch_wallet {r.Account, pubkeychain {"master", hd_pubkey_sequence {key, r.Last}}};
-        return;
+    ordered_list<ray> history {};
+    for (const data::entry<string, address_sequence> ed : derivations.Sequences) {
+        std::cout << "checking address sequence " << ed.Key << std::endl;
+        auto restored = restore {*max_look_ahead} (*e.update ().txdb (), ed.Value);
+        w->Account += restored.Account;
+        history = history + restored.History;
+        w->Pubkeys = w->Pubkeys.update (ed.Key, restored.Last);
+        std::cout << "done checking address sequence " << ed.Key << std::endl;
     }
 
-    list<uint32> receive_derivation;
-    list<uint32> change_derivation;
-
-    if (key_type == master_key_type::BIP44_account) {
-        receive_derivation = list<uint32> {0};
-        change_derivation = list<uint32> {1};
-    } else {
-
-        if (coin_type) {
-            std::cout
-                << "\nassuming this is a bip 44 master, coin type Bitcoin "
-                << "\n\tfirst receive address: "
-                << sk.derive (HD::BIP_44::derivation_path (0, false, 0, *coin_type)).to_public ().address ().encode ()
-                << "\n\tfirst change address: "
-                << sk.derive (HD::BIP_44::derivation_path (0, true, 0, *coin_type)).to_public ().address ().encode ();
-
-            receive_derivation = list<uint32> {HD::BIP_44::purpose, *coin_type, HD::BIP_32::harden (0), 0};
-            change_derivation = list<uint32> {HD::BIP_44::purpose, *coin_type, HD::BIP_32::harden (0), 1};
-        } else {
-
-            throw exception {} << "Could not determine coin type. Check the addresses above to see if any has some BSV";
-        }
-    }
-
-    auto receive_key = hd_pubkey {pk, {"master", receive_derivation}};
-    auto change_key = hd_pubkey {pk, {"master", change_derivation}};
-
-    std::cout << "About to check receive addresses" << std::endl;
-    auto receive_restore = restore (*e.txdb (), receive_key, *max_look_ahead);
-
-    std::cout << "Done checking receive addresses. \n\tEvents found: " << data::size (receive_restore.History)
-        << "\n\tunspent outputs: " << data::size (receive_restore.Account)
-        << "\n\ttotal value: " << receive_restore.value () << std::endl;
-
-    std::cout << "about to restore change addresses" << std::endl;
-    auto change_restore = restore (*e.txdb (), change_key, *max_look_ahead);
-
-    std::cout << "Done checking change addresses. \n\tEvents found: " << data::size (change_restore.History)
-        << "\n\tunspent outputs: " << data::size (change_restore.Account)
-        << "\n\ttotal value: " << change_restore.value () << std::endl;
-
-    *w = watch_wallet {account {receive_restore.Account}, pubkeychain {
-            "change", hd_pubkey_sequence {change_key, change_restore.Last},
-            "receive", hd_pubkey_sequence {receive_key, receive_restore.Last}}};
-    w->Account += account {change_restore.Account};
+    std::cout << "Wallet history: " << history << std::endl;
 
 }
 
@@ -688,7 +746,7 @@ void help (method meth) {
             std::cout << "input should be <method> <args>... where method is "
                 "\n\tgenerate   -- create a new wallet."
                 "\n\tvalue      -- print the total value in the wallet."
-                "\n\treceive    -- generate a new address."
+                "\n\treceive    -- generate a new xpub + address."
                 "\n\timport     -- add a utxo to this wallet."
                 "\n\tsend       -- send to an address or script."
                 "\n\tboost      -- boost content."

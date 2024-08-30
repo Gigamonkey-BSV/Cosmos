@@ -31,6 +31,12 @@ namespace Cosmos {
         return Bitcoin::header (p);
     }
 
+    either<Bitcoin::pubkey, HD::BIP_32::pubkey> inline read_pubkey (const string &x) {
+        if (HD::BIP_32::pubkey p {x}; p.valid ()) return p;
+        if (Bitcoin::pubkey p {x}; p.valid ()) return p;
+        throw exception {} << "could not read " << x << " as a bitcoin public key.";
+    }
+
     void write_to_file (const JSON &j, const std::string &filename) {
         std::fstream file;
         file.open (filename, std::ios::out);
@@ -40,6 +46,7 @@ namespace Cosmos {
     }
 
     JSON read_from_file (const std::string &filename) {
+        std::cout << "reading from file " << filename << std::endl;
         std::filesystem::path p {filename};
         if (!std::filesystem::exists (p)) return JSON (nullptr);
         std::ifstream file;

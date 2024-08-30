@@ -20,18 +20,37 @@ namespace Cosmos {
         maybe<std::string> &price_data_filename ();
 
         network *net ();
-
-        Cosmos::keychain *keys ();
-        Cosmos::pubkeychain *pubkeys ();
-        Cosmos::txdb *txdb ();
-        SPV::database *spvdb ();
-        Cosmos::account *account ();
-        Cosmos::price_data *price_data ();
-
-        Cosmos::watch_wallet *watch_wallet ();
-        Cosmos::wallet *wallet ();
-
         crypto::random *random ();
+
+        const Cosmos::keychain *keys () const;
+        const Cosmos::pubkeychain *pubkeys () const;
+        const Cosmos::txdb *txdb () const;
+        const SPV::database *spvdb () const;
+        const Cosmos::account *account () const;
+        const Cosmos::price_data *price_data () const;
+
+        const Cosmos::watch_wallet *watch_wallet () const;
+        const Cosmos::wallet *wallet () const;
+
+        struct writable_database {
+
+            Cosmos::keychain *keys ();
+            Cosmos::pubkeychain *pubkeys ();
+            Cosmos::txdb *txdb ();
+            SPV::database *spvdb ();
+            Cosmos::account *account ();
+            Cosmos::price_data *price_data ();
+
+            Cosmos::watch_wallet *watch_wallet ();
+            Cosmos::wallet *wallet ();
+
+            context &Context;
+        };
+
+        writable_database update () {
+            Written = true;
+            return writable_database {*this};
+        }
 
         ~context ();
 
@@ -57,6 +76,20 @@ namespace Cosmos {
 
         ptr<crypto::user_entropy> Entropy;
         crypto::random *Random {nullptr};
+
+        bool Written {false};
+
+        Cosmos::keychain *keys ();
+        Cosmos::pubkeychain *pubkeys ();
+        Cosmos::txdb *txdb ();
+        SPV::database *spvdb ();
+        Cosmos::account *account ();
+        Cosmos::price_data *price_data ();
+
+        Cosmos::watch_wallet *watch_wallet ();
+        Cosmos::wallet *wallet ();
+
+        friend struct writable_database;
     };
 
     void generate_wallet (const string &private_filename, const string &public_filename, uint32 account = 0);
@@ -91,10 +124,7 @@ namespace Cosmos {
         std::cout << w.value () << std::endl;
     }
 
-    void inline generate_new_address (pubkeychain &p) {
-        std::cout << "new address: " << Bitcoin::address {Bitcoin::address::main, p.last (p.Receive).Pubkey.address_hash ()} << std::endl;
-        p = p.next (p.Receive);
-    }
+    void generate_new_xpub (pubkeychain &p);
 
     void inline read_wallet_options (context &e, const arg_parser &p) {
         read_both_chains_options (e, p);
@@ -105,6 +135,71 @@ namespace Cosmos {
         read_pubkeychain_options (e, p);
         read_account_and_txdb_options (e, p);
     }
+
+    const Cosmos::keychain inline *context::keys () const {
+        return const_cast<context *> (this)->keys ();
+    }
+
+    const Cosmos::pubkeychain inline *context::pubkeys () const {
+        return const_cast<context *> (this)->pubkeys ();
+    }
+
+    const Cosmos::txdb inline *context::txdb () const {
+        return const_cast<context *> (this)->txdb ();
+    }
+
+    const SPV::database inline *context::spvdb () const {
+        return const_cast<context *> (this)->spvdb ();
+    }
+
+    const Cosmos::account inline *context::account () const {
+        return const_cast<context *> (this)->account ();
+    }
+
+    const Cosmos::price_data inline *context::price_data () const {
+        return const_cast<context *> (this)->price_data ();
+    }
+
+    const Cosmos::watch_wallet inline *context::watch_wallet () const {
+        return const_cast<context *> (this)->watch_wallet ();
+    }
+
+    const Cosmos::wallet inline *context::wallet () const {
+        return const_cast<context *> (this)->wallet ();
+    }
+
+    Cosmos::keychain inline *context::writable_database::keys () {
+        return Context.keys ();
+    }
+
+    Cosmos::pubkeychain inline *context::writable_database::pubkeys () {
+        return Context.pubkeys ();
+    }
+
+    Cosmos::txdb inline *context::writable_database::txdb () {
+        return Context.txdb ();
+    }
+
+    SPV::database inline *context::writable_database::spvdb () {
+        return Context.spvdb ();
+    }
+
+    Cosmos::account inline *context::writable_database::account () {
+        return Context.account ();
+    }
+
+    Cosmos::price_data inline *context::writable_database::price_data () {
+        return Context.price_data ();
+    }
+
+    Cosmos::watch_wallet inline *context::writable_database::watch_wallet () {
+        return Context.watch_wallet ();
+    }
+
+    Cosmos::wallet inline *context::writable_database::wallet () {
+        return Context.wallet ();
+    }
+
 }
 
 #endif

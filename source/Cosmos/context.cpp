@@ -2,12 +2,19 @@
 #include <data/io/exception.hpp>
 #include <data/crypto/NIST_DRBG.hpp>
 #include <gigamonkey/schema/bip_44.hpp>
-#include <gigamonkey/script/pattern/pay_to_address.hpp>
 #include <Cosmos/network.hpp>
 #include <Cosmos/context.hpp>
 #include <Cosmos/wallet/split.hpp>
 
 namespace Cosmos {
+
+    void generate_new_xpub (pubkeychain &p) {
+        address_sequence receive_sequence = p.Sequences[p.Receive];
+        HD::BIP_32::pubkey next_pubkey = receive_sequence.Key.derive (receive_sequence.Path << receive_sequence.Last);
+        Bitcoin::address::decoded next_address = next_pubkey.address ();
+        std::cout << "next xpub is " << next_pubkey << " and its address is " << next_address;
+        p = p.next (p.Receive);
+    }
 
     void generate_wallet (const string &private_filename, const string &public_filename, uint32 account) {
         std::cout << "Type random characters and we will generate a wallet for you. Press enter when you think you have enough." << std::endl;
@@ -22,25 +29,30 @@ namespace Cosmos {
 
         digest512 bits = crypto::SHA2_512 (user_input);
 
-        secp256k1::secret x;
+        HD::BIP_32::secret master {secp256k1::secret {}, HD::chain_code (32), HD::BIP_32::main};
 
-        HD::chain_code chain_code (32);
+        std::copy (bits.begin (), bits.begin () + 32, master.Secret.Value.begin ());
+        std::copy (bits.begin () + 32, bits.end (), master.ChainCode.begin ());
 
-        std::copy (bits.begin (), bits.begin () + 32, x.Value.begin ());
-        std::copy (bits.begin () + 32, bits.end (), chain_code.begin ());
+        keychain key = keychain {}.insert (master);
+        HD::BIP_32::pubkey master_pubkey = master.to_public ();
 
         list<uint32> path {
             HD::BIP_44::purpose,
             HD::BIP_44::coin_type_Bitcoin,
             HD::BIP_32::harden (account)};
 
-        HD::BIP_32::secret master {x, chain_code, HD::BIP_32::main};
-        HD::BIP_32::pubkey master_pubkey = master.to_public ();
+        HD::BIP_32::pubkey account_master_pubkey = master.derive (path).to_public ();
 
-        keychain key {"master", secret {master}};
-        pubkeychain pub {"receive", pubkey {master_pubkey, derivation {"master", path << HD::BIP_44::receive_index}}};
-        pubkey change {master_pubkey, derivation {"master", path << HD::BIP_44::change_index}};
-        pub = pub.insert ("change", change);
+        string receive_name {"receive"};
+        string change_name {"change"};
+
+        pubkeychain pub {
+            {{account_master_pubkey, derivation {master_pubkey, path}}}, {
+                {receive_name, address_sequence {account_master_pubkey, {HD::BIP_44::receive_index}}},
+                {change_name, address_sequence {account_master_pubkey, {HD::BIP_44::change_index}}}},
+            receive_name,
+            change_name};
 
         write_to_file (JSON (key), private_filename);
         write_to_file (JSON (pub), public_filename);
@@ -168,6 +180,7 @@ namespace Cosmos {
 
         if (!bool (LocalTXDB)) {
             auto txf = txdb_filename ();
+            std::cout << "   " << "txdb filename is " << txf << std::endl;
             if (bool (txf)) LocalTXDB = new local_txdb {read_local_txdb_from_file (*txf)};
             else return nullptr;
         }
@@ -243,12 +256,15 @@ namespace Cosmos {
 
     watch_wallet *context::watch_wallet () {
         if (bool (WatchWallet)) return WatchWallet;
+        std::cout << " lodaing txdb" << std::endl;
         auto txs = txdb ();
+        std::cout << " loading account " << std::endl;
         auto acc = account ();
+        std::cout << " loading pubkeys " << std::endl;
         auto pkc = pubkeys ();
 
         if (!bool (txs) || !bool (acc) || !bool (pkc)) return nullptr;
-
+        std::cout << " creating new watch wallet..." << std::endl;
         WatchWallet = new Cosmos::watch_wallet {*acc, *pkc};
         Account = &WatchWallet->Account;
         Pubkeys = &WatchWallet->Pubkeys;
@@ -263,7 +279,7 @@ namespace Cosmos {
         auto k = keys ();
         if (!bool (watch) || !bool (k)) return nullptr;
 
-        Wallet = new Cosmos::wallet {watch->Account, watch->Pubkeys, *k};
+        Wallet = new Cosmos::wallet {*k, watch->Account, watch->Pubkeys};
         Keys = &Wallet->Keys;
         WatchWallet = Wallet;
 
@@ -293,13 +309,15 @@ namespace Cosmos {
         auto kf = keychain_filename ();
         auto pdf = price_data_filename ();
 
-        if (bool (tf) && bool (LocalTXDB)) write_to_file (JSON (*LocalTXDB), *tf);
-        if (bool (af) && bool (Account)) write_to_file (JSON (*Account), *af);
-        if (bool (pf) && bool (Pubkeys)) write_to_file (JSON (*Pubkeys), *kf);
-        if (bool (kf) && bool (Keys)) write_to_file (JSON (*Keys), *kf);
+        if (Written) {
+            if (bool (tf) && bool (LocalTXDB)) write_to_file (JSON (*LocalTXDB), *tf);
+            if (bool (af) && bool (Account)) write_to_file (JSON (*Account), *af);
+            if (bool (pf) && bool (Pubkeys)) write_to_file (JSON (*Pubkeys), *kf);
+            if (bool (kf) && bool (Keys)) write_to_file (JSON (*Keys), *kf);
+        }
 
         if (bool (pdf) && bool (PriceData)) {
-            write_to_file (JSON (*PriceData), *pdf);
+            if (Written) write_to_file (JSON (*PriceData), *pdf);
             delete PriceData;
         }
 
