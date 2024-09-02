@@ -7,7 +7,7 @@
 
 namespace Cosmos {
     namespace MAPI = Gigamonkey::nChain::MAPI;
-    using satoshi_per_byte = Gigamonkey::satoshi_per_byte;
+    using satoshis_per_byte = Gigamonkey::satoshis_per_byte;
 
     struct broadcast_error {
         enum error {
@@ -45,7 +45,7 @@ namespace Cosmos {
         
         bytes get_transaction (const Bitcoin::TXID &);
         
-        satoshi_per_byte mining_fee ();
+        satoshis_per_byte mining_fee ();
         
         broadcast_error broadcast (const bytes &tx);
 

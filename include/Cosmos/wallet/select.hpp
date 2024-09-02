@@ -13,7 +13,7 @@ namespace Cosmos {
     };
 
     // select outputs from a wallet sufficient for the given value, plus the tx cost of the outputs selected.
-    using select = data::function<selected (const account &, Bitcoin::satoshi, satoshi_per_byte fees, data::crypto::random &)>;
+    using select = data::function<selected (const account &, Bitcoin::satoshi, satoshis_per_byte fees, data::crypto::random &)>;
 
     // default select function
     struct select_output_parameters {
@@ -27,7 +27,7 @@ namespace Cosmos {
         double MinChangeFraction;
 
         // select outputs from a wallet sufficient for the given value.
-        selected operator () (const account &, Bitcoin::satoshi, satoshi_per_byte fees, data::crypto::random &) const;
+        selected operator () (const account &, Bitcoin::satoshi, satoshis_per_byte fees, data::crypto::random &) const;
     };
 }
 

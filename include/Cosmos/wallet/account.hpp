@@ -1,6 +1,7 @@
 #ifndef COSMOS_WALLET_ACCOUNT
 #define COSMOS_WALLET_ACCOUNT
 
+#include <data/math/infinite.hpp>
 #include <Cosmos/wallet/keys/sequence.hpp>
 #include <Cosmos/wallet/txdb.hpp>
 
@@ -49,17 +50,23 @@ namespace Cosmos {
 
     };
 
+    // This is how we build an account out of individual events.
     struct events {
 
+        // an event corresponds to a single transaction and everything
+        // that happens in it which is relevant to our wallet.
         struct event {
-            Bitcoin::TXID TXID;
-            Bitcoin::timestamp When;
+            Bitcoin::TXID TXID {};
+            Bitcoin::timestamp When {};
 
-            Bitcoin::satoshi Received;
-            Bitcoin::satoshi Spent;
-            Bitcoin::satoshi Moved;
+            Bitcoin::satoshi Received {};
+            Bitcoin::satoshi Spent {};
+            Bitcoin::satoshi Moved {};
 
-            list<ray> Events;
+            ordered_list<ray> Events {};
+
+            bool operator <=> (const event &) const;
+            event () {}
         };
 
         // timestamp of the latest event incorporated into this account.
@@ -75,8 +82,21 @@ namespace Cosmos {
         events (Bitcoin::timestamp l, std::map<Bitcoin::outpoint, Bitcoin::output> a, list<event> e, Bitcoin::satoshi v):
             Latest {l}, Account {a}, Events {e}, Value {v} {}
 
-        // all events muust be later than Latest.
+        // all events must be later than Latest.
         events &operator <<= (ordered_list<ray> e);
+
+        explicit operator JSON () const;
+        explicit events (const JSON &j);
+
+        struct history {
+            std::map<Bitcoin::outpoint, Bitcoin::output> Account;
+            ordered_list<event> Events;
+        };
+
+        // get all events within a given range.
+        history get_history (
+            math::signed_limit<Bitcoin::timestamp> from = math::signed_limit<Bitcoin::timestamp>::negative_infinity (),
+            math::signed_limit<Bitcoin::timestamp> to = math::signed_limit<Bitcoin::timestamp>::infinity ()) const;
     };
 
     account inline read_account_from_file (const std::string &filename) {

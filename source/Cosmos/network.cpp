@@ -57,7 +57,7 @@ namespace Cosmos {
     // script histories by script hash
     map<digest256, list<Bitcoin::TXID>> History;
 
-    satoshi_per_byte network::mining_fee () {
+    satoshis_per_byte network::mining_fee () {
         std::lock_guard<std::mutex> lock (Mutex);
         auto z = Gorilla.get_fee_quote ();
         if (!z.valid ()) throw exception {} << "invalid fee quote response received: " << string (JSON (z));

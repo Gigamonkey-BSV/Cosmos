@@ -6,14 +6,18 @@
 
 #include <data/io/wait_for_enter.hpp>
 
+#include <gigamonkey/timestamp.hpp>
 #include <gigamonkey/schema/bip_44.hpp>
 #include <gigamonkey/schema/bip_39.hpp>
 #include <gigamonkey/script/pattern/pay_to_address.hpp>
 
 #include <Cosmos/network.hpp>
-#include <Cosmos/context.hpp>
+#include <Cosmos/interface.hpp>
 #include <Cosmos/wallet/split.hpp>
 #include <Cosmos/wallet/restore.hpp>
+#include <Cosmos/database/price_data.hpp>
+#include <Cosmos/options.hpp>
+#include <Cosmos/tax.hpp>
 
 using namespace data;
 
@@ -161,27 +165,37 @@ std::string inline sanitize (const std::string &in) {
     return regex_replace (data::to_lower (in), std::regex {"_|-"}, "");
 }
 
+// TODO encrypt file
+// TODO get accounts
 void command_generate (const arg_parser &p) {
-    Cosmos::context e {};
+    Cosmos::Interface e {};
     Cosmos::read_both_chains_options (e, p);
-    return Cosmos::generate_wallet (*e.keychain_filename (), *e.pubkeychain_filename ());
+    e.update<void> (Cosmos::generate_wallet {});
+
+    std::cout << "private keys will be saved in " << e.keychain_filepath () << " ." << std::endl;
+    std::cout << "private keys will be saved in " << e.pubkeychain_filepath () << " ." << std::endl;
 }
 
 void command_value (const arg_parser &p) {
-    Cosmos::context e {};
+    Cosmos::Interface e {};
     Cosmos::read_account_and_txdb_options (e, p);
-    return Cosmos::display_value (*e.update ().watch_wallet ());
+    if (e.watch_wallet () == nullptr) throw exception {} << "could not read wallet";
+    return Cosmos::display_value (*e.watch_wallet ());
 }
 
 void command_receive (const arg_parser &p) {
-    Cosmos::context e {};
+    Cosmos::Interface e {};
     Cosmos::read_pubkeychain_options (e, p);
-    return Cosmos::generate_new_xpub (*e.update ().pubkeys ());
+    e.update<void> ([] (Cosmos::Interface::writable u) {
+        auto p = u.pubkeys ();
+        if (p == nullptr) throw exception {} << "could not read wallet";
+        Cosmos::generate_new_xpub (*p);
+    });
 }
 
 void command_import (const arg_parser &p) {
     using namespace Cosmos;
-    Cosmos::context e {};
+    Cosmos::Interface e {};
     Cosmos::read_wallet_options (e, p);
 
     maybe<std::string> txid_hex;
@@ -207,16 +221,21 @@ void command_import (const arg_parser &p) {
 
     Bitcoin::outpoint outpoint {txid, *index};
 
-    auto &w = *e.update ().wallet ();
-    w.import_output (
-        Bitcoin::prevout {outpoint, e.update ().txdb ()->output (outpoint)},
-        key, Gigamonkey::pay_to_address::redeem_expected_size (key.Compressed),
-        bool (script_code) ? *script_code : bytes {});
+    e.update<void> ([&outpoint, &key, &script_code] (Cosmos::Interface::writable u) {
+        auto *wallet = u.wallet ();
+        auto *txdb = u.txdb ();
+        if (wallet == nullptr || txdb == nullptr) throw exception {} << "could not read database";
+        wallet->import_output (
+            Bitcoin::prevout {outpoint, txdb->output (outpoint)},
+            key, Gigamonkey::pay_to_address::redeem_expected_size (key.Compressed),
+            bool (script_code) ? *script_code : bytes {});
+    });
 }
 
+// TODO get fee rate from options.
 void command_send (const arg_parser &p) {
     using namespace Cosmos;
-    Cosmos::context e {};
+    Cosmos::Interface e {};
     Cosmos::read_wallet_options (e, p);
     Cosmos::read_random_options (e, p);
 
@@ -227,22 +246,31 @@ void command_send (const arg_parser &p) {
 
     HD::BIP_32::pubkey xpub {*address_string};
     Bitcoin::address address {*address_string};
-    if (!address.valid () && !xpub.valid ())
-        throw exception {2} << "could not read address.";
 
     maybe<int64> value;
     p.get (4, "value", value);
     if (!bool (value))
         throw exception {2} << "could not read value to send.";
 
-    if (address.valid ()) Cosmos::send_to (*e.net (), *e.update ().wallet (), *e.random (),
-        {Bitcoin::output {Bitcoin::satoshi {*value}, pay_to_address::script (address.decode ().Digest)}});
+    Bitcoin::satoshi spend_amount {*value};
 
-    auto &rand = *e.random ();
-    Cosmos::send_to (*e.net (), *e.update ().wallet (), rand,
-        for_each ([] (const redeemable &m) -> Bitcoin::output {
-            return m.Prevout;
-        }, Cosmos::split {} (rand, address_sequence {xpub, {}, 0}, Bitcoin::satoshi {*value}, .001).Outputs));
+    auto *rand = e.random ();
+    auto *net = e.net ();
+
+    if (rand == nullptr) throw exception {4} << "could not initialize random number generator.";
+    if (net == nullptr) throw exception {5} << "could not connect to remote servers";
+
+    if (address.valid ()) e.update<void> ([rand, net, &address, &spend_amount] (Cosmos::Interface::writable u) {
+            Cosmos::send_to (*net, *u.wallet (), *rand,
+                {Bitcoin::output {spend_amount, pay_to_address::script (address.decode ().Digest)}});
+        });
+    else if (xpub.valid ()) e.update<void> ([rand, net, &xpub, &spend_amount] (Cosmos::Interface::writable u) {
+            Cosmos::send_to (*net, *u.wallet (), *rand,
+                for_each ([] (const redeemable &m) -> Bitcoin::output {
+                    return m.Prevout;
+                }, Cosmos::split {} (*rand, address_sequence {xpub, {}, 0}, spend_amount, .001).Outputs));
+        });
+    else throw exception {2} << "Could not read address/xpub";
 }
 
 void command_boost (const arg_parser &p) {
@@ -250,7 +278,7 @@ void command_boost (const arg_parser &p) {
 }
 /*
 void command_boost (const arg_parser &p) {
-    Cosmos::context e {};
+    Cosmos::Interface e {};
     Cosmos::read_wallet_options (e, p);
     Cosmos::read_random_options (e, p);
 
@@ -267,12 +295,9 @@ void command_boost (const arg_parser &p) {
 
 void command_split (const arg_parser &p) {
     using namespace Cosmos;
-    Cosmos::context e {};
+    Cosmos::Interface e {};
     Cosmos::read_wallet_options (e, p);
     Cosmos::read_random_options (e, p);
-
-    auto &w = *e.update ().wallet ();
-    auto &TXDB = *e.update ().txdb ();
 
     maybe<string> address_string;
     p.get (3, "address", address_string);
@@ -281,76 +306,38 @@ void command_split (const arg_parser &p) {
     Bitcoin::address addr {*address_string};
     if (!addr.valid ()) throw exception {5} << "invalid address";
 
-    // is this address in our wallet?
-    ordered_list<Cosmos::ray> outpoints = TXDB.by_address (addr);
-    list<entry<Bitcoin::outpoint, Cosmos::redeemable>> outputs;
-
-    for (const Cosmos::ray &r : outpoints) {
-        auto e = w.Account.Account.find (r.Point);
-        if (e != w.Account.Account.end ()) outputs <<= entry<Bitcoin::outpoint, Cosmos::redeemable> {r.Point, e->second};
-    }
-
-    if (data::size (outputs) == 0) throw exception {1} << "We do not know how to spend this address";
-
-    maybe<double> max_sats_per_output =  50000000;
-    maybe<double> mean_sats_per_output = 12345678;
-    maybe<double> min_sats_per_output = 1234567;
+    maybe<double> max_sats_per_output = double (options {}.MaxSatsPerOutput);
+    maybe<double> mean_sats_per_output = double (options {}.MeanSatsPerOutput);
+    maybe<double> min_sats_per_output = double (options {}.MinSatsPerOutput);
 
     p.get ("min_sats", min_sats_per_output);
     p.get ("max_sats", max_sats_per_output);
     p.get ("mean_sats", mean_sats_per_output);
 
-    auto spent = Cosmos::split {int64 (*max_sats_per_output), int64 (*min_sats_per_output), *mean_sats_per_output}
-        (Gigamonkey::redeem_p2pkh_and_p2pk, *e.random (), w, outputs, 50. / 1000.);
+    Cosmos::split split {int64 (*max_sats_per_output), int64 (*min_sats_per_output), *mean_sats_per_output};
 
-    e.net ()->broadcast (bytes (spent.Transaction));
-    w = spent.Wallet;
+    e.net ()->broadcast (e.update<bytes> ([rand = e.random (), &addr, &split] (Cosmos::Interface::writable w) -> bytes {
 
-}
+        auto &wallet = *w.wallet ();
+        auto &TXDB = *w.txdb ();
 
-struct top_receive_event {
-    Cosmos::events::event Event;
-    std::weak_ordering operator <=> (const top_receive_event &e) const {
-        return Event.Received <=> e.Event.Received;
-    }
+        // is this address in our wallet?
+        ordered_list<Cosmos::ray> outpoints = TXDB.by_address (addr);
+        list<entry<Bitcoin::outpoint, Cosmos::redeemable>> outputs;
 
-    bool operator == (const top_receive_event &e) const {
-        return Event.Received == e.Event.Received;
-    }
-};
+        for (const Cosmos::ray &r : outpoints) {
+            auto en = wallet.Account.Account.find (r.Point);
+            if (en != wallet.Account.Account.end ()) outputs <<= entry<Bitcoin::outpoint, Cosmos::redeemable> {r.Point, en->second};
+        }
 
-std::ostream &operator << (std::ostream &o, const top_receive_event &e) {
-    return o << "received {" << e.Event.Received << " sats in " << e.Event.TXID << "}";
-}
+        if (data::size (outputs) == 0) throw exception {1} << "We do not know how to spend this address";
 
-struct top_move_event {
-    Cosmos::events::event Event;
-    std::weak_ordering operator <=> (const top_move_event &e) const {
-        return Event.Moved <=> e.Event.Moved;
-    }
+        auto spent = split (Gigamonkey::redeem_p2pkh_and_p2pk, *rand, wallet, outputs, double (options {}.FeeRate));
 
-    bool operator == (const top_move_event &e) const {
-        return Event.Moved == e.Event.Moved;
-    }
-};
+        wallet = spent.Wallet;
+        return bytes (spent.Transaction);
 
-std::ostream &operator << (std::ostream &o, const top_move_event &e) {
-    return o << "moved {" << e.Event.Moved << " sats in " << e.Event.TXID << "}";
-}
-
-struct top_events_event {
-    Cosmos::events::event Event;
-    std::weak_ordering operator <=> (const top_events_event &e) const {
-        return data::size (Event.Events) <=> data::size (e.Event.Events);
-    }
-
-    bool operator == (const top_events_event &e) const {
-        return data::size (Event.Events) == data::size (e.Event.Events);
-    }
-};
-
-std::ostream &operator << (std::ostream &o, const top_events_event &e) {
-    return o << "found " << data::size (e.Event.Events) << " events in " << e.Event.TXID << ". ";
+    }));
 }
 
 void command_restore (const arg_parser &p) {
@@ -690,30 +677,138 @@ void command_restore (const arg_parser &p) {
     std::cout << "loading wallet" << std::endl;
     wait_for_enter ();
 
-    context e {};
+    Interface e {};
 
-    if (bool (sk)) read_wallet_options (e, p);
-    else read_watch_wallet_options (e, p);
-    auto *w = e.update ().watch_wallet ();
-    if (!w) throw exception {} << "could not load wallet";
-    w->Pubkeys = derivations;
+    auto restore_from_pubkey = [&max_look_ahead, &derivations] (Cosmos::Interface::writable u) {
+        auto *ww = u.watch_wallet ();
+        if (!ww) throw exception {} << "could not load wallet";
+        ww->Pubkeys = derivations;
 
-    ordered_list<ray> history {};
-    for (const data::entry<string, address_sequence> ed : derivations.Sequences) {
-        std::cout << "checking address sequence " << ed.Key << std::endl;
-        auto restored = restore {*max_look_ahead} (*e.update ().txdb (), ed.Value);
-        w->Account += restored.Account;
-        history = history + restored.History;
-        w->Pubkeys = w->Pubkeys.update (ed.Key, restored.Last);
-        std::cout << "done checking address sequence " << ed.Key << std::endl;
+        ordered_list<ray> history {};
+        for (const data::entry<string, address_sequence> ed : derivations.Sequences) {
+            std::cout << "checking address sequence " << ed.Key << std::endl;
+            auto restored = restore {*max_look_ahead} (*u.txdb (), ed.Value);
+            ww->Account += restored.Account;
+            history = history + restored.History;
+            ww->Pubkeys = ww->Pubkeys.update (ed.Key, restored.Last);
+            std::cout << "done checking address sequence " << ed.Key << std::endl;
+        }
+
+        // There is a potential problem here because if a history already
+        // exists we will throw an error if we try to put histories together
+        // out of order. The restore command really only works with a new wallet.
+        auto &h = *u.history ();
+        h <<= history;
+    };
+
+    auto restore_from_privkey = [&sk, &restore_from_pubkey] (Cosmos::Interface::writable u) {
+        restore_from_pubkey (u);
+        *u.keys () = u.keys ()->insert (*sk);
+    };
+
+    if (bool (sk)) {
+        read_wallet_options (e, p);
+        e.update<void> (restore_from_pubkey);
+    } else {
+        read_watch_wallet_options (e, p);
+        e.update<void> (restore_from_privkey);
     }
 
-    std::cout << "Wallet history: " << history << std::endl;
+    // this is where the function will end in the future. The rest of this stuff
+    // will generate tax implications and split all the coins into tiny pieces.
+    double fee_rate = double (options {}.FeeRate);
+    Cosmos::split split {options {}.MaxSatsPerOutput, options {}.MeanSatsPerOutput, double (options {}.MinSatsPerOutput)};
 
+    list<entry<Bitcoin::outpoint, redeemable>> splitable_outputs;
+    Bitcoin::satoshi total_split_value;
+    // find all outputs that are worth splitting
+    for (const auto &[key, value]: e.account ()->Account)
+        if (value.Prevout.Value > split.MaxSatsPerOutput) {
+            splitable_outputs <<= entry<Bitcoin::outpoint, redeemable> {key, value};
+            total_split_value += value.Prevout.Value;
+        }
+
+    std::cout << "found " << splitable_outputs.size () << " outputs to split." << std::endl;
+    std::cout << "total split value: " << total_split_value << std::endl;
+
+    // split coins
+    read_both_chains_options (e, p);
+    read_random_options (e, p);
+
+    for (const extended_transaction &tx :
+        e.update<list<extended_transaction>>
+            ([rand = e.random (), &split, &splitable_outputs, fee_rate]
+                (Cosmos::Interface::writable u) -> list<extended_transaction> {
+                    auto *wallet = u.wallet ();
+
+                    // we will generate some txs and then add fake events, as if they had been broadcast,
+                    // to the history to determine tax implications before broadcasting them. If the program
+                    // halts before this function is complete, the txs will not be broadcast and the new
+                    // wallets will not be saved.
+                    events h = *u.history ();
+                    Bitcoin::timestamp now = Bitcoin::timestamp::now ();
+                    uint32 fake_block_index = 0;
+
+                    list<extended_transaction> split_txs;
+                    for (const entry<Bitcoin::outpoint, redeemable> &e : splitable_outputs) {
+                        auto spent = split (Gigamonkey::redeem_p2pkh_and_p2pk, *rand, *wallet, splitable_outputs, fee_rate);
+                        *wallet = spent.Wallet;
+                        split_txs <<= spent.Transaction;
+
+                        auto txid = spent.Transaction.id ();
+                        stack<ray> new_events;
+
+                        uint32 index = 0;
+                        for (const Gigamonkey::extended::input &input : spent.Transaction.Inputs)
+                            new_events <<= ray {now, fake_block_index, inpoint {txid, index++}, static_cast<Bitcoin::input> (input), input.Prevout.Value};
+
+                        h <<= ordered_list<ray> (reverse (new_events));
+                        fake_block_index++;
+                    }
+
+                    std::tm tm = {0, 0, 0, 1, 0, 2024 - 1900};
+                    std::cout << "Tax implications: " << std::endl;
+                    std::cout << tax::calculate (*u.txdb (), *u.price_data (),
+                        h.get_history (Bitcoin::timestamp {std::mktime (&tm)})).CapitalGain << std::endl;
+
+                    wait_for_enter ();
+
+                    return split_txs;
+    })) e.net ()->broadcast (bytes (tx));
 }
 
-void command_taxes (const arg_parser &) {
-    throw exception {} << "method command_taxes unimplemented";
+void command_taxes (const arg_parser &p) {
+    using namespace Cosmos;
+
+    math::signed_limit<Bitcoin::timestamp> begin = math::signed_limit<Bitcoin::timestamp>::negative_infinity ();
+    math::signed_limit<Bitcoin::timestamp> end = math::signed_limit<Bitcoin::timestamp>::infinity ();
+
+    // first need to get a time range.
+    // TODO maybe it should be possible to make a narrower time range.
+    maybe<uint32> tax_year;
+    p.get ("tax_year", tax_year);
+    if (!bool (tax_year)) throw exception {1} << "no tax year given";
+
+    std::tm tm_begin = {0, 0, 0, 1, 0, *tax_year - 1900};
+    std::tm tm_end = {0, 0, 0, 1, 0, *tax_year - 1900 + 1};
+
+    begin = Bitcoin::timestamp {std::mktime (&tm_begin)};
+    end = Bitcoin::timestamp {std::mktime (&tm_begin)};
+
+    // TODO there are also issues related to time zone
+    // and the tax year.
+
+    Interface e {};
+    read_watch_wallet_options (e, p);
+
+    // then look in history for that time range.
+    e.update<void> ([&begin, &end] (Cosmos::Interface::writable u) {
+        auto *h = u.history ();
+        if (h == nullptr) throw exception {} << "could not read wallet history";
+
+        std::cout << "Tax implications: " << std::endl;
+        std::cout << tax::calculate (*u.txdb (), *u.price_data (), h->get_history (begin, end)) << std::endl;
+    });
 }
 
 method read_method (const arg_parser &p, uint32 index) {
@@ -775,12 +870,12 @@ void help (method meth) {
         case method::RESTORE : {
             std::cout << "arguments for method restore:"
                 "\n\t(--name=)<wallet name>"
-                "\n\t(--key=)<public key>"
+                "\n\t(--key=)<xpub | xpriv>"
                 "\n\t(--max_look_ahead=)<integer> (= 25)"
+                "\n\t(--words=<string>)"
                 "\n\t(--key_type=\"HD_sequence\"|\"BIP44_account\"|\"BIP44_master\") (= \"HD_sequence\")"
                 "\n\t(--coin_type=\"Bitcoin\"|\"BitcoinCash\"|\"BitcoinSV\"|<integer>)"
                 "\n\t(--wallet_type=\"RelayX\"|\"ElectrumSV\"|\"SimplyCash\"|\"CentBee\"|<string>)"
-                "\n\t(--words=<string>)"
                 "\n\t(--entropy=<string>)" << std::endl;
         } break;
         case method::SPLIT : {

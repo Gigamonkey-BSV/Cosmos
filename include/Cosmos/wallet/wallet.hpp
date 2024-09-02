@@ -72,7 +72,7 @@ namespace Cosmos {
     spent spend (wallet, select, make_change, redeem,
         data::crypto::random &,
         list<Bitcoin::output> to,
-        satoshi_per_byte fees = {1, 100},
+        satoshis_per_byte fees = {1, 100},
         uint32 lock = 0);
 
 }

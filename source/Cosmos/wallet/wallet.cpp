@@ -10,7 +10,7 @@ namespace Cosmos {
     spent spend (wallet w, select s, make_change c, redeem r,
         data::crypto::random &rand,
         list<Bitcoin::output> to,
-        satoshi_per_byte fees,
+        satoshis_per_byte fees,
         uint32 lock) {
 
         using namespace Gigamonkey;
@@ -43,7 +43,7 @@ namespace Cosmos {
         redeemable_transaction design_before_change {1, inputs, to, lock};
 
         // how much do we need to make in change?
-        satoshi_per_byte fee_rate_before_change {design_before_change.fee (), design_before_change.expected_size ()};
+        satoshis_per_byte fee_rate_before_change {design_before_change.fee (), design_before_change.expected_size ()};
 
         // what change needs to be acconted for in order to make
         Bitcoin::satoshi change_amount

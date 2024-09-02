@@ -22,7 +22,7 @@ namespace Cosmos {
     };
 
     // construct a set of change outputs.
-    using make_change = data::function<change (address_sequence, Bitcoin::satoshi, satoshi_per_byte fees, data::crypto::random &)>;
+    using make_change = data::function<change (address_sequence, Bitcoin::satoshi, satoshis_per_byte fees, data::crypto::random &)>;
 
     // default make_change function
     struct make_change_parameters {
@@ -41,7 +41,7 @@ namespace Cosmos {
         double ExpectedSplitFraction;
 
         // construct a set of change outputs.
-        change operator () (address_sequence, Bitcoin::satoshi, satoshi_per_byte fees, data::crypto::random &) const;
+        change operator () (address_sequence, Bitcoin::satoshi, satoshis_per_byte fees, data::crypto::random &) const;
     };
 }
 

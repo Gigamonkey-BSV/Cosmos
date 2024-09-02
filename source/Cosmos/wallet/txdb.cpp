@@ -221,25 +221,4 @@ namespace Cosmos {
         import_transaction (id);
         return Local [id];
     }
-
-    double price_data::operator [] (const Bitcoin::timestamp &t) {
-        auto v = Price.find (t);
-        if (v != Price.end ()) return v->second;
-        double p = Net.price (t);
-        Price[t] = p;
-        return p;
-    }
-
-    price_data::price_data (network &n, const JSON &j): Net {n} {
-        std::cout << "reading " << j.size () << " entries of price data " << std::endl;
-        for (const JSON &x : j) Price[Bitcoin::timestamp {uint32 (x[0])}] = double (x[1]);
-    }
-
-    price_data::operator JSON () const {
-        JSON::array_t data {};
-        for (const auto &[key, value] : Price)
-            data.push_back (JSON::array_t {uint32 (key), value});
-
-        return data;
-    }
 }

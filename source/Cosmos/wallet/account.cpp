@@ -40,10 +40,98 @@ namespace Cosmos {
         return a;
     }
 
-    list<ray> get_next_tx (ordered_list<ray> &e) {
-        list<ray> next_tx;
-        if (data::size (e) == 0) return next_tx;
+    ray read_ray (const JSON &j, const Bitcoin::timestamp &when) {
+        if (j.contains ("output")) return ray {when, static_cast<uint64> (int64 (j["index"])),
+            read_outpoint (j["outpoint"]), read_output (j["output"])};
+        return ray {when, static_cast<uint64> (int64 (j["index"])), inpoint {read_outpoint (j["inpoint"])},
+            read_input (j["input"]), Bitcoin::satoshi {int64 (j["value"])}};
+    }
 
+    JSON write_ray (const ray &r) {
+        JSON::object_t o;
+
+        if (r.Index > std::numeric_limits<int64>::max ())
+            throw exception {} << "index in block is too big to represent as an integer in the JSON library we are using";
+
+        o["index"] = static_cast<int64> (r.Index);
+        if (r.Direction == direction::out) {
+            o["output"] = write (Bitcoin::output {r.Put});
+            o["outpoint"] = write (Bitcoin::outpoint {r.Point});
+        } else {
+            o["value"] = uint64 (r.Value);
+            o["input"] = write (Bitcoin::output {r.Put});
+            o["inpoint"] = write (Bitcoin::outpoint {r.Point});
+        }
+        return o;
+    }
+
+    JSON write_event (const events::event &e) {
+        JSON::object_t o;
+        o["txid"] = write (e.TXID);
+        o["when"] = uint32 (e.When);
+        o["received"] = int64 (e.Received);
+        o["spent"] = int64 (e.Spent);
+        o["moved"] = int64 (e.Moved);
+        JSON::array_t a;
+        a.resize (e.Events.size ());
+        int i = 0;
+        for (const ray &r : e.Events) a[i++] = write_ray (r);
+        o["events"] = a;
+        return o;
+    }
+
+    events::event read_event (const JSON &j) {
+        events::event e {};
+        e.TXID = read_txid (std::string (j["txid"]));
+        e.When = Bitcoin::timestamp (uint32 (j["when"]));
+        e.Received = Bitcoin::satoshi (uint64 (j["received"]));
+        e.Spent = Bitcoin::satoshi (uint64 (j["spent"]));
+        e.Moved = Bitcoin::satoshi (uint64 (j["moved"]));
+        stack<ray> events;
+        for (const auto &jj : j["events"]) events <<= read_ray (jj, e.When);
+        e.Events = ordered_list<ray> (data::reverse (events));
+        return e;
+    }
+
+    events::operator JSON () const {
+        JSON::object_t ev;
+
+        ev["latest"] = uint32 (Latest);
+        ev["value"] = Value;
+        ev["spent"] = Spent;
+        ev["received"] = Received;
+
+        JSON::array_t events;
+        events.resize (Events.size ());
+        int i = 0;
+        for (const event &e : Events) events[i++] = write_event (e);
+        ev["events"] = events;
+
+        JSON::object_t account;
+        for (const auto &[key, value] : Account) account[write (key)] = write (value);
+        ev["account"] = account;
+
+        return ev;
+    }
+
+    events::events (const JSON &j) {
+        if (j == JSON {nullptr}) return;
+
+        Latest = Bitcoin::timestamp {uint32 (j["latest"])};
+        Value = Bitcoin::satoshi {int64 (j["value"])};
+        Spent = Bitcoin::satoshi {int64 (j["spent"])};
+        Received = Bitcoin::satoshi {int64 (j["received"])};
+
+        for (const auto &[key, value] : j["account"].items ()) Account[read_outpoint (key)] = read_output (value);
+
+        for (const auto &jj : j["events"]) Events <<= read_event (jj);
+    }
+
+    // get all events corresponding to the same tx.
+    ordered_list<ray> get_next_tx (ordered_list<ray> &e) {
+        if (data::size (e) == 0) return {};
+
+        stack<ray> next_tx;
         const auto &txid = e.first ().Point.Digest;
 
         while (true) {
@@ -51,9 +139,7 @@ namespace Cosmos {
 
             e = e.rest ();
 
-            if (data::size (e) == 0) return next_tx;
-
-            if (e.first ().Point.Digest != txid) return next_tx;
+            if (data::size (e) == 0 || e.first ().Point.Digest != txid) return reverse (next_tx);
         }
     }
 
@@ -90,6 +176,9 @@ namespace Cosmos {
                 received += current.Value;
             }
 
+            // this is not correct. It is theoretically possible to
+            // receive and spend at the same time, although you
+            // wouldn't normally do that.
             if (received > spent) {
                 next_event.Spent = 0;
                 next_event.Moved = spent;
@@ -109,6 +198,18 @@ namespace Cosmos {
 
         }
 
+    }
+
+    events::history events::get_history (
+        math::signed_limit<Bitcoin::timestamp> from,
+        math::signed_limit<Bitcoin::timestamp> to) const {
+
+        events ev;
+        stack<event> h;
+        for (const event &e : Events) if (from > e.When) ev <<= e.Events;
+        else if (to >= e.When) h <<= e;
+
+        return history {ev.Account, ordered_list<event> (reverse (h))};
     }
 
 }

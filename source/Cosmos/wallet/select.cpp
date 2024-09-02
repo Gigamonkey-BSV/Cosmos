@@ -5,7 +5,7 @@ namespace Cosmos {
 
     // select outputs from a wallet sufficient for the given value.
     selected select_output_parameters::operator ()
-        (const account &acc, Bitcoin::satoshi value_to_spend, satoshi_per_byte fees, data::crypto::random &r) const {
+        (const account &acc, Bitcoin::satoshi value_to_spend, satoshis_per_byte fees, data::crypto::random &r) const {
 
         // select all funds, determine total value of account.
         Bitcoin::satoshi spendable_value = acc.value ();

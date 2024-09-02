@@ -25,6 +25,9 @@ namespace Cosmos {
     JSON write (const Bitcoin::output &j);
     Bitcoin::output read_output (const JSON &j);
 
+    JSON write (const Bitcoin::input &j);
+    Bitcoin::input read_input (const JSON &j);
+
     void write_to_file (const JSON &, const std::string &filename);
     JSON read_from_file (const std::string &filename);
 
@@ -54,6 +57,10 @@ namespace Cosmos {
 
     Bitcoin::output inline read_output (const JSON &j) {
         return Bitcoin::output {int64 (j["value"]), *encoding::hex::read (std::string (j["script"]))};
+    }
+
+    Bitcoin::input inline read_input (const JSON &j) {
+        return Bitcoin::input {read_outpoint (j["reference"]), *encoding::hex::read (std::string (j["script"])), uint32 (j["sequence"])};
     }
 }
 

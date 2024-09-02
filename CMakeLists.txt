@@ -3,8 +3,12 @@ project (cosmos_lib CXX)
 
 add_library (cosmos_lib STATIC
     source/Cosmos/wallet/write.cpp
+    source/Cosmos/network/whatsonchain.cpp
+    source/Cosmos/network.cpp
     source/Cosmos/wallet/keys/derivation.cpp
     source/Cosmos/wallet/txdb.cpp
+    source/Cosmos/database/price_data.cpp
+    source/Cosmos/database/json/price_data.cpp
     source/Cosmos/wallet/account.cpp
     source/Cosmos/wallet/restore.cpp
     source/Cosmos/wallet/select.cpp
@@ -13,9 +17,8 @@ add_library (cosmos_lib STATIC
     source/Cosmos/wallet/keys/secret.cpp
     source/Cosmos/wallet/wallet.cpp
     source/Cosmos/wallet/split.cpp
-    source/Cosmos/network/whatsonchain.cpp
-    source/Cosmos/network.cpp
-    source/Cosmos/context.cpp)
+    source/Cosmos/tax.cpp
+    source/Cosmos/interface.cpp)
 
 find_package (Gigamonkey CONFIG REQUIRED)
 

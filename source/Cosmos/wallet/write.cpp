@@ -20,6 +20,14 @@ namespace Cosmos {
         return op;
     }
 
+    JSON write (const Bitcoin::input &o) {
+        JSON::object_t ip;
+        ip["reference"] = write (o.Reference);
+        ip["script"] = encoding::hex::write (o.Script);
+        ip["sequence"] = uint32 (o.Sequence);
+        return ip;
+    }
+
     std::string write (const Bitcoin::header &h) {
         return encoding::hex::write (h.write ());
     }
