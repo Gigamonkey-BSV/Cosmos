@@ -1,11 +1,12 @@
-#ifndef COSMOS_WALLET_WRITE
-#define COSMOS_WALLET_WRITE
+#ifndef COSMOS_DATABASE_WRITE
+#define COSMOS_DATABASE_WRITE
 
 #include <gigamonkey/timechain.hpp>
 #include <gigamonkey/schema/hd.hpp>
 #include <data/net/JSON.hpp>
 #include <Cosmos/network.hpp>
 
+// provide standard ways of converting certain types into strings and back.
 namespace Cosmos {
     using namespace data;
     namespace Bitcoin = Gigamonkey::Bitcoin;

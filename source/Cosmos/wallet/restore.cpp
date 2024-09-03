@@ -23,59 +23,50 @@ namespace Cosmos {
             // generate next address
             entry<Bitcoin::address, signing> next = m.last ();
             const Bitcoin::address &new_addr = next.Key;
-            try {
 
-                std::cout << " recovering address " << m.Last << ": " << new_addr << std::endl;
+            std::cout << " recovering address " << m.Last << ": " << new_addr << std::endl;
 
-                m = m.next ();
+            m = m.next ();
 
-                // get all txs relating to this address.
-                ordered_list<ray> ev = TXDB.by_address (new_addr);
-                std::cout << " found " << ev.size () << " events for address " << new_addr << std::endl;
+            // get all txs relating to this address.
+            ordered_list<ray> ev = TXDB.by_address (new_addr);
+            std::cout << " found " << ev.size () << " events for address " << new_addr << std::endl;
 
-                if (ev.size () == 0) {
-                    if (last_used == MaxLookAhead) break;
+            if (ev.size () == 0) {
+                if (last_used == MaxLookAhead) break;
 
-                    last_used++;
-                    continue;
-                }
-
-                last_used = 0;
-                last = m;
-
-                for (const auto &e : ev) {
-                    events = events.insert (e);
-                    std::cout << "    " << new_addr << " received " << e.Value << " on " << e.When;
-                    received += e.Value;
-
-                    // has this output been redeemed?
-                    auto r = TXDB.redeeming (e.Point);
-
-                    if (r != nullptr) {
-                        std::cout << "; spent on " << r->When;
-                        events = events.insert (*r);
-                        spent += e.Value;
-                    } else {
-                        a[e.Point] = redeemable {Bitcoin::output {e.Put}, next.Value};
-                        in_wallet += e.Value;
-                    }
-
-                }
-
-                std::cout << "    total received  " << received << std::endl;
-                std::cout << "    total spent     " << spent << std::endl;
-                std::cout << "    total in wallet " << in_wallet << std::endl;
-
-                std::cout << "    " << data::size (events) << " total events discovered for " << new_addr << std::endl;
-
-            } catch (std::exception &response) {
-                // put the address index back to its earlier state so that in case the program crashes
-                // we can keep all the data that we got.
-                std::cout << "exception caught " << response.what () << std::endl;
-                auto cr_txdb = static_cast<cached_remote_txdb &> (TXDB);
-                cr_txdb.Local.AddressIndex.erase (new_addr);
-                throw response;
+                last_used++;
+                continue;
             }
+
+            last_used = 0;
+            last = m;
+
+            for (const auto &e : ev) {
+                events = events.insert (e);
+                std::cout << "    " << new_addr << " received " << e.Value << " on " << e.When;
+                received += e.Value;
+
+                // has this output been redeemed?
+                auto r = TXDB.redeeming (e.Point);
+
+                if (r != nullptr) {
+                    std::cout << "; spent on " << r->When;
+                    events = events.insert (*r);
+                    spent += e.Value;
+                } else {
+                    a[e.Point] = redeemable {Bitcoin::output {e.Put}, next.Value};
+                    in_wallet += e.Value;
+                }
+
+            }
+
+            std::cout << "    total received  " << received << std::endl;
+            std::cout << "    total spent     " << spent << std::endl;
+            std::cout << "    total in wallet " << in_wallet << std::endl;
+
+            std::cout << "    " << data::size (events) << " total events discovered for " << new_addr << std::endl;
+
         }
 
         return restored {events, a, last.Last};

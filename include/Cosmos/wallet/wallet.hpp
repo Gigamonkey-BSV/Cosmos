@@ -1,7 +1,7 @@
 #ifndef COSMOS_WALLET_WALLET
 #define COSMOS_WALLET_WALLET
 
-#include <Cosmos/wallet/write.hpp>
+#include <Cosmos/database/write.hpp>
 #include <Cosmos/wallet/account.hpp>
 #include <Cosmos/wallet/keys/chain.hpp>
 #include <Cosmos/wallet/keys/secret.hpp>

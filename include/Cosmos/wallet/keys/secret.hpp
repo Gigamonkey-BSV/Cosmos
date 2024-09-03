@@ -1,7 +1,7 @@
 #ifndef COSMOS_WALLET_KEYS_SECRET
 #define COSMOS_WALLET_KEYS_SECRET
 
-#include <Cosmos/wallet/write.hpp>
+#include <Cosmos/database/write.hpp>
 #include <Cosmos/wallet/keys/derivation.hpp>
 
 namespace Cosmos {

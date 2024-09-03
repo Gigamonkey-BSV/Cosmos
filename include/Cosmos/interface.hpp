@@ -7,6 +7,7 @@
 
 #include <Cosmos/wallet/wallet.hpp>
 #include <Cosmos/database/json/price_data.hpp>
+#include <Cosmos/database/json/txdb.hpp>
 
 using arg_parser = data::io::arg_parser;
 
@@ -90,7 +91,7 @@ namespace Cosmos {
         Cosmos::pubkeychain *Pubkeys {nullptr};
         Cosmos::local_txdb *LocalTXDB {nullptr};
         Cosmos::cached_remote_txdb *RemoteTXDB {nullptr};
-        Cosmos::JSON_price_data *LocalPriceData {nullptr};
+        Cosmos::local_price_data *LocalPriceData {nullptr};
         Cosmos::price_data *PriceData {nullptr};
         Cosmos::events *Events {nullptr};
         Cosmos::account *Account {nullptr};

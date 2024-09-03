@@ -204,7 +204,7 @@ namespace Cosmos {
         if (!bool (LocalTXDB)) {
             auto txf = txdb_filepath ();
             std::cout << "   " << "txdb filepath is " << txf << std::endl;
-            if (bool (txf)) LocalTXDB = new local_txdb {read_local_txdb_from_file (*txf)};
+            if (bool (txf)) LocalTXDB = new JSON_local_txdb {read_JSON_local_txdb_from_file (*txf)};
             else return nullptr;
         }
 
@@ -223,7 +223,7 @@ namespace Cosmos {
 
         if (!bool (LocalTXDB)) {
             auto txf = txdb_filepath ();
-            if (bool (txf)) LocalTXDB = new local_txdb {read_local_txdb_from_file (*txf)};
+            if (bool (txf)) LocalTXDB = new JSON_local_txdb {read_JSON_local_txdb_from_file (*txf)};
             else return nullptr;
         }
 
@@ -347,11 +347,11 @@ namespace Cosmos {
         auto pdf = price_data_filepath ();
 
         if (Written) {
-            if (bool (tf) && bool (LocalTXDB)) write_to_file (JSON (*LocalTXDB), *tf);
+            if (bool (tf) && bool (LocalTXDB)) write_to_file (JSON (dynamic_cast<JSON_local_txdb &> (*LocalTXDB)), *tf);
             if (bool (af) && bool (Account)) write_to_file (JSON (*Account), *af);
             if (bool (pf) && bool (Pubkeys)) write_to_file (JSON (*Pubkeys), *kf);
             if (bool (kf) && bool (Keys)) write_to_file (JSON (*Keys), *kf);
-            if (bool (pdf) && bool (LocalPriceData)) write_to_file (JSON (*LocalPriceData), *pdf);
+            if (bool (pdf) && bool (LocalPriceData)) write_to_file (JSON (dynamic_cast<JSON_price_data &> (*LocalPriceData)), *pdf);
         }
 
         delete PriceData;

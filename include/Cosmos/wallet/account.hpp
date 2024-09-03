@@ -3,7 +3,7 @@
 
 #include <data/math/infinite.hpp>
 #include <Cosmos/wallet/keys/sequence.hpp>
-#include <Cosmos/wallet/txdb.hpp>
+#include <Cosmos/database/txdb.hpp>
 
 namespace Cosmos {
     struct redeemable : signing {

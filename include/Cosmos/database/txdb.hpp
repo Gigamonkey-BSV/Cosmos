@@ -1,13 +1,15 @@
-#ifndef COSMOS_WALLET_TXDB
-#define COSMOS_WALLET_TXDB
+#ifndef COSMOS_DATABASE_TXDB
+#define COSMOS_DATABASE_TXDB
 
-#include <Cosmos/wallet/write.hpp>
+#include <gigamonkey/SPV.hpp>
+#include <Cosmos/database/write.hpp>
 #include <Cosmos/network.hpp>
 
 namespace Cosmos {
     using namespace data;
     namespace Bitcoin = Gigamonkey::Bitcoin;
     namespace Merkle = Gigamonkey::Merkle;
+    namespace SPV = Gigamonkey::SPV;
 
     // a transaction with a complete Merkle proof.
     struct vertex : SPV::database::confirmed {
@@ -122,30 +124,25 @@ namespace Cosmos {
 
     };
 
-    struct local_txdb final : SPV::database::memory, txdb {
-
-        std::map<Bitcoin::address, list<Bitcoin::outpoint>> AddressIndex;
-        std::map<digest256, list<Bitcoin::outpoint>> ScriptIndex;
-        std::map<Bitcoin::outpoint, inpoint> RedeemIndex;
-
-        bool import_transaction (const Bitcoin::transaction &, const Merkle::path &, const Bitcoin::header &h);
+    struct local_txdb : txdb, SPV::database {
 
         vertex operator [] (const Bitcoin::TXID &id) final override {
             return vertex {this->tx (id)};
         }
 
-        ordered_list<ray> by_address (const Bitcoin::address &) final override;
-        ordered_list<ray> by_script_hash (const digest256 &) final override;
-        ptr<ray> redeeming (const Bitcoin::outpoint &) final override;
+        bool import_transaction (const Bitcoin::transaction &, const Merkle::path &, const Bitcoin::header &h);
 
-        local_txdb (): SPV::database::memory {}, txdb {}, AddressIndex {}, ScriptIndex {}, RedeemIndex {} {}
-        explicit local_txdb (const JSON &);
-        explicit operator JSON () const;
+        virtual void add_address (const Bitcoin::address &, const Bitcoin::outpoint &) = 0;
+        virtual void add_script (const digest256 &, const Bitcoin::outpoint &) = 0;
+        virtual void set_redeem (const Bitcoin::outpoint &, const inpoint &) = 0;
+
+        virtual ~local_txdb () {}
+
     };
 
     struct cached_remote_txdb final : txdb {
         network &Net;
-        local_txdb Local;
+        local_txdb &Local;
 
         cached_remote_txdb (network &n, local_txdb &x): txdb {}, Net {n}, Local {x} {}
 
@@ -156,11 +153,6 @@ namespace Cosmos {
 
         void import_transaction (const Bitcoin::TXID &);
     };
-
-    local_txdb inline read_local_txdb_from_file (const std::string &filename) {
-        return local_txdb (read_from_file (filename));
-    }
-
 }
 
 #endif
