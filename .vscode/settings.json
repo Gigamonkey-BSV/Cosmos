@@ -1,0 +1,5 @@
+{
+    "cmake.allowUnsupportedPresetsVersions": true,
+    "cmake.allowCommentsInPresetsFile": true,
+    "cmake.useCMakePresets": "always"
+}
