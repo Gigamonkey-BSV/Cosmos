@@ -71,21 +71,20 @@ namespace Cosmos {
         }
     }
 
-    void send_to (network &n, wallet &w, crypto::random &rand, list<Bitcoin::output> o) {
-        spent z = spend (w,
-            select_output_parameters {4, 5000, .23},
-            make_change_parameters {10, 100, 1000000, .4},
-            Gigamonkey::redeem_p2pkh_and_p2pk, rand, o);
+    void Interface::writable::broadcast (const spent &x) {
 
-        std::cout << "broadcasting tx " << z.Transaction.id () << std::endl;
+        std::cout << "broadcasting tx " << x.Transaction.Key;
 
-        bytes tx_raw = bytes (z.Transaction);
+        wait_for_enter ();
 
-        auto err = n.broadcast (tx_raw);
+        auto *w = wallet ();
+        if (!bool (w)) throw exception {1} << "could not load wallet";
 
-        if (bool (err)) throw exception {3} << "tx broadcast failed;\n\ttx: " << encoding::hex::write (tx_raw) << "\n\terror: " << err;
+        auto err = I.net ()->broadcast (bytes (x.Transaction.Value));
+        if (bool (err)) throw exception {3} << "tx broadcast failed;\n\ttx: " << x.Transaction << "\n\terror: " << err;
 
-        w = z.Wallet;
+        // save new wallet.
+        *w = x.Wallet;
     }
 
     void read_both_chains_options (Interface &e, const arg_parser &p) {

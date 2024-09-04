@@ -78,7 +78,7 @@ namespace Cosmos {
         }
 
         // return new wallet.
-        return spent {complete, {w.Keys, new_account, w.Pubkeys.update (w.Pubkeys.Change, ch.Last)}};
+        return spent {txid, complete, {w.Keys, new_account, w.Pubkeys.update (w.Pubkeys.Change, ch.Last)}};
     }
 }
 

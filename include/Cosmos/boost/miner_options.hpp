@@ -55,40 +55,6 @@ namespace BoostPOW {
         static script_options read (const argh::parser &, int start_pos = 2);
         explicit operator Boost::output_script () const;
     };
-/*
-    struct redeeming_options {
-
-        ptr<map_key_database> SigningKeys {};
-
-        ptr<address_source> ReceivingAddresses {};
-
-        uint32 Threads {1};
-
-        // if not provided, look up fee rate from GorillaPool MAPI.
-        maybe<double> FeeRate {};
-
-        // Where to call the Boost API.
-        // If not provided, use pow.co.
-        maybe<string> APIHost {};
-    };
-
-    struct mining_options : redeeming_options {
-        double MinProfitability {0};
-        double MaxDifficulty {-1};
-        int64 MinValue {300};
-        bool Websockets {false};
-        uint32 RefreshInterval {90};
-    };
-
-    // validate options and call the appropriate function.
-    int run (const argh::parser &,
-        int (*help) (),
-        int (*version) (),
-        int (*spend) (const script_options &),
-        int (*redeem) (const Bitcoin::outpoint &, const bytes &script, int64 value, const redeeming_options &),
-        int (*mine) (const mining_options &));*/
-
-    int run_spend (const argh::parser &command_line, int (*spend) (const script_options &));
 }
 
 #endif

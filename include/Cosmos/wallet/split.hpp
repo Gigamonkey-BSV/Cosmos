@@ -15,7 +15,7 @@ namespace Cosmos {
         spent operator () (redeem, data::crypto::random &, wallet, list<entry<Bitcoin::outpoint, redeemable>> selected, double fee_rate) const;
 
         struct result {
-            extended_transaction Transaction;
+            entry<Bitcoin::TXID, extended_transaction> Transaction;
             account Account;
             uint32 Last;
         };

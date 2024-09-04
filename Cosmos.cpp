@@ -351,22 +351,16 @@ void command_send (const arg_parser &p) {
     if (net == nullptr) throw exception {5} << "could not connect to remote servers";
 
     if (address.valid ()) e.update<void> ([rand, net, &address, &spend_amount] (Cosmos::Interface::writable u) {
-            Cosmos::send_to (*net, *u.wallet (), *rand,
-                {Bitcoin::output {spend_amount, pay_to_address::script (address.decode ().Digest)}});
+            u.broadcast (u.make_tx ({Bitcoin::output {spend_amount, pay_to_address::script (address.decode ().Digest)}}));
         });
     else if (xpub.valid ()) e.update<void> ([rand, net, &xpub, &spend_amount] (Cosmos::Interface::writable u) {
-            Cosmos::send_to (*net, *u.wallet (), *rand,
-                for_each ([] (const redeemable &m) -> Bitcoin::output {
+            u.broadcast (u.make_tx (for_each ([] (const redeemable &m) -> Bitcoin::output {
                     return m.Prevout;
-                }, Cosmos::split {} (*rand, address_sequence {xpub, {}, 0}, spend_amount, .001).Outputs));
+                }, Cosmos::split {} (*rand, address_sequence {xpub, {}, 0}, spend_amount, .001).Outputs)));
         });
     else throw exception {2} << "Could not read address/xpub";
 }
 
-void command_boost (const arg_parser &p) {
-    throw exception {} << "command_boost is unimplemented";
-}
-/*
 void command_boost (const arg_parser &p) {
     using namespace BoostPOW;
 
@@ -379,12 +373,12 @@ void command_boost (const arg_parser &p) {
     if (!bool (value))
         throw exception {2} << "could not read value to boost.";
 
-    Bitcoin::output op {Bitcoin::satoshi {*value}, Boost::output_script (script_options::read (p.Parser, 4)).write ()};
+    Bitcoin::output op {Bitcoin::satoshi {*value}, Boost::output_script (script_options::read (p.Parser, 3)).write ()};
 
     e.update<void> ([net = e.net (), rand = e.random (), &op] (Cosmos::Interface::writable u) {
-        Cosmos::send_to (*net, *u.wallet (), *rand, {op});
+        u.broadcast (u.make_tx ({op}));
     });
-}*/
+}
 
 void command_split (const arg_parser &p) {
     using namespace Cosmos;
@@ -410,83 +404,85 @@ void command_split (const arg_parser &p) {
     maybe<string> address_string;
     p.get (3, "address", address_string);
 
-    for (const extended_transaction &tx :
-        e.update<list<extended_transaction>>
-            ([rand = e.random (), &split, address_string, fee_rate]
-                (Cosmos::Interface::writable u) -> list<extended_transaction> {
+    e.update<void> ([rand = e.random (), &split, address_string, fee_rate]
+        (Cosmos::Interface::writable u) {
 
-                    if (!bool (address_string)) throw exception {1} << "could not read address to split";
+            if (!bool (address_string)) throw exception {1} << "could not read address to split";
 
-                    Bitcoin::address addr {*address_string};
-                    HD::BIP_32::pubkey pk {*address_string};
-                    if (pk.valid ()) throw exception {6} << "hd pubkey not yet supported";
-                    if (!addr.valid ()) throw exception {5} << "invalid address";
+            Bitcoin::address addr {*address_string};
+            HD::BIP_32::pubkey pk {*address_string};
+            if (pk.valid ()) throw exception {6} << "hd pubkey not yet supported";
+            if (!addr.valid ()) throw exception {5} << "invalid address";
 
-                    list<entry<Bitcoin::outpoint, redeemable>> splitable_outputs;
-                    Bitcoin::satoshi total_split_value;
+            list<entry<Bitcoin::outpoint, redeemable>> splitable_outputs;
+            Bitcoin::satoshi total_split_value;
 
-                    if (addr.valid ()) {
-                        auto &wallet = *u.wallet ();
-                        auto &TXDB = *u.txdb ();
+            auto *w = u.wallet ();
+            if (!bool (w)) throw exception {} << "could not load wallet";
 
-                        // is this address in our wallet?
-                        ordered_list<Cosmos::ray> outpoints = TXDB.by_address (addr);
+            if (addr.valid ()) {
+                auto *TXDB = u.txdb ();
+                if (!bool (TXDB)) throw exception {} << "could not load wallet";
 
-                        for (const Cosmos::ray &r : outpoints) {
-                            auto en = wallet.Account.Account.find (r.Point);
-                            if (en != wallet.Account.Account.end ()) splitable_outputs
-                                <<= entry <Bitcoin::outpoint, Cosmos::redeemable> {r.Point, en->second};
-                            total_split_value += en->second.Prevout.Value;
-                        }
+                // is this address in our wallet?
+                ordered_list<Cosmos::ray> outpoints = TXDB->by_address (addr);
 
-                    } else for (const auto &[key, value]: u.account ()->Account)
-                        // find all outputs that are worth splitting
-                        if (value.Prevout.Value > split.MaxSatsPerOutput) {
-                            splitable_outputs <<= entry<Bitcoin::outpoint, redeemable> {key, value};
-                            total_split_value += value.Prevout.Value;
-                        }
+                for (const Cosmos::ray &r : outpoints) {
+                    auto en = w->Account.Account.find (r.Point);
+                    if (en != w->Account.Account.end ()) splitable_outputs
+                        <<= entry <Bitcoin::outpoint, Cosmos::redeemable> {r.Point, en->second};
+                    total_split_value += en->second.Prevout.Value;
+                }
 
-                    if (data::size (splitable_outputs) == 0) throw exception {1} << "No outputs to split";
+            } else for (const auto &[key, value]: u.account ()->Account)
+                // find all outputs that are worth splitting
+                if (value.Prevout.Value > split.MaxSatsPerOutput) {
+                    splitable_outputs <<= entry<Bitcoin::outpoint, redeemable> {key, value};
+                    total_split_value += value.Prevout.Value;
+                }
 
-                    std::cout << "found " << splitable_outputs.size () << " outputs to split." << std::endl;
-                    std::cout << "total split value: " << total_split_value << std::endl;
+            if (data::size (splitable_outputs) == 0) throw exception {1} << "No outputs to split";
 
-                    auto *wallet = u.wallet ();
+            std::cout << "found " << splitable_outputs.size () << " outputs to split." << std::endl;
+            std::cout << "total split value: " << total_split_value << std::endl;
 
-                    // we will generate some txs and then add fake events, as if they had been broadcast,
-                    // to the history to determine tax implications before broadcasting them. If the program
-                    // halts before this function is complete, the txs will not be broadcast and the new
-                    // wallets will not be saved.
-                    events h = *u.history ();
-                    Bitcoin::timestamp now = Bitcoin::timestamp::now ();
-                    uint32 fake_block_index = 0;
+            // we will generate some txs and then add fake events, as if they had been broadcast,
+            // to the history to determine tax implications before broadcasting them. If the program
+            // halts before this function is complete, the txs will not be broadcast and the new
+            // wallets will not be saved.
+            events h = *u.history ();
+            Bitcoin::timestamp now = Bitcoin::timestamp::now ();
+            uint32 fake_block_index = 0;
 
-                    list<extended_transaction> split_txs;
-                    for (const entry<Bitcoin::outpoint, redeemable> &e : splitable_outputs) {
-                        auto spent = split (Gigamonkey::redeem_p2pkh_and_p2pk, *rand, *wallet, splitable_outputs, *fee_rate);
-                        *wallet = spent.Wallet;
-                        split_txs <<= spent.Transaction;
+            list<spent> split_txs;
+            wallet old = *w;
+            for (const entry<Bitcoin::outpoint, redeemable> &e : splitable_outputs) {
+                auto spent = split (Gigamonkey::redeem_p2pkh_and_p2pk, *rand, old, splitable_outputs, *fee_rate);
+                split_txs <<= spent;
+                old = spent.Wallet;
 
-                        auto txid = spent.Transaction.id ();
-                        stack<ray> new_events;
+                stack<ray> new_events;
 
-                        uint32 index = 0;
-                        for (const Gigamonkey::extended::input &input : spent.Transaction.Inputs)
-                            new_events <<= ray {now, fake_block_index, inpoint {txid, index++}, static_cast<Bitcoin::input> (input), input.Prevout.Value};
+                uint32 index = 0;
+                for (const Gigamonkey::extended::input &input : spent.Transaction.Value.Inputs)
+                    new_events <<= ray {now, fake_block_index,
+                        inpoint {spent.Transaction.Key, index++}, static_cast<Bitcoin::input> (input), input.Prevout.Value};
 
-                        h <<= ordered_list<ray> (reverse (new_events));
-                        fake_block_index++;
-                    }
+                h <<= ordered_list<ray> (reverse (new_events));
+                fake_block_index++;
+            }
 
-                    std::tm tm = {0, 0, 0, 1, 0, 2024 - 1900};
-                    std::cout << "Tax implications: " << std::endl;
-                    std::cout << tax::calculate (*u.txdb (), *u.price_data (),
-                        h.get_history (Bitcoin::timestamp {std::mktime (&tm)})).CapitalGain << std::endl;
+            std::tm tm = {0, 0, 0, 1, 0, 2024 - 1900};
+            std::cout << "Tax implications: " << std::endl;
+            std::cout << tax::calculate (*u.txdb (), *u.price_data (),
+                h.get_history (Bitcoin::timestamp {std::mktime (&tm)})).CapitalGain << std::endl;
 
-                    wait_for_enter ();
+            wait_for_enter ();
 
-                    return split_txs;
-    })) e.net ()->broadcast (bytes (tx));
+            std::cout << "broadcasting split transactions" << std::endl;
+
+            for (const spent &x : split_txs) u.broadcast (x);
+    });
 }
 
 void command_restore (const arg_parser &p) {

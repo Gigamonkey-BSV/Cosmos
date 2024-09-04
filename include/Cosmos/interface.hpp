@@ -55,11 +55,21 @@ namespace Cosmos {
             Cosmos::watch_wallet *watch_wallet ();
             Cosmos::wallet *wallet ();
 
-        private:
-            Cosmos::Interface &Interface;
+            void broadcast (const spent &);
 
-            writable (Cosmos::Interface &i) : Interface {i} {}
-            friend struct Interface;
+            // make a transaction with a bunch of default options already set
+            spent make_tx (list<Bitcoin::output> o) {
+                return spend (*wallet (),
+                    select_output_parameters {4, 5000, .23},
+                    make_change_parameters {10, 100, 1000000, .4},
+                    Gigamonkey::redeem_p2pkh_and_p2pk, *I.random (), o);
+            }
+
+        private:
+            Cosmos::Interface &I;
+
+            writable (Cosmos::Interface &i) : I {i} {}
+            friend struct Cosmos::Interface;
         };
 
         // if this function returns normally, any changes
@@ -127,7 +137,6 @@ namespace Cosmos {
     void display_value (const watch_wallet &w);
     void generate_new_address (pubkeychain &p);
     void generate_new_address (pubkeychain &p);
-    void send_to (network &n, wallet &w, crypto::random &rand, list<Bitcoin::output> o);
     void restore_wallet (Interface &e);
 
     void read_both_chains_options (Interface &, const arg_parser &p);
@@ -168,39 +177,39 @@ namespace Cosmos {
     }
 
     Cosmos::keychain inline *Interface::writable::keys () {
-        return Interface.get_keys ();
+        return I.get_keys ();
     }
 
     Cosmos::pubkeychain inline *Interface::writable::pubkeys () {
-        return Interface.get_pubkeys ();
+        return I.get_pubkeys ();
     }
 
     Cosmos::txdb inline *Interface::writable::txdb () {
-        return Interface.get_txdb ();
+        return I.get_txdb ();
     }
 
     SPV::database inline *Interface::writable::spvdb () {
-        return Interface.get_spvdb ();
+        return I.get_spvdb ();
     }
 
     Cosmos::account inline *Interface::writable::account () {
-        return Interface.get_account ();
+        return I.get_account ();
     }
 
     Cosmos::price_data inline *Interface::writable::price_data () {
-        return Interface.get_price_data ();
+        return I.get_price_data ();
     }
 
     Cosmos::watch_wallet inline *Interface::writable::watch_wallet () {
-        return Interface.get_watch_wallet ();
+        return I.get_watch_wallet ();
     }
 
     Cosmos::wallet inline *Interface::writable::wallet () {
-        return Interface.get_wallet ();
+        return I.get_wallet ();
     }
 
     events inline *Interface::writable::history () {
-        return Interface.get_history ();
+        return I.get_history ();
     }
 
     const Cosmos::keychain inline *Interface::keys () const {

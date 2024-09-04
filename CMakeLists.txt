@@ -20,7 +20,7 @@ add_library (cosmos_lib STATIC
     source/Cosmos/wallet/wallet.cpp
     source/Cosmos/wallet/split.cpp
     source/Cosmos/tax.cpp
-    #source/Cosmos/boost/miner_options.cpp
+    source/Cosmos/boost/miner_options.cpp
     source/Cosmos/interface.cpp)
 
 find_package (Gigamonkey CONFIG REQUIRED)

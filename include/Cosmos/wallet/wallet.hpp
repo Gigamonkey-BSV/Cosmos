@@ -58,15 +58,17 @@ namespace Cosmos {
     };
 
     struct spent {
-        extended_transaction Transaction;
+        entry<Bitcoin::TXID, extended_transaction> Transaction;
+        // TODO: ideally we would have some kind of diff type that can be applied to a wallet.
         wallet Wallet;
 
         bool valid () const {
             return data::size (Transaction) != 0 && data::valid (Wallet);
         }
 
-        spent () : Transaction {}, Wallet {} {}
-        spent (const extended_transaction &tx, const wallet &w) : Transaction {tx}, Wallet {w} {}
+        spent () : Transaction {Bitcoin::TXID {}, extended_transaction {}}, Wallet {} {}
+        spent (const entry<Bitcoin::TXID, extended_transaction> &t, const wallet &w) : Transaction {t}, Wallet {w} {}
+        spent (const Bitcoin::TXID &id, const extended_transaction &tx, const wallet &w) : Transaction {id, tx}, Wallet {w} {}
     };
 
     spent spend (wallet, select, make_change, redeem,
