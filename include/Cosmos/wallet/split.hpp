@@ -9,8 +9,8 @@ namespace Cosmos {
 
     struct split {
         Bitcoin::satoshi MaxSatsPerOutput {5000000};
-        Bitcoin::satoshi MinSatsPerOutput {12345};
-        double MeanSatsPerOutput {123456};
+        Bitcoin::satoshi MinSatsPerOutput {123456};
+        double MeanSatsPerOutput {1234567};
 
         spent operator () (redeem, data::crypto::random &, wallet, list<entry<Bitcoin::outpoint, redeemable>> selected, double fee_rate) const;
 
