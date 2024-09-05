@@ -19,6 +19,8 @@ namespace Cosmos {
         Bitcoin::satoshi received = 0;
         Bitcoin::satoshi spent = 0;
 
+        std::cout << " restoring wallet ..." << std::endl;
+
         while (true) {
             // generate next address
             entry<Bitcoin::address, signing> next = m.last ();

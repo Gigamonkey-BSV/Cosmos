@@ -27,6 +27,7 @@ namespace Cosmos {
 
     account::account (const JSON &j) {
         if (j == nullptr) return;
+        if (!j.is_object ()) throw exception {} << "invalid account JSON format";
 
         for (const auto &[key, value] : j.items ()) Account [read_outpoint (key)] = redeemable {value};
         return;

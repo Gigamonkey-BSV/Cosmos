@@ -46,6 +46,7 @@ namespace Cosmos {
 
             balance get_balance (const Bitcoin::address &);
 
+            // txids of all transactions that spend to or redeem from a given address.
             list<Bitcoin::TXID> get_history (const Bitcoin::address &);
 
             list<UTXO> get_unspent (const Bitcoin::address &);

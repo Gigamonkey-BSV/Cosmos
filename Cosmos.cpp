@@ -767,7 +767,6 @@ void command_restore (const arg_parser &p) {
         } else if (bool (coin_type_wallet)) coin_type = coin_type_wallet;
 
         if (coin_type) {
-            std::cout << " using coin type " << *coin_type << std::endl;
             auto construct_derivation = []
             (const HD::BIP_32::secret &master, list<uint32> to_account_master, list<uint32> to_receive, list<uint32> to_change) ->pubkeychain {
                 HD::BIP_32::pubkey account_master = master.derive (to_account_master).to_public ();

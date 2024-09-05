@@ -386,6 +386,7 @@ namespace Cosmos {
 
         auto tf = txdb_filepath ();
         auto af = account_filepath ();
+        auto hf = history_filepath ();
         auto pf = pubkeychain_filepath ();
         auto kf = keychain_filepath ();
         auto pdf = price_data_filepath ();
@@ -393,6 +394,7 @@ namespace Cosmos {
         if (Written) {
             if (bool (tf) && bool (LocalTXDB)) write_to_file (JSON (dynamic_cast<JSON_local_txdb &> (*LocalTXDB)), *tf);
             if (bool (af) && bool (Account)) write_to_file (JSON (*Account), *af);
+            if (bool (hf) && bool (Events)) write_to_file (JSON (*Events), *hf);
             if (bool (pf) && bool (Pubkeys)) write_to_file (JSON (*Pubkeys), *pf);
             if (bool (kf) && bool (Keys)) write_to_file (JSON (*Keys), *kf);
             if (bool (pdf) && bool (LocalPriceData)) write_to_file (JSON (dynamic_cast<JSON_price_data &> (*LocalPriceData)), *pdf);

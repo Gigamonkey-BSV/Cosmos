@@ -45,21 +45,33 @@ namespace Cosmos {
     JSON_local_txdb::JSON_local_txdb (const JSON &j) {
         if (j == JSON (nullptr)) return;
 
+        if (!j.is_object ()) throw exception {} << "invalid TXDB JSON format: not an object.";
+        if (!j.contains ("redeems")) throw exception {} << "invalid TXDB JSON format: missing field 'redeems'. ";
+        if (!j.contains ("spvdb") || !j.contains ("addresses") || !j.contains ("scripts"))
+            throw exception {} << "invalid TXDB JSON format: " << j;
+
+        const JSON &addresses = j["addresses"];
+        const JSON &scripts = j["scripts"];
+        const JSON &redeems = j["redeems"];
+
+        if (!addresses.is_object () || !scripts.is_object () || !redeems.is_object ())
+            throw exception {} << "invalid TXDB JSON format f: " << j;
+
         SPVDB = JSON_SPV_database (j["spvdb"]);
 
-        for (const auto &[key, value] : j["addresses"].items ()) {
+        for (const auto &[key, value] : addresses.items ()) {
             list<Bitcoin::outpoint> outpoints;
             for (const auto &k : value) outpoints <<= read_outpoint (std::string (k));
             this->AddressIndex[Bitcoin::address (std::string (key))] = outpoints;
         }
 
-        for (const auto &[key, value] : j["scripts"].items ()) {
+        for (const auto &[key, value] : scripts.items ()) {
             list<Bitcoin::outpoint> outpoints;
             for (const auto &k : value) outpoints <<= read_outpoint (std::string (k));
             this->ScriptIndex[read_txid (key)] = outpoints;
         }
 
-        for (const auto &[key, value] : j["redeems"].items ())
+        for (const auto &[key, value] : redeems.items ())
             this->RedeemIndex[read_outpoint (key)] = inpoint {read_outpoint (value)};
 
     }

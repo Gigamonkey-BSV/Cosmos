@@ -49,7 +49,7 @@ namespace Cosmos {
         std::fstream file;
         file.open (filename, std::ios::out);
         if (!file) throw exception {"could not open file"};
-        file << j;
+        file << j.dump (0, ' ');
         file.close ();
     }
 

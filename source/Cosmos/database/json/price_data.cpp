@@ -3,7 +3,6 @@
 namespace Cosmos {
 
     JSON_price_data::JSON_price_data (const JSON &j) {
-        std::cout << "reading " << j.size () << " entries of price data " << std::endl;
         for (const JSON &x : j) Price[Bitcoin::timestamp {uint32 (x[0])}] = double (x[1]);
     }
 
