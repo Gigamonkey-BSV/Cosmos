@@ -54,12 +54,13 @@ namespace Cosmos {
     }
 
     JSON read_from_file (const std::string &filename) {
-        std::cout << "reading from file " << filename << std::endl;
+
         std::filesystem::path p {filename};
         if (!std::filesystem::exists (p)) return JSON (nullptr);
         std::ifstream file;
         file.open (filename, std::ios::in);
         if (!file) throw exception {"could not open file"};
+
         return JSON::parse (file);
     }
 

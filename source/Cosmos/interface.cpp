@@ -9,20 +9,22 @@
 
 namespace Cosmos {
 
-    void generate_new_xpub (pubkeychain &p) {
+    pubkeychain generate_new_xpub (const pubkeychain &p) {
         address_sequence receive_sequence = p.Sequences[p.Receive];
         HD::BIP_32::pubkey next_pubkey = receive_sequence.Key.derive (receive_sequence.Path << receive_sequence.Last);
         Bitcoin::address::decoded next_address = next_pubkey.address ();
         std::cout << "next xpub is " << next_pubkey << " and its address is " << next_address;
-        p = p.next (p.Receive);
+        return p.next (p.Receive);
     }
 
     void generate_wallet::operator () (Interface::writable u) {
-        auto *w = u.wallet ();
+        const auto *w = u.get ().wallet ();
         if (w == nullptr) throw exception {} << "could not read wallet.";
 
-        std::cout << "We will generate a new BIP 44 wallet for you with " << Accounts << " accounts pre-generated" << std::endl;
-        std::cout << "Coin type is Bitcoin (= 0)" << std::endl;
+        if (UseBIP_39) std::cout << "We will generate a new BIP 39 wallet for you." << std::endl;
+        else std::cout << "We will generate a new BIP 44 wallet for you." << std::endl;
+        std::cout << "We will pre-generate " << Accounts << " accounts in this wallet." << std::endl;
+        std::cout << "Coin type is " << CoinType << std::endl;
         std::cout << "Type random characters to use as entropy for generating this wallet. "
             "Press enter when you think you have enough."
             "Around 200 characters ought to be enough as long as they are random enough." << std::endl;
@@ -35,26 +37,35 @@ namespace Cosmos {
             user_input.push_back (x);
         }
 
-        digest512 bits = crypto::SHA2_512 (user_input);
+        HD::BIP_32::secret master {};
 
-        std::string words = HD::BIP_39::generate (bits);
+        if (UseBIP_39) {
+            digest256 bits = crypto::SHA2_256 (user_input);
 
-        std::cout << "your words are\n\n\t" << words << "\n\nRemember, these words can be used to generate "
-            "all your keys, but at scale that is not enough to restore your funds. You need to keep the transactions"
-            " into your wallet along with Merkle proofs as well." << std::endl;
+            std::string words = HD::BIP_39::generate (bits);
 
-        // TODO use passphrase option.
-        HD::BIP_32::secret master = HD::BIP_32::secret::from_seed (HD::BIP_39::read (words));
+            std::cout << "your words are\n\n\t" << words << "\n\nRemember, these words can be used to generate "
+                "all your keys, but at scale that is not enough to restore your funds. You need to keep the transactions"
+                " into your wallet along with Merkle proofs as well." << std::endl;
+
+            // TODO use passphrase option.
+            master = HD::BIP_32::secret::from_seed (HD::BIP_39::read (words));
+        } else {
+            digest512 bits = crypto::SHA2_512 (user_input);
+            master.ChainCode.resize (32);
+            std::copy (bits.begin (), bits.begin () + 32, master.Secret.Value.begin ());
+            std::copy (bits.begin () + 32, bits.end (), master.ChainCode.begin ());
+        }
 
         HD::BIP_32::pubkey master_pubkey = master.to_public ();
-        keychain key = keychain {}.insert (master_pubkey, master);
+        keychain keys = keychain {}.insert (master_pubkey, master);
 
         pubkeychain pub {{}, {}, "receive_0", "change_0"};
 
         for (int account = 0; account < Accounts; account++) {
             list<uint32> path {
                 HD::BIP_44::purpose,
-                HD::BIP_44::coin_type_Bitcoin,
+                HD::BIP_32::harden (CoinType),
                 HD::BIP_32::harden (account)};
 
             HD::BIP_32::pubkey account_master_pubkey = master.derive (path).to_public ();
@@ -69,6 +80,9 @@ namespace Cosmos {
             pub.Sequences = pub.Sequences.insert (receive_name, address_sequence {account_master_pubkey, {HD::BIP_44::receive_index}});
             pub.Sequences = pub.Sequences.insert (change_name, address_sequence {account_master_pubkey, {HD::BIP_44::change_index}});
         }
+
+        u.set_keys (keys);
+        u.set_pubkeys (pub);
     }
 
     void Interface::writable::broadcast (const spent &x) {
@@ -77,14 +91,14 @@ namespace Cosmos {
 
         wait_for_enter ();
 
-        auto *w = wallet ();
+        auto *w = I.wallet ();
         if (!bool (w)) throw exception {1} << "could not load wallet";
 
         auto err = I.net ()->broadcast (bytes (x.Transaction.Value));
         if (bool (err)) throw exception {3} << "tx broadcast failed;\n\ttx: " << x.Transaction << "\n\terror: " << err;
 
         // save new wallet.
-        *w = x.Wallet;
+        set_wallet (x.Wallet);
     }
 
     void read_both_chains_options (Interface &e, const arg_parser &p) {
@@ -202,7 +216,6 @@ namespace Cosmos {
 
         if (!bool (LocalTXDB)) {
             auto txf = txdb_filepath ();
-            std::cout << "   " << "txdb filepath is " << txf << std::endl;
             if (bool (txf)) LocalTXDB = new JSON_local_txdb {read_JSON_local_txdb_from_file (*txf)};
             else return nullptr;
         }
@@ -282,15 +295,14 @@ namespace Cosmos {
     }
 
     watch_wallet *Interface::get_watch_wallet () {
-        if (bool (WatchWallet)) return WatchWallet;
 
-        auto txs = txdb ();
+        if (bool (WatchWallet)) return WatchWallet;
 
         auto acc = account ();
 
         auto pkc = pubkeys ();
 
-        if (!bool (txs) || !bool (acc) || !bool (pkc)) return nullptr;
+        if (!bool (acc) || !bool (pkc)) return nullptr;
 
         WatchWallet = new Cosmos::watch_wallet {*acc, *pkc};
         Account = &WatchWallet->Account;
@@ -300,10 +312,12 @@ namespace Cosmos {
     }
 
     wallet *Interface::get_wallet () {
-        if (!bool (Wallet)) return Wallet;
+
+        if (bool (Wallet)) return Wallet;
 
         auto watch = watch_wallet ();
         auto k = keys ();
+
         if (!bool (watch) || !bool (k)) return nullptr;
 
         Wallet = new Cosmos::wallet {*k, watch->Account, watch->Pubkeys};
@@ -337,6 +351,37 @@ namespace Cosmos {
 
     }
 
+    void Interface::writable::set_keys (const Cosmos::keychain &kk) {
+        if (I.Keys) *I.Keys = kk;
+        else if (I.Wallet) I.Wallet->Keys = kk;
+        else I.Keys = new Cosmos::keychain {kk};
+    }
+
+    void Interface::writable::set_pubkeys (const Cosmos::pubkeychain &pk) {
+        if (I.Pubkeys) *I.Pubkeys = pk;
+        else if (I.WatchWallet) I.WatchWallet->Pubkeys = pk;
+        else if (I.Wallet) I.Wallet->Pubkeys = pk;
+        else I.Pubkeys = new Cosmos::pubkeychain {pk};
+    }
+
+    void Interface::writable::set_account (const Cosmos::account &a) {
+        if (I.Account) *I.Account = a;
+        else if (I.WatchWallet) I.WatchWallet->Account = a;
+        else if (I.Wallet) I.Wallet->Account = a;
+        else I.Account = new Cosmos::account {a};
+    }
+
+    void Interface::writable::set_watch_wallet (const Cosmos::watch_wallet &ww) {
+        if (I.WatchWallet) *I.WatchWallet = ww;
+        else if (I.Wallet) static_cast<Cosmos::watch_wallet &> (*I.Wallet) = ww;
+        else I.WatchWallet = new Cosmos::watch_wallet {ww};
+    }
+
+    void Interface::writable::set_wallet (const Cosmos::wallet &w) {
+        if (I.Wallet) *I.Wallet = w;
+        else I.Wallet = new Cosmos::wallet {w};
+    }
+
     Interface::~Interface () {
 
         auto tf = txdb_filepath ();
@@ -348,7 +393,7 @@ namespace Cosmos {
         if (Written) {
             if (bool (tf) && bool (LocalTXDB)) write_to_file (JSON (dynamic_cast<JSON_local_txdb &> (*LocalTXDB)), *tf);
             if (bool (af) && bool (Account)) write_to_file (JSON (*Account), *af);
-            if (bool (pf) && bool (Pubkeys)) write_to_file (JSON (*Pubkeys), *kf);
+            if (bool (pf) && bool (Pubkeys)) write_to_file (JSON (*Pubkeys), *pf);
             if (bool (kf) && bool (Keys)) write_to_file (JSON (*Keys), *kf);
             if (bool (pdf) && bool (LocalPriceData)) write_to_file (JSON (dynamic_cast<JSON_price_data &> (*LocalPriceData)), *pdf);
         }

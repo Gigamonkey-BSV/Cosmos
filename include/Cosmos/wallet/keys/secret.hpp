@@ -18,12 +18,12 @@ namespace Cosmos {
 
         Bitcoin::secret derive (const derivation &) const;
 
-        keychain insert (const secret &x) {
+        keychain insert (const secret &x) const {
             return insert (x.to_public (), x);
         }
 
         // please don't confuse people by putting in a different pubkey from secret key.
-        keychain insert (const pubkey &p, const secret &x) {
+        keychain insert (const pubkey &p, const secret &x) const {
             return keychain {Keys.insert (p, x, [] (const secret &o, const secret &n) {
                 if (o != n) throw exception {} << "Different key in map under the same name!";
                 return o;

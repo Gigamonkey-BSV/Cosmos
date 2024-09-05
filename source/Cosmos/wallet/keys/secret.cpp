@@ -6,7 +6,7 @@ namespace Cosmos {
     keychain::keychain (const JSON &j) {
         data::map<pubkey, secret> db {};
 
-        if (j == JSON (nullptr)) throw exception {} << "could not read pubkeychain";
+        if (j == JSON (nullptr)) return;
 
         if (j != JSON (nullptr)) for (const auto &[key, value] : j.items ())
             db = db.insert (key, secret {std::string (value)});

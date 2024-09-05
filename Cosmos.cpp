@@ -206,7 +206,13 @@ void help (method meth) {
                 "\nuse help \"method\" for information on a specific method"<< std::endl;
         } break;
         case method::GENERATE : {
-            std::cout << "arguments for method generate not yet available." << std::endl;
+            std::cout << "Generate a new wallet in terms of 24 words (BIP 39) or as an extended private key."
+                "\narguments for method split:"
+                "\n\t(--name=)<wallet name>"
+                "\n\t(--words) (use BIP 39)"
+                "\n\t(--no_words) (don't use BIP 39)"
+                "\n\t(--accounts=<uint32> (=10)) (how many accounts to pre-generate)"
+                "\n\t(--coin_type=<uint32> (=0)) (value of BIP 44 coin_type)" << std::endl;
         } break;
         case method::VALUE : {
             std::cout << "arguments for method value not yet available." << std::endl;
@@ -260,10 +266,24 @@ void version () {
 void command_generate (const arg_parser &p) {
     Cosmos::Interface e {};
     Cosmos::read_both_chains_options (e, p);
-    e.update<void> (Cosmos::generate_wallet {});
 
-    std::cout << "private keys will be saved in " << e.keychain_filepath () << " ." << std::endl;
-    std::cout << "private keys will be saved in " << e.pubkeychain_filepath () << " ." << std::endl;
+    Cosmos::generate_wallet gen {};
+
+    if (p.has ("words")) gen.UseBIP_39 = true;
+    if (p.has ("no_words")) gen.UseBIP_39 = false;
+
+    maybe<uint32> accounts;
+    p.get ("accounts", accounts);
+    if (bool (accounts)) gen.Accounts = *accounts;
+
+    maybe<uint32> coin_type;
+    p.get ("coin_type", coin_type);
+    if (bool (coin_type)) gen.CoinType = *coin_type;
+
+    e.update<void> (gen);
+
+    std::cout << "private keys will be saved in " << *e.keychain_filepath () << "." << std::endl;
+    std::cout << "private keys will be saved in " << *e.pubkeychain_filepath () << "." << std::endl;
 }
 
 void command_value (const arg_parser &p) {
@@ -277,9 +297,9 @@ void command_request (const arg_parser &p) {
     Cosmos::Interface e {};
     Cosmos::read_pubkeychain_options (e, p);
     e.update<void> ([] (Cosmos::Interface::writable u) {
-        auto p = u.pubkeys ();
+        const auto *p = u.get ().pubkeys ();
         if (p == nullptr) throw exception {} << "could not read wallet";
-        Cosmos::generate_new_xpub (*p);
+        u.set_pubkeys (Cosmos::generate_new_xpub (*p));
     });
 }
 
@@ -312,13 +332,19 @@ void command_import (const arg_parser &p) {
     Bitcoin::outpoint outpoint {txid, *index};
 
     e.update<void> ([&outpoint, &key, &script_code] (Cosmos::Interface::writable u) {
-        auto *wallet = u.wallet ();
+        const auto *w = u.get ().wallet ();
+        if (!bool (w)) throw exception {} << "could not load wallet.";
+
         auto *txdb = u.txdb ();
-        if (wallet == nullptr || txdb == nullptr) throw exception {} << "could not read database";
-        wallet->import_output (
+        if (!bool (txdb)) throw exception {} << "could not read database";
+
+        wallet wall = *w;
+        wall.import_output (
             Bitcoin::prevout {outpoint, txdb->output (outpoint)},
             key, Gigamonkey::pay_to_address::redeem_expected_size (key.Compressed),
             bool (script_code) ? *script_code : bytes {});
+
+        u.set_wallet (wall);
     });
 }
 
@@ -417,7 +443,7 @@ void command_split (const arg_parser &p) {
             list<entry<Bitcoin::outpoint, redeemable>> splitable_outputs;
             Bitcoin::satoshi total_split_value;
 
-            auto *w = u.wallet ();
+            const auto *w = u.get ().wallet ();
             if (!bool (w)) throw exception {} << "could not load wallet";
 
             if (addr.valid ()) {
@@ -434,7 +460,7 @@ void command_split (const arg_parser &p) {
                     total_split_value += en->second.Prevout.Value;
                 }
 
-            } else for (const auto &[key, value]: u.account ()->Account)
+            } else for (const auto &[key, value]: w->Account.Account)
                 // find all outputs that are worth splitting
                 if (value.Prevout.Value > split.MaxSatsPerOutput) {
                     splitable_outputs <<= entry<Bitcoin::outpoint, redeemable> {key, value};
@@ -827,19 +853,28 @@ void command_restore (const arg_parser &p) {
     std::cout << "About to restore wallet." << std::endl;
 
     auto restore_from_pubkey = [&max_look_ahead, &derivations] (Cosmos::Interface::writable u) {
-        auto *ww = u.watch_wallet ();
-        if (!ww) throw exception {} << "could not load wallet";
-        ww->Pubkeys = derivations;
+        const auto &pp = u.get ().pubkeys ();
+        if (!pp) throw exception {} << "could not load pubkeys";
+
+        const auto *acp = u.get ().account ();
+        if (!acp) throw exception {} << "could not load account";
+
+        account acc = *acp;
 
         ordered_list<ray> history {};
         for (const data::entry<string, address_sequence> ed : derivations.Sequences) {
             std::cout << "checking address sequence " << ed.Key << std::endl;
             auto restored = restore {*max_look_ahead} (*u.txdb (), ed.Value);
-            ww->Account += restored.Account;
+            acc += restored.Account;
             history = history + restored.History;
-            ww->Pubkeys = ww->Pubkeys.update (ed.Key, restored.Last);
+            derivations = derivations.update (ed.Key, restored.Last);
             std::cout << "done checking address sequence " << ed.Key << std::endl;
         }
+
+        u.set_account (acc);
+
+        // TODO: we should have a way of merging the pubkeys. This would overwrite anything already in there!
+        u.set_pubkeys (derivations);
 
         // There is a potential problem here because if a history already
         // exists we will throw an error if we try to put histories together
@@ -850,7 +885,7 @@ void command_restore (const arg_parser &p) {
 
     auto restore_from_privkey = [&sk, &restore_from_pubkey] (Cosmos::Interface::writable u) {
         restore_from_pubkey (u);
-        *u.keys () = u.keys ()->insert (*sk);
+        u.set_keys (u.get ().keys ()->insert (*sk));
     };
 
     if (bool (sk)) {
