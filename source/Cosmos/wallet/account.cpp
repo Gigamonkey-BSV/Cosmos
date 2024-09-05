@@ -115,7 +115,7 @@ namespace Cosmos {
     }
 
     events::events (const JSON &j) {
-        if (j == JSON {nullptr}) return;
+        if (j == JSON (nullptr)) return;
 
         Latest = Bitcoin::timestamp {uint32 (j["latest"])};
         Value = Bitcoin::satoshi {int64 (j["value"])};

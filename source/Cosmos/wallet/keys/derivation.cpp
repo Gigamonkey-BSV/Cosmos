@@ -32,7 +32,7 @@ namespace Cosmos {
     };
 
     address_sequence::address_sequence (const JSON &j) {
-        if (j == JSON {nullptr}) return;
+        if (j == JSON (nullptr)) return;
 
         Key = HD::BIP_32::pubkey {std::string (j["key"])};
         read_path (Path, j);
