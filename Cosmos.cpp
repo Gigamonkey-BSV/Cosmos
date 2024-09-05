@@ -723,7 +723,6 @@ void command_restore (const arg_parser &p) {
 
         derivations = pubkeychain {{{pk, {pk, {}}}}, {{"receive", {pk, {0}}}, {"change", {pk, {1}}}}, "receive", "change"};
     } else if (key_type == master_key_type::BIP44_master) {
-
         maybe<uint32> coin_type_option;
 
         maybe<string> coin_type_string;
@@ -768,7 +767,7 @@ void command_restore (const arg_parser &p) {
         } else if (bool (coin_type_wallet)) coin_type = coin_type_wallet;
 
         if (coin_type) {
-
+            std::cout << " using coin type " << *coin_type << std::endl;
             auto construct_derivation = []
             (const HD::BIP_32::secret &master, list<uint32> to_account_master, list<uint32> to_receive, list<uint32> to_change) ->pubkeychain {
                 HD::BIP_32::pubkey account_master = master.derive (to_account_master).to_public ();
@@ -787,7 +786,7 @@ void command_restore (const arg_parser &p) {
             std::cout
                 << "\nthis is a bip 44 master, coin type " << *coin_type
                 << "\n\tfirst receive address: " << first_receive
-                << "\n\tfirst change address: " << first_change;
+                << "\n\tfirst change address: " << first_change << std::endl;
 
         } else {
             HD::BIP_32::path bitcoin_to_account_master {HD::BIP_44::purpose, HD::BIP_44::coin_type_Bitcoin, HD::BIP_32::harden (0)};

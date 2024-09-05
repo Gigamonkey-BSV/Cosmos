@@ -39,14 +39,14 @@ namespace Cosmos {
     }
 
     void cached_remote_txdb::import_transaction (const Bitcoin::TXID &txid) {
-        std::cout << "\n\tImporting transaction " << txid << std::endl;
-        wait_for_enter ("");
+        std::cout << "\n  Importing transaction " << txid << std::endl;
+
         auto tx = Net.get_transaction (txid);
         if (tx.size () == 0) throw exception {} << "transaction " << txid << " does not exist.";
         auto proof = Net.WhatsOnChain.transaction ().get_merkle_proof (txid);
 
-        std::cout << "\n\t  Transaction is: " << tx << std::endl;
-        std::cout << "\n\t     with merkle proof: " << proof.Proof << std::endl;
+        std::cout << "   " << tx << std::endl;
+        std::cout << "    " << proof.Proof << std::endl;
 
         if (!proof.Proof.valid ())
             throw exception {} << "could not get Merkle proof for " << txid;
@@ -57,7 +57,7 @@ namespace Cosmos {
         else {
             auto header = Net.WhatsOnChain.block ().get_header (proof.BlockHash);
             if (!header.valid ()) return;
-            std::cout << "\n\t     header: " << header.Header << ", height " << header.Height << std::endl;
+            std::cout << "\n  Header: " << header.Header << ", height " << header.Height << std::endl;
 
             Local.insert (header.Height, header.Header);
             Local.import_transaction (decoded, Merkle::path (proof.Proof.Branch), header.Header);

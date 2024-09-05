@@ -25,7 +25,6 @@ namespace Cosmos {
             const Bitcoin::address &new_addr = next.Key;
 
             std::cout << " recovering address " << m.Last << ": " << new_addr << std::endl;
-            wait_for_enter ("");
 
             m = m.next ();
 

@@ -5,7 +5,7 @@ namespace Cosmos {
     std::string inline whatsonchain::write (const Bitcoin::TXID &txid) {
         std::stringstream ss;
         ss << txid;
-        return ss.str ().substr (9, 64);
+        return ss.str ().substr (2);
     }
 
     Bitcoin::TXID inline whatsonchain::read_txid (const JSON &j) {
