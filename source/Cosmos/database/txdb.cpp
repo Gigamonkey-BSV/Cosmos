@@ -43,9 +43,6 @@ namespace Cosmos {
         auto tx = Net.get_transaction (txid);
         if (tx.size () == 0) throw exception {} << "transaction " << txid << " does not exist.";
         auto proof = Net.WhatsOnChain.transaction ().get_merkle_proof (txid);
-/*
-        std::cout << "   " << tx << std::endl;
-        std::cout << "    " << proof.Proof << std::endl;*/
 
         if (!proof.Proof.valid ())
             throw exception {} << "could not get Merkle proof for " << txid;

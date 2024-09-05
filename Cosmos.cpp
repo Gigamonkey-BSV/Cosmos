@@ -349,6 +349,7 @@ void command_import (const arg_parser &p) {
 }
 
 // TODO get fee rate from options.
+// TODO send is not a good name.
 void command_send (const arg_parser &p) {
     using namespace Cosmos;
     Cosmos::Interface e {};
@@ -406,11 +407,43 @@ void command_boost (const arg_parser &p) {
     });
 }
 
+namespace Cosmos {
+
+    // we organize by script hash because we want to
+    // redeem all identical scripts in the same tx.
+    using splitable = map<digest256, list<entry<Bitcoin::outpoint, redeemable>>>;
+
+    // collect splitable scripts by addres.
+    splitable get_split_address (Interface::writable u, splitable x, const Bitcoin::address &addr) {
+        const auto *w = u.get ().wallet ();
+        auto *TXDB = u.txdb ();
+        if (!bool (TXDB) | !bool (w)) throw exception {} << "could not load wallet";
+
+        // is this address in our wallet?
+        ordered_list<ray> outpoints = TXDB->by_address (addr);
+
+        list<entry<Bitcoin::outpoint, redeemable>> outputs;
+
+        if (outputs.size () == 0) return x;
+
+        // this step doesn't entirely make sense because if we could
+        // redeem any output with this address we could redeem every one.
+        for (const ray &r : outpoints)
+            if (auto en = w->Account.Account.find (r.Point); en != w->Account.Account.end ()) {
+                outputs <<= entry <Bitcoin::outpoint, redeemable> {r.Point, en->second};
+            } else throw exception {} << "WARNING: output " << r.Point << " for address " << addr <<
+                " was not found in our account even though we believe we own this address.";
+
+        return x.insert (Gigamonkey::SHA2_256 (pay_to_address::script (addr.digest ())), outputs);
+
+    };
+}
+
 void command_split (const arg_parser &p) {
     using namespace Cosmos;
-    Cosmos::Interface e {};
-    Cosmos::read_wallet_options (e, p);
-    Cosmos::read_random_options (e, p);
+    Interface e {};
+    read_wallet_options (e, p);
+    read_random_options (e, p);
 
     maybe<double> max_sats_per_output = double (options {}.MaxSatsPerOutput);
     maybe<double> mean_sats_per_output = double (options {}.MeanSatsPerOutput);
@@ -424,90 +457,142 @@ void command_split (const arg_parser &p) {
 
     Cosmos::split split {int64 (*max_sats_per_output), int64 (*min_sats_per_output), *mean_sats_per_output};
 
+    splitable x;
+
     // the user may provide an address or xpub to split. If it is provided, we look for
     // outputs in our wallet corresponding to that address or to addressed derived
     // sequentially from the pubkey.
+
     maybe<string> address_string;
     p.get (3, "address", address_string);
 
-    e.update<void> ([rand = e.random (), &split, address_string, fee_rate]
-        (Cosmos::Interface::writable u) {
+    if (bool (address_string)) {
+        Bitcoin::address addr {*address_string};
+        HD::BIP_32::pubkey pk {*address_string};
+        if (!pk.valid () && !addr.valid ()) throw exception {6} << "could not read address string";
 
-            if (!bool (address_string)) throw exception {1} << "could not read address to split";
+        if (addr.valid ())
+            x = e.update<splitable> ([&addr] (Interface::writable u) {
+                return get_split_address (u, splitable {}, addr);
+            });
+        else {
 
-            Bitcoin::address addr {*address_string};
-            HD::BIP_32::pubkey pk {*address_string};
-            if (pk.valid ()) throw exception {6} << "hd pubkey not yet supported";
-            if (!addr.valid ()) throw exception {5} << "invalid address";
+            // if we're using a pubkey we need a max_look_ahead.
+            maybe<uint32> max_look_ahead;
+            p.get (4, "max_look_ahead", max_look_ahead);
+            if (!bool (max_look_ahead)) max_look_ahead = 25;
 
-            list<entry<Bitcoin::outpoint, redeemable>> splitable_outputs;
-            Bitcoin::satoshi total_split_value;
+            x = e.update<splitable> ([&pk, &max_look_ahead] (Interface::writable u) {
+
+                splitable z {};
+                int32 since_last_unused = 0;
+                address_sequence seq {pk, {}};
+
+                while (since_last_unused < *max_look_ahead) {
+                    size_t last_size = z.size ();
+                    z = get_split_address (u, z, seq.last ().Key);
+                    seq = seq.next ();
+                    if (z.size () == last_size) {
+                        since_last_unused++;
+                    } else since_last_unused = 0;
+                }
+
+                return z;
+            });
+        }
+    } else {
+        // in this case, we just look for all outputs in our account that we are able to split.
+        x = e.update<splitable> ([&max_sats_per_output] (Interface::writable u) {
 
             const auto *w = u.get ().wallet ();
             if (!bool (w)) throw exception {} << "could not load wallet";
 
-            if (addr.valid ()) {
-                auto *TXDB = u.txdb ();
-                if (!bool (TXDB)) throw exception {} << "could not load wallet";
+            splitable z;
 
-                // is this address in our wallet?
-                ordered_list<Cosmos::ray> outpoints = TXDB->by_address (addr);
-
-                for (const Cosmos::ray &r : outpoints) {
-                    auto en = w->Account.Account.find (r.Point);
-                    if (en != w->Account.Account.end ()) splitable_outputs
-                        <<= entry <Bitcoin::outpoint, Cosmos::redeemable> {r.Point, en->second};
-                    total_split_value += en->second.Prevout.Value;
-                }
-
-            } else for (const auto &[key, value]: w->Account.Account)
+            for (const auto &[key, value]: w->Account.Account)
                 // find all outputs that are worth splitting
-                if (value.Prevout.Value > split.MaxSatsPerOutput) {
-                    splitable_outputs <<= entry<Bitcoin::outpoint, redeemable> {key, value};
-                    total_split_value += value.Prevout.Value;
+                if (value.Prevout.Value > *max_sats_per_output) {
+                    z = z.insert (
+                        Gigamonkey::SHA2_256 (value.Prevout.Script),
+                        {entry<Bitcoin::outpoint, redeemable> {key, value}},
+                        [] (list<entry<Bitcoin::outpoint, redeemable>> o, list<entry<Bitcoin::outpoint, redeemable>> n)
+                            -> list<entry<Bitcoin::outpoint, redeemable>> {
+                                return o + n;
+                            });
                 }
 
-            if (data::size (splitable_outputs) == 0) throw exception {1} << "No outputs to split";
+            // go through all the smaller outputs and check on whether the same script exists in our list
+            // of big outputs since we don't want to leave any script partially redeemed and partially not.
+            for (const auto &[key, value]: w->Account.Account)
+                // find all outputs that are worth splitting
+                if (value.Prevout.Value <= *max_sats_per_output) {
+                    digest256 script_hash = Gigamonkey::SHA2_256 (value.Prevout.Script);
+                    if (z.contains (script_hash))
+                        z = z.insert (script_hash,
+                            {entry<Bitcoin::outpoint, redeemable> {key, value}},
+                            [] (list<entry<Bitcoin::outpoint, redeemable>> o, list<entry<Bitcoin::outpoint, redeemable>> n)
+                                -> list<entry<Bitcoin::outpoint, redeemable>> {
+                                    return o + n;
+                                });
+                }
 
-            std::cout << "found " << splitable_outputs.size () << " outputs to split." << std::endl;
-            std::cout << "total split value: " << total_split_value << std::endl;
+            return z;
+        });
+    }
 
-            // we will generate some txs and then add fake events, as if they had been broadcast,
-            // to the history to determine tax implications before broadcasting them. If the program
-            // halts before this function is complete, the txs will not be broadcast and the new
-            // wallets will not be saved.
-            events h = *u.history ();
-            Bitcoin::timestamp now = Bitcoin::timestamp::now ();
-            uint32 fake_block_index = 0;
+    if (data::size (x) == 0) throw exception {1} << "No outputs to split";
 
-            list<spent> split_txs;
-            wallet old = *w;
-            for (const entry<Bitcoin::outpoint, redeemable> &e : splitable_outputs) {
-                auto spent = split (Gigamonkey::redeem_p2pkh_and_p2pk, *rand, old, splitable_outputs, *fee_rate);
-                split_txs <<= spent;
-                old = spent.Wallet;
+    size_t num_outputs {0};
+    Bitcoin::satoshi total_split_value {0};
+    for (const auto &e : x) {
+        num_outputs += e.Value.size ();
+        for (const auto &v : e.Value) total_split_value += v.Value.Prevout.Value;
+    }
 
-                stack<ray> new_events;
+    std::cout << "found " << x.size () << " scripts in " << num_outputs <<
+        " outputs to split with a total value of " << total_split_value << std::endl;
 
-                uint32 index = 0;
-                for (const Gigamonkey::extended::input &input : spent.Transaction.Value.Inputs)
-                    new_events <<= ray {now, fake_block_index,
-                        inpoint {spent.Transaction.Key, index++}, static_cast<Bitcoin::input> (input), input.Prevout.Value};
+    wait_for_enter ();
 
-                h <<= ordered_list<ray> (reverse (new_events));
-                fake_block_index++;
-            }
+    e.update<void> ([rand = e.random (), &split, &x, fee_rate] (Cosmos::Interface::writable u) {
 
-            std::tm tm = {0, 0, 0, 1, 0, 2024 - 1900};
-            std::cout << "Tax implications: " << std::endl;
-            std::cout << tax::calculate (*u.txdb (), *u.price_data (),
-                h.get_history (Bitcoin::timestamp {std::mktime (&tm)})).CapitalGain << std::endl;
+        // we will generate some txs and then add fake events, as if they had been broadcast,
+        // to the history to determine tax implications before broadcasting them. If the program
+        // halts before this function is complete, the txs will not be broadcast and the new
+        // wallets will not be saved.
+        events h = *u.history ();
+        Bitcoin::timestamp now = Bitcoin::timestamp::now ();
+        uint32 fake_block_index = 1;
 
-            wait_for_enter ();
+        list<spent> split_txs;
+        wallet old = *u.get ().wallet ();
+        for (const entry<digest256, list<entry<Bitcoin::outpoint, redeemable>>> &e : x) {
+            auto spent = split (Gigamonkey::redeem_p2pkh_and_p2pk, *rand, old, e.Value, *fee_rate);
+            split_txs <<= spent;
+            old = spent.Wallet;
 
-            std::cout << "broadcasting split transactions" << std::endl;
+            stack<ray> new_events;
 
-            for (const spent &x : split_txs) u.broadcast (x);
+            uint32 index = 0;
+            for (const Gigamonkey::extended::input &input : spent.Transaction.Value.Inputs)
+                new_events <<= ray {now, fake_block_index,
+                    inpoint {spent.Transaction.Key, index++}, static_cast<Bitcoin::input> (input), input.Prevout.Value};
+
+            h <<= ordered_list<ray> (reverse (new_events));
+            fake_block_index++;
+        }
+
+        std::cout << "Tax implications: " << std::endl;
+        std::cout << tax::calculate (*u.txdb (), *u.price_data (), h.get_history (now)).CapitalGain << std::endl;
+
+        std::cout << "last chance to quit the program before broadcasting these!" << std::endl;
+
+        wait_for_enter ();
+
+        std::cout << "broadcasting split transactions" << std::endl;
+
+        // TODO how do these get in my wallet?
+        for (const spent &x : split_txs) u.broadcast (x);
     });
 }
 

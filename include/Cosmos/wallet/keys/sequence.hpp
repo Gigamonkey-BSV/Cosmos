@@ -37,8 +37,7 @@ namespace Cosmos {
         uint32 Last;
 
         address_sequence () : Key {}, Path {}, Last {0} {}
-        address_sequence (const HD::BIP_32::pubkey &s, const
-        HD::BIP_32::path &p, uint32 l = 0) :
+        address_sequence (const HD::BIP_32::pubkey &s, HD::BIP_32::path p, uint32 l = 0) :
             Key {s}, Path {p}, Last {l} {}
 
         address_sequence next () const;

@@ -27,6 +27,7 @@ namespace Cosmos {
     JSON_SPV_database::operator JSON () const {
         JSON::array_t by_height;
         by_height.resize (this->ByHeight.size ());
+
         int ind = 0;
         for (const auto &[height, entry] : this->ByHeight)
             by_height[ind++] = write (*entry);
@@ -37,7 +38,7 @@ namespace Cosmos {
 
         JSON::object_t by_root;
         for (const auto &[root, entry] : this->ByRoot)
-            by_hash[write (root)] = write (entry->Header.Key);
+            by_root[write (root)] = write (entry->Header.Key);
 
         JSON::object_t txs;
         for (const auto &[txid, tx] : this->Transactions)

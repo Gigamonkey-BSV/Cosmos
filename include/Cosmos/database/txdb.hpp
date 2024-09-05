@@ -106,6 +106,8 @@ namespace Cosmos {
     struct txdb {
 
         virtual vertex operator [] (const Bitcoin::TXID &id) = 0;
+
+        // all outputs for a given address.
         virtual ordered_list<ray> by_address (const Bitcoin::address &) = 0;
         virtual ordered_list<ray> by_script_hash (const digest256 &) = 0;
         virtual ptr<ray> redeeming (const Bitcoin::outpoint &) = 0;
