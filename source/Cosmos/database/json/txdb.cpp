@@ -80,7 +80,11 @@ namespace Cosmos {
         auto zz = AddressIndex.find (a);
         if (zz == AddressIndex.end ()) return {};
         ordered_list<ray> n;
-        for (const Bitcoin::outpoint &o : zz->second) n = n.insert (ray {(*this) [o.Digest], o});
+        for (const Bitcoin::outpoint &o : zz->second) {
+            vertex confirmed = (*this) [o.Digest];
+            if (!confirmed.has_proof ()) return {};
+            n = n.insert (ray {confirmed, o});
+        }
         return n;
     }
 

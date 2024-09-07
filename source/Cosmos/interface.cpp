@@ -27,8 +27,8 @@ namespace Cosmos {
     }
 
     void generate_wallet::operator () (Interface::writable u) {
-        const auto *w = u.get ().wallet ();
-        if (w == nullptr) throw exception {} << "could not read wallet.";
+        const auto w = u.get ().wallet ();
+        if (!bool (w)) throw exception {} << "could not read wallet.";
 
         if (UseBIP_39) std::cout << "We will generate a new BIP 39 wallet for you." << std::endl;
         else std::cout << "We will generate a new BIP 44 wallet for you." << std::endl;
@@ -100,7 +100,7 @@ namespace Cosmos {
 
         wait_for_enter ();
 
-        auto *w = I.wallet ();
+        auto w = I.wallet ();
         if (!bool (w)) throw exception {1} << "could not load wallet";
 
         auto err = txdb ()->broadcast (x.Transaction);
@@ -215,123 +215,105 @@ namespace Cosmos {
     }
 
     network *Interface::net () {
-        if (!bool (Net)) Net = new network ();
+        if (!bool (Net)) Net = std::make_shared<network> ();
 
-        return Net;
+        return Net.get ();
+    }
+
+    local_txdb *Interface::get_local_txdb () {
+
+        if (!bool (LocalTXDB)) {
+            auto txf = txdb_filepath ();
+            if (bool (txf))
+                LocalTXDB = std::static_pointer_cast<Cosmos::local_txdb>
+                    (std::make_shared<JSON_local_txdb> (read_JSON_local_txdb_from_file (*txf)));
+            else return nullptr;
+        }
+
+        return LocalTXDB.get ();
     }
 
     maybe<cached_remote_txdb> Interface::get_txdb () {
 
         auto n = net ();
-        if (!bool (n)) return {};
+        auto l = get_local_txdb ();
+        if (!bool (n) || !bool (l)) return {};
 
-        if (!bool (LocalTXDB)) {
-            auto txf = txdb_filepath ();
-            if (bool (txf)) LocalTXDB = new JSON_local_txdb {read_JSON_local_txdb_from_file (*txf)};
-            else return {};
-        }
-
-        return {cached_remote_txdb {*n, *LocalTXDB}};
+        return {cached_remote_txdb {*n, *l}};
     }
 
     account *Interface::get_account () {
-        if (bool (Wallet)) return &Wallet->Account;
-        if (bool (WatchWallet)) return &WatchWallet->Account;
 
         if (!bool (Account)) {
             auto af = account_filepath ();
             if (bool (af)) {
-                Account = new Cosmos::account {read_account_from_file (*af)};
+                Account = std::make_shared<Cosmos::account> (read_account_from_file (*af));
             }
         }
 
-        return Account;
+        return Account.get ();
     }
 
     pubkeychain *Interface::get_pubkeys () {
 
-        if (bool (Wallet)) return &Wallet->Pubkeys;
-        if (bool (WatchWallet)) return &WatchWallet->Pubkeys;
-
         if (!bool (Pubkeys)) {
             auto pf = pubkeychain_filepath ();
-            if (bool (pf)) Pubkeys = new pubkeychain {read_pubkeychain_from_file (*pf)};
+            if (bool (pf)) Pubkeys = std::make_shared<pubkeychain> (read_pubkeychain_from_file (*pf));
         }
 
-        return Pubkeys;
+        return Pubkeys.get ();
     }
 
     keychain *Interface::get_keys () {
-        if (bool (Wallet)) return &Wallet->Keys;
 
         if (!bool (Keys)) {
             auto kf = keychain_filepath ();
-            if (bool (kf)) Keys = new keychain {read_keychain_from_file (*kf)};
+            if (bool (kf)) Keys = std::make_shared<keychain> (read_keychain_from_file (*kf));
         }
 
-        return Keys;
+        return Keys.get ();
     }
 
-    price_data *Interface::get_price_data () {
-        if (PriceData == nullptr) {
-            if (LocalPriceData == nullptr) {
-                auto pdf = price_data_filepath ();
-                if (!bool (pdf)) return nullptr;
-                LocalPriceData = new Cosmos::JSON_price_data {read_from_file (*pdf)};
-            }
-
-            auto n = net ();
-            if (!bool (n)) return static_cast<Cosmos::price_data *> (LocalPriceData);
-            PriceData = new Cosmos::cached_remote_price_data {*n, *LocalPriceData};
+    ptr<price_data> Interface::get_price_data () {
+        if (LocalPriceData == nullptr) {
+            auto pdf = price_data_filepath ();
+            if (!bool (pdf)) return nullptr;
+            LocalPriceData = std::static_pointer_cast<Cosmos::local_price_data>
+                (std::make_shared<Cosmos::JSON_price_data> (read_from_file (*pdf)));
         }
 
-        return PriceData;
+        auto n = net ();
+        if (!bool (n)) return std::static_pointer_cast<Cosmos::price_data> (LocalPriceData);
+        return std::static_pointer_cast<Cosmos::price_data> (std::make_shared<Cosmos::cached_remote_price_data> (*n, *LocalPriceData));
     }
 
-    watch_wallet *Interface::get_watch_wallet () {
-
-        if (bool (WatchWallet)) return WatchWallet;
+    maybe<watch_wallet> Interface::get_watch_wallet () {
 
         auto acc = account ();
-
         auto pkc = pubkeys ();
 
-        if (!bool (acc) || !bool (pkc)) return nullptr;
+        if (!bool (acc) || !bool (pkc)) return {};
 
-        WatchWallet = new Cosmos::watch_wallet {*acc, *pkc};
-        delete acc;
-        acc = nullptr;
-        delete pkc;
-        pkc = nullptr;
-
-        return WatchWallet;
+        return {Cosmos::watch_wallet {*acc, *pkc}};
     }
 
-    wallet *Interface::get_wallet () {
-
-        if (bool (Wallet)) return Wallet;
+    maybe<wallet> Interface::get_wallet () {
 
         auto watch = watch_wallet ();
         auto k = keys ();
 
-        if (!bool (watch) || !bool (k)) return nullptr;
+        if (!bool (watch) || !bool (k)) return {};
 
-        Wallet = new Cosmos::wallet {*k, watch->Account, watch->Pubkeys};
-        delete k;
-        k = nullptr;
-        delete watch;
-        watch = nullptr;
-
-        return Wallet;
+        return {Cosmos::wallet {*k, watch->Account, watch->Pubkeys}};
     }
 
     events *Interface::get_history () {
         if (!bool (Events)) {
             auto hf = history_filepath ();
-            if (bool (hf)) Events = new events {read_from_file (*hf)};
+            if (bool (hf)) Events = std::make_shared<events> (read_from_file (*hf));
         }
 
-        return Events;
+        return Events.get ();
     }
 
     crypto::random *Interface::random () {
@@ -342,45 +324,15 @@ namespace Cosmos {
                 "We need some entropy for this operation. Please type random characters.",
                 "Sufficient entropy provided.", std::cout, std::cin);
 
-            Random = new crypto::NIST::DRBG {crypto::NIST::DRBG::Hash, *Entropy};
+            Random = std::make_shared<crypto::NIST::DRBG> (crypto::NIST::DRBG::Hash, *Entropy);
         }
 
-        return Random;
+        return Random.get ();
 
-    }
-
-    void Interface::writable::set_keys (const Cosmos::keychain &kk) {
-        if (I.Keys) *I.Keys = kk;
-        else if (I.Wallet) I.Wallet->Keys = kk;
-        else I.Keys = new Cosmos::keychain {kk};
-    }
-
-    void Interface::writable::set_pubkeys (const Cosmos::pubkeychain &pk) {
-        if (I.Pubkeys) *I.Pubkeys = pk;
-        else if (I.WatchWallet) I.WatchWallet->Pubkeys = pk;
-        else if (I.Wallet) I.Wallet->Pubkeys = pk;
-        else I.Pubkeys = new Cosmos::pubkeychain {pk};
-    }
-
-    void Interface::writable::set_account (const Cosmos::account &a) {
-        if (I.Account) *I.Account = a;
-        else if (I.WatchWallet) I.WatchWallet->Account = a;
-        else if (I.Wallet) I.Wallet->Account = a;
-        else I.Account = new Cosmos::account {a};
-    }
-
-    void Interface::writable::set_watch_wallet (const Cosmos::watch_wallet &ww) {
-        if (I.WatchWallet) *I.WatchWallet = ww;
-        else if (I.Wallet) static_cast<Cosmos::watch_wallet &> (*I.Wallet) = ww;
-        else I.WatchWallet = new Cosmos::watch_wallet {ww};
-    }
-
-    void Interface::writable::set_wallet (const Cosmos::wallet &w) {
-        if (I.Wallet) *I.Wallet = w;
-        else I.Wallet = new Cosmos::wallet {w};
     }
 
     Interface::~Interface () {
+        if (!Written) return;
 
         auto tf = txdb_filepath ();
         auto af = account_filepath ();
@@ -389,34 +341,24 @@ namespace Cosmos {
         auto kf = keychain_filepath ();
         auto pdf = price_data_filepath ();
 
-        if (Written) {
-            if (bool (tf) && bool (LocalTXDB)) write_to_file (JSON (dynamic_cast<JSON_local_txdb &> (*LocalTXDB)), *tf);
-            if (bool (af) && bool (Account)) write_to_file (JSON (*Account), *af);
-            if (bool (hf) && bool (Events)) write_to_file (JSON (*Events), *hf);
-            if (bool (pf) && bool (Pubkeys)) write_to_file (JSON (*Pubkeys), *pf);
-            if (bool (kf) && bool (Keys)) write_to_file (JSON (*Keys), *kf);
-            if (bool (pdf) && bool (LocalPriceData)) write_to_file (JSON (dynamic_cast<JSON_price_data &> (*LocalPriceData)), *pdf);
-        }
+        if (bool (tf) && bool (LocalTXDB))
+            write_to_file (JSON (dynamic_cast<JSON_local_txdb &> (*LocalTXDB)), *tf);
 
-        delete PriceData;
-        delete LocalPriceData;
+        if (bool (af) && bool (Account))
+            write_to_file (JSON (*Account), *af);
 
-        if (Wallet != nullptr) delete Wallet;
-        else {
-            delete Keys;
-            if (WatchWallet != nullptr) delete WatchWallet;
-            else {
-                delete Account;
-                delete Pubkeys;
-            }
-        }
+        if (bool (hf) && bool (Events))
+            write_to_file (JSON (*Events), *hf);
 
+        if (bool (pf) && bool (Pubkeys))
+            write_to_file (JSON (*Pubkeys), *pf);
 
-        delete LocalTXDB;
+        if (bool (kf) && bool (Keys))
+            write_to_file (JSON (*Keys), *kf);
 
-        delete Net;
+        if (bool (pdf) && bool (LocalPriceData))
+            write_to_file (JSON (dynamic_cast<JSON_price_data &> (*LocalPriceData)), *pdf);
 
-        delete Random;
     }
 
 }

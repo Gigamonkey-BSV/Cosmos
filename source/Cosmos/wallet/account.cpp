@@ -98,9 +98,9 @@ namespace Cosmos {
         JSON::object_t ev;
 
         ev["latest"] = uint32 (Latest);
-        ev["value"] = Value;
-        ev["spent"] = Spent;
-        ev["received"] = Received;
+        ev["value"] = write (Value);
+        ev["spent"] = write (Spent);
+        ev["received"] = write (Received);
 
         JSON::array_t events;
         events.resize (Events.size ());
@@ -118,10 +118,27 @@ namespace Cosmos {
     events::events (const JSON &j) {
         if (j == JSON (nullptr)) return;
 
-        Latest = Bitcoin::timestamp {uint32 (j["latest"])};
-        Value = Bitcoin::satoshi {int64 (j["value"])};
-        Spent = Bitcoin::satoshi {int64 (j["spent"])};
-        Received = Bitcoin::satoshi {int64 (j["received"])};
+        if (!j.is_object ()) throw exception {} << "invalid events JSON format";
+
+        auto latest = j.find ("latest");
+        auto value = j.find ("value");
+        auto spent = j.find ("spent");
+        auto received = j.find ("received");
+        auto account = j.find ("account");
+        auto events = j.find ("events");
+
+        if (latest == j.end () || value == j.end () || spent == j.end () || received == j.end () || account == j.end () || events == j.end ())
+            throw exception {} << "invalid events JSON format: missing fields";
+
+        if (!latest->is_number ()) throw exception {} << "invalid events JSON format: invalid field latest";
+        if (!value->is_number ()) throw exception {} << "invalid events JSON format: invalid field value";
+        if (!spent->is_number ()) throw exception {} << "invalid events JSON format: invalid field spent";
+        if (!received->is_number ()) throw exception {} << "invalid events JSON format: invalid field received";
+
+        Latest = Bitcoin::timestamp {uint32 (*latest)};
+        Value = read_satoshi (*value);
+        Spent = read_satoshi (*spent);
+        Received = read_satoshi (*received);
 
         for (const auto &[key, value] : j["account"].items ()) Account[read_outpoint (key)] = read_output (value);
 
@@ -147,6 +164,7 @@ namespace Cosmos {
     events &events::operator <<= (ordered_list<ray> e) {
         if (data::size (e) == 0) return *this;
 
+        std::cout << "adding histories starting from " << e.first ().When << " to events lasting to " << Latest << std::endl;
         if (e.first ().When <= Latest) throw exception {} << "must be later than latest time";
 
         while (true) {

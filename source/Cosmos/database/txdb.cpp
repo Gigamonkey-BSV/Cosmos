@@ -15,7 +15,7 @@ namespace Cosmos {
 
         auto db_entry = this->tx (txid);
 
-        if (!bool (db_entry.Confirmation)) this->insert (Merkle::proof {Merkle::branch {txid, p}, h.MerkleRoot});
+        if (!db_entry.Confirmation.valid ()) this->insert (Merkle::proof {Merkle::branch {txid, p}, h.MerkleRoot});
         if (this->tx (txid).Transaction == nullptr) {
             this->insert (tx);
 
@@ -61,8 +61,10 @@ namespace Cosmos {
     }
 
     ordered_list<ray> cached_remote_txdb::by_address (const Bitcoin::address &a) {
+        std::cout << " retrieving address " << a << std::endl;
         auto x = Local.by_address (a);
-        if (!data::empty (x)) return x;
+        std::cout << x.size () << " events returned; valid? " << std::boolalpha << x.valid () << std::endl;
+        if (!data::empty (x) && x.valid ()) return x;
 
         auto ids = Net.WhatsOnChain.address ().get_history (a);
 

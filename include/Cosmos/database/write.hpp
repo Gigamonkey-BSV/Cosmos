@@ -23,6 +23,9 @@ namespace Cosmos {
     std::string write (const Bitcoin::header &h);
     Bitcoin::header read_header (const string &j);
 
+    JSON write (const Bitcoin::satoshi &j);
+    Bitcoin::satoshi read_satoshi (const JSON &j);
+
     JSON write (const Bitcoin::output &j);
     Bitcoin::output read_output (const JSON &j);
 
@@ -54,6 +57,14 @@ namespace Cosmos {
         Bitcoin::TXID t {std::string {x}};
         if (!t.valid ()) throw exception {} << "invalid txid " << x;
         return t;
+    }
+
+    JSON inline write (const Bitcoin::satoshi &j) {
+        return JSON (int64 (j));
+    }
+
+    Bitcoin::satoshi inline read_satoshi (const JSON &j) {
+        return Bitcoin::satoshi (int64 (j));
     }
 
     Bitcoin::output inline read_output (const JSON &j) {

@@ -4,9 +4,7 @@
 namespace Cosmos {
 
     pubkeychain::pubkeychain (const JSON &j) {
-        std::cout << "reading pubkey chain " << j << std::endl;
         if (j == JSON (nullptr)) return;
-        std::cout << "reading pubkey chain... " << j << std::endl;
 
         if (!j.is_object () || !j.contains ("pubkeys") || !j.contains ("sequences") || !j.contains ("receive") || !j.contains ("change"))
             throw exception {} << "invalid JSON format";

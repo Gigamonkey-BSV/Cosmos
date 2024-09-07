@@ -78,7 +78,7 @@ namespace Cosmos {
         Bitcoin::satoshi Spent;
         Bitcoin::satoshi Received;
 
-        events () : Latest {}, Account {}, Events {}, Value {0}, Spent {0}, Received {0} {}
+        events () : Latest {0}, Account {}, Events {}, Value {0}, Spent {0}, Received {0} {}
         events (Bitcoin::timestamp l, std::map<Bitcoin::outpoint, Bitcoin::output> a, list<event> e, Bitcoin::satoshi v):
             Latest {l}, Account {a}, Events {e}, Value {v} {}
 

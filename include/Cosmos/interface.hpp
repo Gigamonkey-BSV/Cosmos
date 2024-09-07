@@ -29,9 +29,10 @@ namespace Cosmos {
         network *net ();
         crypto::random *random ();
 
+        const Cosmos::local_txdb *local_txdb ();
         const maybe<Cosmos::cached_remote_txdb> txdb () const;
         const SPV::database *spvdb () const;
-        const Cosmos::price_data *price_data () const;
+        const ptr<Cosmos::price_data> price_data () const;
 
         const Cosmos::events *history () const;
 
@@ -39,8 +40,8 @@ namespace Cosmos {
         const Cosmos::pubkeychain *pubkeys () const;
         const Cosmos::account *account () const;
 
-        const Cosmos::watch_wallet *watch_wallet () const;
-        const Cosmos::wallet *wallet () const;
+        const maybe<Cosmos::watch_wallet> watch_wallet () const;
+        const maybe<Cosmos::wallet> wallet () const;
 
         Interface () {}
 
@@ -57,9 +58,10 @@ namespace Cosmos {
         // We use this to change the database.
         struct writable {
 
+            Cosmos::local_txdb *local_txdb ();
             maybe<Cosmos::cached_remote_txdb> txdb ();
             SPV::database *spvdb ();
-            Cosmos::price_data *price_data ();
+            ptr<Cosmos::price_data> price_data ();
 
             Cosmos::events *history ();
 
@@ -103,19 +105,16 @@ namespace Cosmos {
         maybe<std::string> PriceDataFilepath {};
         maybe<std::string> HistoryFilepath {};
 
-        network *Net {nullptr};
-        Cosmos::keychain *Keys {nullptr};
-        Cosmos::pubkeychain *Pubkeys {nullptr};
-        Cosmos::local_txdb *LocalTXDB {nullptr};
-        Cosmos::local_price_data *LocalPriceData {nullptr};
-        Cosmos::price_data *PriceData {nullptr};
-        Cosmos::events *Events {nullptr};
-        Cosmos::account *Account {nullptr};
-        Cosmos::watch_wallet *WatchWallet {nullptr};
-        Cosmos::wallet *Wallet {nullptr};
+        ptr<network> Net {nullptr};
+        ptr<Cosmos::keychain> Keys {nullptr};
+        ptr<Cosmos::pubkeychain> Pubkeys {nullptr};
+        ptr<Cosmos::local_txdb> LocalTXDB {nullptr};
+        ptr<Cosmos::local_price_data> LocalPriceData {nullptr};
+        ptr<Cosmos::events> Events {nullptr};
+        ptr<Cosmos::account> Account {nullptr};
 
         ptr<crypto::user_entropy> Entropy;
-        crypto::random *Random {nullptr};
+        ptr<crypto::random> Random {nullptr};
 
         // if this is set to true, then everything will be
         // saved to disk on destruction of the Interface.
@@ -124,12 +123,13 @@ namespace Cosmos {
         Cosmos::keychain *get_keys ();
         Cosmos::pubkeychain *get_pubkeys ();
         maybe<Cosmos::cached_remote_txdb> get_txdb ();
+        Cosmos::local_txdb *get_local_txdb ();
         Cosmos::account *get_account ();
-        Cosmos::price_data *get_price_data ();
+        ptr<Cosmos::price_data> get_price_data ();
         events *get_history ();
 
-        Cosmos::watch_wallet *get_watch_wallet ();
-        Cosmos::wallet *get_wallet ();
+        maybe<Cosmos::watch_wallet> get_watch_wallet ();
+        maybe<Cosmos::wallet> get_wallet ();
 
         friend struct writable;
     };
@@ -202,7 +202,7 @@ namespace Cosmos {
         return I.get_history ();
     }
 
-    Cosmos::price_data inline *Interface::writable::price_data () {
+    ptr<Cosmos::price_data> inline Interface::writable::price_data () {
         return I.get_price_data ();
     }
 
@@ -222,20 +222,45 @@ namespace Cosmos {
         return const_cast<Interface *> (this)->get_account ();
     }
 
-    const Cosmos::price_data inline *Interface::price_data () const {
+    const ptr<Cosmos::price_data> inline Interface::price_data () const {
         return const_cast<Interface *> (this)->get_price_data ();
     }
 
-    const Cosmos::watch_wallet inline *Interface::watch_wallet () const {
+    const maybe<Cosmos::watch_wallet> inline Interface::watch_wallet () const {
         return const_cast<Interface *> (this)->get_watch_wallet ();
     }
 
-    const Cosmos::wallet inline *Interface::wallet () const {
+    const maybe<Cosmos::wallet> inline Interface::wallet () const {
         return const_cast<Interface *> (this)->get_wallet ();
     }
 
     const events inline *Interface::history () const {
         return const_cast<Interface *> (this)->get_history ();
+    }
+
+    void inline Interface::writable::set_keys (const Cosmos::keychain &kk) {
+        if (I.Keys) *I.Keys = kk;
+        else I.Keys = std::make_shared<Cosmos::keychain> (kk);
+    }
+
+    void inline Interface::writable::set_pubkeys (const Cosmos::pubkeychain &pk) {
+        if (I.Pubkeys) *I.Pubkeys = pk;
+        else I.Pubkeys = std::make_shared<Cosmos::pubkeychain> (pk);
+    }
+
+    void inline Interface::writable::set_account (const Cosmos::account &a) {
+        if (I.Account) *I.Account = a;
+        else I.Account = std::make_shared<Cosmos::account> (a);
+    }
+
+    void inline Interface::writable::set_watch_wallet (const Cosmos::watch_wallet &ww) {
+        set_account (ww.Account);
+        set_pubkeys (ww.Pubkeys);
+    }
+
+    void inline Interface::writable::set_wallet (const Cosmos::wallet &w) {
+        set_watch_wallet (w);
+        set_keys (w.Keys);
     }
 
 }

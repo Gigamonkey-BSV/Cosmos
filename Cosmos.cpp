@@ -297,7 +297,7 @@ void command_value (const arg_parser &p) {
     Cosmos::Interface e {};
     Cosmos::read_account_and_txdb_options (e, p);
     e.update<void> (Cosmos::update_pending_transactions);
-    if (e.watch_wallet () == nullptr) throw exception {} << "could not read wallet";
+    if (!bool (e.watch_wallet ())) throw exception {} << "could not read wallet";
     return Cosmos::display_value (*e.watch_wallet ());
 }
 
@@ -352,7 +352,7 @@ void command_import (const arg_parser &p) {
     e.update<void> (update_pending_transactions);
 
     e.update<void> ([&outpoint, &key, &script_code] (Cosmos::Interface::writable u) {
-        const auto *w = u.get ().wallet ();
+        const auto w = u.get ().wallet ();
         if (!bool (w)) throw exception {} << "could not load wallet.";
 
         auto txdb = u.txdb ();
@@ -438,7 +438,7 @@ namespace Cosmos {
 
     // collect splitable scripts by addres.
     splitable get_split_address (Interface::writable u, splitable x, const Bitcoin::address &addr) {
-        const auto *w = u.get ().wallet ();
+        const auto w = u.get ().wallet ();
         auto TXDB = u.txdb ();
         if (!bool (TXDB) | !bool (w)) throw exception {} << "could not load wallet";
 
@@ -527,7 +527,7 @@ void command_split (const arg_parser &p) {
         // in this case, we just look for all outputs in our account that we are able to split.
         x = e.update<splitable> ([&max_sats_per_output] (Interface::writable u) {
 
-            const auto *w = u.get ().wallet ();
+            const auto w = u.get ().wallet ();
             if (!bool (w)) throw exception {} << "could not load wallet";
 
             splitable z;
@@ -955,8 +955,6 @@ void command_restore (const arg_parser &p) {
     wait_for_enter ();
 
     Interface e {};
-
-    std::cout << "About to restore wallet." << std::endl;
 
     auto restore_from_pubkey = [&max_look_ahead, &derivations] (Cosmos::Interface::writable u) {
         const auto &pp = u.get ().pubkeys ();

@@ -19,16 +19,16 @@ namespace Cosmos {
 
         std::strong_ordering operator <=> (const vertex &tx) const {
             if (!valid ()) throw exception {} << "unconfirmed or invalid tx.";
-            return *this->Confirmation <=> *tx.Confirmation;
+            return this->Confirmation <=> tx.Confirmation;
         }
 
         bool operator == (const vertex &tx) const {
             if (!valid ()) throw exception {} << "unconfirmed or invalid tx.";
-            return *this->Transaction == *tx.Transaction && *this->Confirmation == *tx.Confirmation;
+            return *this->Transaction == *tx.Transaction && this->Confirmation == tx.Confirmation;
         }
 
         bool valid () const {
-            return this->Transaction != nullptr && bool (this->Confirmation);
+            return this->has_proof ();
         }
 
         explicit operator bool () {
@@ -36,7 +36,9 @@ namespace Cosmos {
         }
 
         Bitcoin::timestamp when () const {
-            return this->Confirmation->Header.Timestamp;
+            if (this->Confirmation.Header.Timestamp == Bitcoin::timestamp {0}) throw exception {} << " Warning: " <<
+                " tx " << this->Transaction->id () << " has header " << this->Confirmation.Header;
+            return this->Confirmation.Header.Timestamp;
         }
     };
 
@@ -64,24 +66,33 @@ namespace Cosmos {
         Bitcoin::satoshi Value;
 
         ray (Bitcoin::timestamp w, uint64 i, const Bitcoin::outpoint &op, const Bitcoin::output &o) :
-            Direction {direction::out}, Put {bytes (o)}, When {w}, Index {i}, Point {op}, Value {o.Value} {}
+            Direction {direction::out}, Put {bytes (o)}, When {w}, Index {i}, Point {op}, Value {o.Value} {
+            if (When == Bitcoin::timestamp {0}) throw exception {} << "Warning: invalid timestamp detected A";
+        }
 
         ray (Bitcoin::timestamp w, uint64 i, const inpoint &ip, const Bitcoin::input &in, const Bitcoin::satoshi &v) :
-            Direction {direction::in}, Put {bytes (in)}, When {w}, Index {i}, Point {ip}, Value {v} {}
+            Direction {direction::in}, Put {bytes (in)}, When {w}, Index {i}, Point {ip}, Value {v} {
+            if (When == Bitcoin::timestamp {0}) throw exception {} << "Warning: invalid timestamp detected B";
+        }
 
         ray (const vertex &t, const Bitcoin::outpoint &op):
             Direction {direction::out},
             Put {bytes (t.Transaction->Outputs[op.Index])},
             When {t.when ()},
-            Index {t.Confirmation->Path.Index},
-            Point {op}, Value {Bitcoin::output::value (Put)} {}
+            Index {t.Confirmation.Path.Index},
+            Point {op}, Value {Bitcoin::output::value (Put)} {
+            std::cout << "     " << " creating ray from vertex ... " << std::endl;
+            if (When == Bitcoin::timestamp {0}) throw exception {} << "Warning: invalid timestamp detected C";
+        }
 
         ray (const vertex &t, const inpoint &ip, const Bitcoin::satoshi &v):
             Direction {direction::in},
             Put {bytes (t.Transaction->Inputs[ip.Index])},
             When {t.when ()},
-            Index {t.Confirmation->Path.Index},
-            Point {ip}, Value {v} {}
+            Index {t.Confirmation.Path.Index},
+            Point {ip}, Value {v} {
+            if (When == Bitcoin::timestamp {0}) throw exception {} << "Warning: invalid timestamp detected D";
+        }
 
         std::strong_ordering operator <=> (const ray &e) const {
             auto compare_time = When <=> e.When;
