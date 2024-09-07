@@ -4,9 +4,15 @@
 namespace Cosmos {
 
     redeemable::operator JSON () const {
-        JSON::object_t j;
         JSON::array_t deriv;
-        for (const derivation &d : Derivation) deriv.push_back (JSON (d));
+
+        {
+            int index = 0;
+            deriv.resize (Derivation.size ());
+            for (const derivation &d : Derivation) deriv[index++] = JSON (d);
+        }
+
+        JSON::object_t j;
         j["derivation"] = deriv;
         if (UnlockScriptSoFar.size () != 0) j["script_code"] = encoding::hex::write (UnlockScriptSoFar);
         j["expected_size"] = ExpectedScriptSize;
@@ -70,7 +76,7 @@ namespace Cosmos {
         JSON::object_t o;
         o["txid"] = write (e.TXID);
         o["when"] = uint32 (e.When);
-        o["received"] = int64 (e.Received);
+        o["received"] = write (e.Received);
         o["spent"] = int64 (e.Spent);
         o["moved"] = int64 (e.Moved);
         JSON::array_t a;
@@ -86,8 +92,8 @@ namespace Cosmos {
         e.TXID = read_txid (std::string (j["txid"]));
         e.When = Bitcoin::timestamp (uint32 (j["when"]));
         e.Received = Bitcoin::satoshi (uint64 (j["received"]));
-        e.Spent = Bitcoin::satoshi (uint64 (j["spent"]));
-        e.Moved = Bitcoin::satoshi (uint64 (j["moved"]));
+        e.Spent = read_satoshi (j["spent"]);
+        e.Moved = read_satoshi (j["moved"]);
         stack<ray> events;
         for (const auto &jj : j["events"]) events <<= read_ray (jj, e.When);
         e.Events = ordered_list<ray> (data::reverse (events));

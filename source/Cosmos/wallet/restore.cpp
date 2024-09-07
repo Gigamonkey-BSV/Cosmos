@@ -19,20 +19,18 @@ namespace Cosmos {
         Bitcoin::satoshi received = 0;
         Bitcoin::satoshi spent = 0;
 
-        std::cout << " restoring wallet ..." << std::endl;
-
         while (true) {
             // generate next address
             entry<Bitcoin::address, signing> next = m.last ();
             const Bitcoin::address &new_addr = next.Key;
 
-            std::cout << " recovering address " << m.Last << ": " << new_addr << std::endl;
+            std::cout << "  recovering address " << m.Last << ": " << new_addr << std::endl;
 
             m = m.next ();
 
             // get all txs relating to this address.
             ordered_list<ray> ev = TXDB.by_address (new_addr);
-            std::cout << " found " << ev.size () << " events for address " << new_addr << std::endl;
+            std::cout << "  found " << ev.size () << " events for address " << new_addr << std::endl;
 
             if (ev.size () == 0) {
                 if (last_used == MaxLookAhead) break;
