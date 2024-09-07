@@ -29,7 +29,7 @@ namespace Cosmos {
         network *net ();
         crypto::random *random ();
 
-        const Cosmos::txdb *txdb () const;
+        const maybe<Cosmos::cached_remote_txdb> txdb () const;
         const SPV::database *spvdb () const;
         const Cosmos::price_data *price_data () const;
 
@@ -57,7 +57,7 @@ namespace Cosmos {
         // We use this to change the database.
         struct writable {
 
-            Cosmos::txdb *txdb ();
+            maybe<Cosmos::cached_remote_txdb> txdb ();
             SPV::database *spvdb ();
             Cosmos::price_data *price_data ();
 
@@ -104,11 +104,9 @@ namespace Cosmos {
         maybe<std::string> HistoryFilepath {};
 
         network *Net {nullptr};
-
         Cosmos::keychain *Keys {nullptr};
         Cosmos::pubkeychain *Pubkeys {nullptr};
         Cosmos::local_txdb *LocalTXDB {nullptr};
-        Cosmos::cached_remote_txdb *RemoteTXDB {nullptr};
         Cosmos::local_price_data *LocalPriceData {nullptr};
         Cosmos::price_data *PriceData {nullptr};
         Cosmos::events *Events {nullptr};
@@ -125,8 +123,7 @@ namespace Cosmos {
 
         Cosmos::keychain *get_keys ();
         Cosmos::pubkeychain *get_pubkeys ();
-        Cosmos::txdb *get_txdb ();
-        SPV::database *get_spvdb ();
+        maybe<Cosmos::cached_remote_txdb> get_txdb ();
         Cosmos::account *get_account ();
         Cosmos::price_data *get_price_data ();
         events *get_history ();
@@ -149,7 +146,11 @@ namespace Cosmos {
     };
 
     void display_value (const watch_wallet &w);
+
     pubkeychain generate_new_xpub (const pubkeychain &p);
+
+    void update_pending_transactions (Interface::writable);
+
     void restore_wallet (Interface &e);
 
     void read_both_chains_options (Interface &, const arg_parser &p);
@@ -193,12 +194,8 @@ namespace Cosmos {
         read_account_and_txdb_options (e, p);
     }
 
-    Cosmos::txdb inline *Interface::writable::txdb () {
+    maybe<Cosmos::cached_remote_txdb> inline Interface::writable::txdb () {
         return I.get_txdb ();
-    }
-
-    SPV::database inline *Interface::writable::spvdb () {
-        return I.get_spvdb ();
     }
 
     events inline *Interface::writable::history () {
@@ -217,12 +214,8 @@ namespace Cosmos {
         return const_cast<Interface *> (this)->get_pubkeys ();
     }
 
-    const Cosmos::txdb inline *Interface::txdb () const {
+    const maybe<Cosmos::cached_remote_txdb> inline Interface::txdb () const {
         return const_cast<Interface *> (this)->get_txdb ();
-    }
-
-    const SPV::database inline *Interface::spvdb () const {
-        return const_cast<Interface *> (this)->get_spvdb ();
     }
 
     const Cosmos::account inline *Interface::account () const {

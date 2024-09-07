@@ -9,7 +9,16 @@
 
 namespace Cosmos {
 
+    void update_pending_transactions (Interface::writable u) {
+        auto txdb = u.txdb ();
+        if (!bool (txdb)) throw exception {"could not connect to network and database"};
+        set<Bitcoin::TXID> pending = txdb->Local.pending ();
+        for (const Bitcoin::TXID &txid : pending) txdb->import_transaction (txid);
+    }
+
     pubkeychain generate_new_xpub (const pubkeychain &p) {
+        const auto *v = p.Sequences.contains (p.Receive);
+        if (v == nullptr) throw exception {} << "pubkey map has no receive sequence";
         address_sequence receive_sequence = p.Sequences[p.Receive];
         HD::BIP_32::pubkey next_pubkey = receive_sequence.Key.derive (receive_sequence.Path << receive_sequence.Last);
         Bitcoin::address::decoded next_address = next_pubkey.address ();
@@ -94,7 +103,7 @@ namespace Cosmos {
         auto *w = I.wallet ();
         if (!bool (w)) throw exception {1} << "could not load wallet";
 
-        auto err = I.net ()->broadcast (bytes (x.Transaction.Value));
+        auto err = txdb ()->broadcast (x.Transaction);
         if (bool (err)) throw exception {3} << "tx broadcast failed;\n\ttx: " << x.Transaction << "\n\terror: " << err;
 
         // save new wallet.
@@ -211,45 +220,24 @@ namespace Cosmos {
         return Net;
     }
 
-    txdb *Interface::get_txdb () {
-        if (bool (RemoteTXDB)) return RemoteTXDB;
+    maybe<cached_remote_txdb> Interface::get_txdb () {
+
+        auto n = net ();
+        if (!bool (n)) return {};
 
         if (!bool (LocalTXDB)) {
             auto txf = txdb_filepath ();
             if (bool (txf)) LocalTXDB = new JSON_local_txdb {read_JSON_local_txdb_from_file (*txf)};
-            else return nullptr;
+            else return {};
         }
 
-        auto n = net ();
-        if (bool (n)) {
-
-            RemoteTXDB = new cached_remote_txdb {*n, *LocalTXDB};
-            LocalTXDB = &RemoteTXDB->Local;
-            return RemoteTXDB;
-
-        } else return LocalTXDB;
-    }
-
-    SPV::database *Interface::get_spvdb () {
-        if (bool (RemoteTXDB)) return &RemoteTXDB->Local;
-
-        if (!bool (LocalTXDB)) {
-            auto txf = txdb_filepath ();
-            if (bool (txf)) LocalTXDB = new JSON_local_txdb {read_JSON_local_txdb_from_file (*txf)};
-            else return nullptr;
-        }
-
-        auto n = net ();
-        if (bool (n)) {
-
-            RemoteTXDB = new cached_remote_txdb {*n, *LocalTXDB};
-            LocalTXDB = &RemoteTXDB->Local;
-            return &RemoteTXDB->Local;
-
-        } else return LocalTXDB;
+        return {cached_remote_txdb {*n, *LocalTXDB}};
     }
 
     account *Interface::get_account () {
+        if (bool (Wallet)) return &Wallet->Account;
+        if (bool (WatchWallet)) return &WatchWallet->Account;
+
         if (!bool (Account)) {
             auto af = account_filepath ();
             if (bool (af)) {
@@ -261,6 +249,10 @@ namespace Cosmos {
     }
 
     pubkeychain *Interface::get_pubkeys () {
+
+        if (bool (Wallet)) return &Wallet->Pubkeys;
+        if (bool (WatchWallet)) return &WatchWallet->Pubkeys;
+
         if (!bool (Pubkeys)) {
             auto pf = pubkeychain_filepath ();
             if (bool (pf)) Pubkeys = new pubkeychain {read_pubkeychain_from_file (*pf)};
@@ -270,6 +262,8 @@ namespace Cosmos {
     }
 
     keychain *Interface::get_keys () {
+        if (bool (Wallet)) return &Wallet->Keys;
+
         if (!bool (Keys)) {
             auto kf = keychain_filepath ();
             if (bool (kf)) Keys = new keychain {read_keychain_from_file (*kf)};
@@ -305,8 +299,10 @@ namespace Cosmos {
         if (!bool (acc) || !bool (pkc)) return nullptr;
 
         WatchWallet = new Cosmos::watch_wallet {*acc, *pkc};
-        Account = &WatchWallet->Account;
-        Pubkeys = &WatchWallet->Pubkeys;
+        delete acc;
+        acc = nullptr;
+        delete pkc;
+        pkc = nullptr;
 
         return WatchWallet;
     }
@@ -321,8 +317,10 @@ namespace Cosmos {
         if (!bool (watch) || !bool (k)) return nullptr;
 
         Wallet = new Cosmos::wallet {*k, watch->Account, watch->Pubkeys};
-        Keys = &Wallet->Keys;
-        WatchWallet = Wallet;
+        delete k;
+        k = nullptr;
+        delete watch;
+        watch = nullptr;
 
         return Wallet;
     }
@@ -414,8 +412,7 @@ namespace Cosmos {
         }
 
 
-        if (RemoteTXDB != nullptr) delete RemoteTXDB;
-        else delete LocalTXDB;
+        delete LocalTXDB;
 
         delete Net;
 

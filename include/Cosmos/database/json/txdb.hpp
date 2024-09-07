@@ -28,6 +28,9 @@ namespace Cosmos {
         ordered_list<ray> by_script_hash (const digest256 &) final override;
         ptr<ray> redeeming (const Bitcoin::outpoint &) final override;
 
+        set<Bitcoin::TXID> pending () final override;
+        void remove (const Bitcoin::TXID &) final override;
+
         void add_address (const Bitcoin::address &, const Bitcoin::outpoint &) final override;
         void add_script (const digest256 &, const Bitcoin::outpoint &) final override;
         void set_redeem (const Bitcoin::outpoint &, const inpoint &) final override;
@@ -80,6 +83,14 @@ namespace Cosmos {
 
     void inline JSON_local_txdb::set_redeem (const Bitcoin::outpoint &op, const inpoint &ip) {
         RedeemIndex[op] = ip;
+    }
+
+    set<Bitcoin::TXID> inline JSON_local_txdb::pending () {
+        return SPVDB.pending ();
+    }
+
+    void inline JSON_local_txdb::remove (const Bitcoin::TXID &tx) {
+        return SPVDB.remove (tx);
     }
 }
 

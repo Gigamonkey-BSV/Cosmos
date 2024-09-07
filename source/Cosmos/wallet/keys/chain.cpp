@@ -4,7 +4,12 @@
 namespace Cosmos {
 
     pubkeychain::pubkeychain (const JSON &j) {
+        std::cout << "reading pubkey chain " << j << std::endl;
         if (j == JSON (nullptr)) return;
+        std::cout << "reading pubkey chain... " << j << std::endl;
+
+        if (!j.is_object () || !j.contains ("pubkeys") || !j.contains ("sequences") || !j.contains ("receive") || !j.contains ("change"))
+            throw exception {} << "invalid JSON format";
 
         data::map<pubkey, derivation> db {};
 
@@ -20,13 +25,14 @@ namespace Cosmos {
     }
 
     pubkeychain::operator JSON () const {
+
         JSON::object_t db {};
         for (const data::entry<pubkey, derivation> &e : Derivations)
             db [e.Key] = JSON (e.Value);
 
         JSON::object_t x {};
         for (const data::entry<string, address_sequence> &e : Sequences)
-            db [e.Key] = JSON (e.Value);
+            x [e.Key] = JSON (e.Value);
 
         JSON::object_t j;
         j["pubkeys"] = db;

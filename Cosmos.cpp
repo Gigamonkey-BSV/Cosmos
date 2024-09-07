@@ -29,13 +29,14 @@ enum class method {
     HELP,
     VERSION,
     GENERATE,
+    RESTORE,
+    UPDATE,
     REQUEST,
     PAY,
     VALUE,
     IMPORT,
     SEND,
     BOOST,
-    RESTORE,
     SPLIT,
     TAXES
 };
@@ -55,12 +56,13 @@ void version ();
 void help (method meth = method::UNSET);
 
 void command_generate (const arg_parser &);
+void command_update (const arg_parser &);
+void command_restore (const arg_parser &);
 void command_request (const arg_parser &);
 void command_value (const arg_parser &);
 void command_send (const arg_parser &);
 void command_import (const arg_parser &);
 void command_boost (const arg_parser &);
-void command_restore (const arg_parser &);
 void command_split (const arg_parser &);
 void command_taxes (const arg_parser &);
 
@@ -99,6 +101,16 @@ Cosmos::error run (const io::arg_parser &p) {
                     break;
                 }
 
+                case method::RESTORE: {
+                    command_restore (p);
+                    break;
+                }
+
+                case method::UPDATE: {
+                    command_update (p);
+                    break;
+                }
+
                 case method::REQUEST: {
                     command_request (p);
                     break;
@@ -121,11 +133,6 @@ Cosmos::error run (const io::arg_parser &p) {
 
                 case method::BOOST: {
                     command_boost (p);
-                    break;
-                }
-
-                case method::RESTORE: {
-                    command_restore (p);
                     break;
                 }
 
@@ -196,6 +203,7 @@ void help (method meth) {
             version ();
             std::cout << "input should be <method> <args>... where method is "
                 "\n\tgenerate   -- create a new wallet."
+                "\n\tupdate     -- get Merkle proofs for txs that were pending last time the program ran."
                 "\n\tvalue      -- print the total value in the wallet."
                 "\n\treceive    -- generate a new xpub + address."
                 "\n\timport     -- add a utxo to this wallet."
@@ -215,7 +223,7 @@ void help (method meth) {
                 "\n\t(--coin_type=<uint32> (=0)) (value of BIP 44 coin_type)" << std::endl;
         } break;
         case method::VALUE : {
-            std::cout << "arguments for method value not yet available." << std::endl;
+            std::cout << "Print the value in a wallet. No parameters." << std::endl;
         } break;
         case method::PAY : {
             std::cout << "arguments for method pay not yet available." << std::endl;
@@ -258,11 +266,10 @@ void help (method meth) {
 }
 
 void version () {
-    std::cout << "Cosmos Wallet version 0.0" << std::endl;
+    std::cout << "Cosmos Wallet version 0.0.1 alpha" << std::endl;
 }
 
 // TODO encrypt file
-// TODO get accounts
 void command_generate (const arg_parser &p) {
     Cosmos::Interface e {};
     Cosmos::read_both_chains_options (e, p);
@@ -289,14 +296,26 @@ void command_generate (const arg_parser &p) {
 void command_value (const arg_parser &p) {
     Cosmos::Interface e {};
     Cosmos::read_account_and_txdb_options (e, p);
+    e.update<void> (Cosmos::update_pending_transactions);
     if (e.watch_wallet () == nullptr) throw exception {} << "could not read wallet";
     return Cosmos::display_value (*e.watch_wallet ());
+}
+
+// find all pending transactions and
+void command_update (const arg_parser &p) {
+    Cosmos::Interface e {};
+    Cosmos::read_account_and_txdb_options (e, p);
+    e.update<void> (Cosmos::update_pending_transactions);
 }
 
 void command_request (const arg_parser &p) {
     Cosmos::Interface e {};
     Cosmos::read_pubkeychain_options (e, p);
+    std::cout << "about to do check pending txs" << std::endl;
+    e.update<void> (Cosmos::update_pending_transactions);
+    std::cout << "updating pubkeys " << std::endl;
     e.update<void> ([] (Cosmos::Interface::writable u) {
+        std::cout << " meep moop" << std::endl;
         const auto *p = u.get ().pubkeys ();
         if (p == nullptr) throw exception {} << "could not read wallet";
         u.set_pubkeys (Cosmos::generate_new_xpub (*p));
@@ -330,12 +349,13 @@ void command_import (const arg_parser &p) {
     if (bool (script_code_hex)) script_code = *encoding::hex::read (*script_code_hex);
 
     Bitcoin::outpoint outpoint {txid, *index};
+    e.update<void> (update_pending_transactions);
 
     e.update<void> ([&outpoint, &key, &script_code] (Cosmos::Interface::writable u) {
         const auto *w = u.get ().wallet ();
         if (!bool (w)) throw exception {} << "could not load wallet.";
 
-        auto *txdb = u.txdb ();
+        auto txdb = u.txdb ();
         if (!bool (txdb)) throw exception {} << "could not read database";
 
         wallet wall = *w;
@@ -377,6 +397,8 @@ void command_send (const arg_parser &p) {
     if (rand == nullptr) throw exception {4} << "could not initialize random number generator.";
     if (net == nullptr) throw exception {5} << "could not connect to remote servers";
 
+    e.update<void> (update_pending_transactions);
+
     if (address.valid ()) e.update<void> ([rand, net, &address, &spend_amount] (Cosmos::Interface::writable u) {
             u.broadcast (u.make_tx ({Bitcoin::output {spend_amount, pay_to_address::script (address.decode ().Digest)}}));
         });
@@ -402,6 +424,7 @@ void command_boost (const arg_parser &p) {
 
     Bitcoin::output op {Bitcoin::satoshi {*value}, Boost::output_script (script_options::read (p.Parser, 3)).write ()};
 
+    e.update<void> (Cosmos::update_pending_transactions);
     e.update<void> ([net = e.net (), rand = e.random (), &op] (Cosmos::Interface::writable u) {
         u.broadcast (u.make_tx ({op}));
     });
@@ -416,7 +439,7 @@ namespace Cosmos {
     // collect splitable scripts by addres.
     splitable get_split_address (Interface::writable u, splitable x, const Bitcoin::address &addr) {
         const auto *w = u.get ().wallet ();
-        auto *TXDB = u.txdb ();
+        auto TXDB = u.txdb ();
         if (!bool (TXDB) | !bool (w)) throw exception {} << "could not load wallet";
 
         // is this address in our wallet?

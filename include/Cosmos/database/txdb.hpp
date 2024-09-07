@@ -10,6 +10,7 @@ namespace Cosmos {
     namespace Bitcoin = Gigamonkey::Bitcoin;
     namespace Merkle = Gigamonkey::Merkle;
     namespace SPV = Gigamonkey::SPV;
+    using extended_transaction = Gigamonkey::extended::transaction;
 
     // a transaction with a complete Merkle proof.
     struct vertex : SPV::database::confirmed {
@@ -154,6 +155,12 @@ namespace Cosmos {
         ptr<ray> redeeming (const Bitcoin::outpoint &) final override;
 
         void import_transaction (const Bitcoin::TXID &);
+
+        broadcast_error broadcast (const entry<Bitcoin::TXID, extended_transaction> e) {
+            auto err = Net.broadcast (bytes (e.Value));
+            if (!bool (err)) Local.insert (Bitcoin::transaction (e.Value));
+            return err;
+        }
     };
 }
 

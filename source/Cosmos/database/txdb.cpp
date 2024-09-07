@@ -13,10 +13,11 @@ namespace Cosmos {
         auto txid = tx.id ();
         if (!SPV::proof::valid (txid, p, h.MerkleRoot)) return false;
 
-        if (this->tx (txid).Transaction == nullptr) {
+        auto db_entry = this->tx (txid);
 
+        if (!bool (db_entry.Confirmation)) this->insert (Merkle::proof {Merkle::branch {txid, p}, h.MerkleRoot});
+        if (this->tx (txid).Transaction == nullptr) {
             this->insert (tx);
-            this->insert (Merkle::proof {Merkle::branch {txid, p}, h.MerkleRoot});
 
             uint32 i = 0;
             for (const Bitcoin::input in : tx.Inputs)
@@ -94,7 +95,7 @@ namespace Cosmos {
 
     vertex cached_remote_txdb::operator [] (const Bitcoin::TXID &id) {
         auto p = Local [id];
-        if (!p.valid ()) return p;
+        if (p.valid ()) return p;
         import_transaction (id);
         return Local [id];
     }

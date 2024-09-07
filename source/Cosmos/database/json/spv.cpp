@@ -15,7 +15,6 @@ namespace Cosmos {
     }
 
     ptr<SPV::database::memory::entry> read_db_entry (const JSON &j) {
-        std::cout << " reading db entry " << j << std::endl;
         if (!j.is_object () || !j.contains ("header") || (!j.contains ("height") && !j.contains ("tree")))
             throw exception {} << "invalid SPV DB entry: " << j;
         if (j.contains ("tree")) return std::make_shared<SPV::database::memory::entry>

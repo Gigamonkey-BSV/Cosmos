@@ -56,6 +56,10 @@ namespace Cosmos {
         bool operator == (const address_sequence &x) const;
     };
 
+    std::ostream inline &operator << (std::ostream &o, const address_sequence &a) {
+        return o << "{" << a.Key << ", " << a.Path << ", " << a.Last << "}";
+    }
+
     address_sequence inline address_sequence::next () const {
         return address_sequence {this->Key, this->Path, Last + 1};
     }
