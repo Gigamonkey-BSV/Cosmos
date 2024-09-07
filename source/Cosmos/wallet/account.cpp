@@ -20,10 +20,16 @@ namespace Cosmos {
         return j;
     }
 
-    redeemable::redeemable (const JSON &j) : signing {derivation {}, uint32 (j["expected_size"])} {
+    redeemable::redeemable (const JSON &j) : signing {derivation (), uint32 (j["expected_size"])} {
         Prevout = read_output (j["prevout"]);
         const JSON &p = j["derivation"];
-        for (const JSON &d : p) Derivation <<= derivation {d};
+
+        for (const JSON &d : p) {
+            auto dd = derivation {d};
+            if (!dd.valid ()) throw exception {} << "invalid derivation";
+            Derivation <<= dd;
+        }
+
         if (j.contains ("script_code")) {
             auto x = encoding::hex::read (std::string (p["script_code"]));
             if (!bool (x)) throw exception {} << "could not read hex value from \"" + p["script"].dump () + "\"";
@@ -77,8 +83,8 @@ namespace Cosmos {
         o["txid"] = write (e.TXID);
         o["when"] = uint32 (e.When);
         o["received"] = write (e.Received);
-        o["spent"] = int64 (e.Spent);
-        o["moved"] = int64 (e.Moved);
+        o["spent"] = write (e.Spent);
+        o["moved"] = write (e.Moved);
         JSON::array_t a;
         a.resize (e.Events.size ());
         int i = 0;
@@ -91,7 +97,7 @@ namespace Cosmos {
         events::event e {};
         e.TXID = read_txid (std::string (j["txid"]));
         e.When = Bitcoin::timestamp (uint32 (j["when"]));
-        e.Received = Bitcoin::satoshi (uint64 (j["received"]));
+        e.Received = read_satoshi (j["received"]);
         e.Spent = read_satoshi (j["spent"]);
         e.Moved = read_satoshi (j["moved"]);
         stack<ray> events;

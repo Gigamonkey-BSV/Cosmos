@@ -68,7 +68,7 @@ namespace Cosmos {
     }
 
     Bitcoin::output inline read_output (const JSON &j) {
-        return Bitcoin::output {int64 (j["value"]), *encoding::hex::read (std::string (j["script"]))};
+        return Bitcoin::output {read_satoshi (j["value"]), *encoding::hex::read (std::string (j["script"]))};
     }
 
     Bitcoin::input inline read_input (const JSON &j) {

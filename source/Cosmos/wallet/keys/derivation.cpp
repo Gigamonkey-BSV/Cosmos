@@ -5,12 +5,19 @@ namespace Cosmos {
 
     JSON write_path (HD::BIP_32::path p) {
         JSON::array_t a;
-        for (const uint32 &u : p) a.push_back (u);
+        a.resize (p.size ());
+        int index = 0;
+        for (const uint32 &u : p) a[index++] = u;
         return a;
     }
 
-    void read_path (HD::BIP_32::path &p, const JSON &j) {
-        for (const JSON &jj : j) p <<= uint32 (jj);
+    HD::BIP_32::path read_path (const JSON &j) {
+        HD::BIP_32::path p;
+        for (const JSON &jj : j) {
+            if (!jj.is_number ()) throw exception {} << " could not read path " << j;
+            p <<= uint32 (jj);
+        }
+        return p;
     }
 
     derivation::operator JSON () const {
@@ -22,7 +29,7 @@ namespace Cosmos {
 
     derivation::derivation (const JSON &j) {
         Key = std::string (j["key"]);
-        read_path (Path, j["path"]);
+        Path = read_path (j["path"]);
     }
 
     pubkey secret::to_public () const {
@@ -35,7 +42,7 @@ namespace Cosmos {
         if (j == JSON (nullptr)) return;
 
         Key = HD::BIP_32::pubkey {std::string (j["key"])};
-        read_path (Path, j);
+        Path = read_path (j["path"]);
         Last = j["last"];
     }
 

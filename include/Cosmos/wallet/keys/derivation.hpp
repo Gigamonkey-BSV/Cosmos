@@ -20,7 +20,9 @@ namespace Cosmos {
 
     struct pubkey : key {
         using key::key;
-        bool valid () const;
+        bool valid () const {
+            return HD::BIP_32::pubkey {*this}.valid () || Bitcoin::pubkey {*this}.valid ();
+        }
     };
 
     struct secret : key {

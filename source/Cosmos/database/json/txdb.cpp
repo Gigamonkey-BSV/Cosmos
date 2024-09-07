@@ -43,19 +43,20 @@ namespace Cosmos {
     }
 
     JSON_local_txdb::JSON_local_txdb (const JSON &j) {
+
         if (j == JSON (nullptr)) return;
 
         if (!j.is_object ()) throw exception {} << "invalid TXDB JSON format: not an object.";
         if (!j.contains ("redeems")) throw exception {} << "invalid TXDB JSON format: missing field 'redeems'. ";
         if (!j.contains ("spvdb") || !j.contains ("addresses") || !j.contains ("scripts"))
-            throw exception {} << "invalid TXDB JSON format: " << j;
+            throw exception {} << "invalid TXDB JSON format: ";
 
         const JSON &addresses = j["addresses"];
         const JSON &scripts = j["scripts"];
         const JSON &redeems = j["redeems"];
 
         if (!addresses.is_object () || !scripts.is_object () || !redeems.is_object ())
-            throw exception {} << "invalid TXDB JSON format f: " << j;
+            throw exception {} << "invalid TXDB JSON format ";
 
         SPVDB = JSON_SPV_database (j["spvdb"]);
 

@@ -15,7 +15,7 @@ namespace Cosmos {
 
     JSON write (const Bitcoin::output &j) {
         JSON::object_t op;
-        op["value"] = int64 (j.Value);
+        op["value"] = write (j.Value);
         op["script"] = encoding::hex::write (j.Script);
         return op;
     }
