@@ -21,6 +21,7 @@ namespace Cosmos {
         error Error;
 
         broadcast_error (error e): Error {e} {}
+        broadcast_error (): Error {none} {}
 
         operator bool () {
             return Error == none;

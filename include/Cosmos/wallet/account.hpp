@@ -30,8 +30,21 @@ namespace Cosmos {
 
     size_t estimated_size (const redeemable &);
 
+    // the effect of a single transaction on an account.
+    struct account_diff {
+        Bitcoin::TXID TXID {};
+        map<Bitcoin::index, redeemable> Insert {};
+        set<Bitcoin::outpoint> Remove {};
+
+        account_diff () {}
+    };
+
     struct account {
         std::map<Bitcoin::outpoint, redeemable> Account;
+
+        // apply a diff to an account. Throw exception if the diff contains
+        // outpoints to be removed that are not in the account.
+        static std::map<Bitcoin::outpoint, redeemable> apply (const account_diff &);
 
         account () : Account {} {}
         account (std::map<Bitcoin::outpoint, redeemable> a) : Account {a} {}
@@ -47,6 +60,8 @@ namespace Cosmos {
             for (const auto &[key, value] : b.Account) Account[key] = value;
             return *this;
         }
+
+        account &operator <<= (const account_diff &d);
 
     };
 

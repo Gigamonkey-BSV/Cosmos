@@ -171,14 +171,19 @@ namespace Cosmos {
 
         if (!completed.valid ()) throw exception {6} << "invalid tx generated";
 
-        // construct the final result.
-        result r {{completed.id (), completed}, a, x.Last};
+        account_diff diff;
+        diff.TXID = completed.id ();
 
         // update account information.
-        for (const auto &e : selected) r.Account.Account.erase (e.Key);
+        for (const auto &e : selected) diff.Remove = diff.Remove.insert (e.Key);
 
         uint32 i = 0;
-        for (const auto &o : split_outputs.Outputs) r.Account.Account[Bitcoin::outpoint {r.Transaction.Key, i++}] = o;
+        for (const auto &o : split_outputs.Outputs) diff.Insert = diff.Insert.insert (i++, o);
+
+        // construct the final result.
+        result r {{{completed, diff}}, x.Last};
+
+
 
         return r;
 

@@ -21,7 +21,6 @@ namespace Cosmos {
         // We do this by selecting all inputs and then removing outputs one by one until we can
         // no longer remove any and still satisfy MinChangeFraction and MinChangeValue.
 
-        account remainder {};
         auto result = acc.Account;
         auto spent_value = spendable_value;
 
@@ -81,8 +80,6 @@ namespace Cosmos {
             auto removed = result.find (remove_key);
             if (removed == result.end ()) throw exception {} << "some weird error happened here, not sure how to explain it.";
 
-            remainder.Account[remove_key] = removed->second;
-
             inputs_expected_size -= removed->second.expected_input_size ();
             spent_value -= removed->second.Prevout.Value;
 
@@ -100,7 +97,7 @@ namespace Cosmos {
         for (const auto &[key, value] : result) selected_outputs <<= data::entry<Bitcoin::outpoint, redeemable> {key, value};
 
         // shuffle before returning.
-        return selected {shuffle (selected_outputs, r), remainder};
+        return shuffle (selected_outputs, r);
     }
 
 }

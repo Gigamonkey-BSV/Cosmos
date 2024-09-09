@@ -1,9 +1,9 @@
 
-#include <Cosmos/wallet/keys/chain.hpp>
+#include <Cosmos/wallet/keys/pubkeys.hpp>
 
 namespace Cosmos {
 
-    pubkeychain::pubkeychain (const JSON &j) {
+    pubkeys::pubkeys (const JSON &j) {
         if (j == JSON (nullptr)) return;
 
         if (!j.is_object () || !j.contains ("pubkeys") || !j.contains ("sequences") || !j.contains ("receive") || !j.contains ("change"))
@@ -19,10 +19,10 @@ namespace Cosmos {
         for (const auto &[key, value] : j["sequences"].items ())
             x = x.insert (key, address_sequence {value});
 
-        *this = pubkeychain {db, x, j["receive"], j["change"]};
+        *this = pubkeys {db, x, j["receive"], j["change"]};
     }
 
-    pubkeychain::operator JSON () const {
+    pubkeys::operator JSON () const {
 
         JSON::object_t db {};
         for (const data::entry<pubkey, derivation> &e : Derivations)

@@ -7,10 +7,7 @@
 
 namespace Cosmos {
 
-    struct selected {
-        list<entry<Bitcoin::outpoint, redeemable>> Selected;
-        account Rest;
-    };
+    using selected = list<entry<Bitcoin::outpoint, redeemable>>;
 
     // select outputs from a wallet sufficient for the given value, plus the tx cost of the outputs selected.
     using select = data::function<selected (const account &, Bitcoin::satoshi, satoshis_per_byte fees, data::crypto::random &)>;

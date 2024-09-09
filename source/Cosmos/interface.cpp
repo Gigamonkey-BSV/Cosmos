@@ -15,8 +15,8 @@ namespace Cosmos {
         set<Bitcoin::TXID> pending = txdb->Local.pending ();
         for (const Bitcoin::TXID &txid : pending) txdb->import_transaction (txid);
     }
-
-    pubkeychain generate_new_xpub (const pubkeychain &p) {
+/*
+    pubkeys generate_new_xpub (const pubkeys &p) {
         const auto *v = p.Sequences.contains (p.Receive);
         if (v == nullptr) throw exception {} << "pubkey map has no receive sequence";
         address_sequence receive_sequence = p.Sequences[p.Receive];
@@ -24,7 +24,7 @@ namespace Cosmos {
         Bitcoin::address::decoded next_address = next_pubkey.address ();
         std::cout << "next xpub is " << next_pubkey << " and its address is " << next_address;
         return p.next (p.Receive);
-    }
+    }*/
 
     void generate_wallet::operator () (Interface::writable u) {
         const auto w = u.get ().wallet ();
@@ -69,7 +69,7 @@ namespace Cosmos {
         HD::BIP_32::pubkey master_pubkey = master.to_public ();
         keychain keys = keychain {}.insert (master_pubkey, master);
 
-        pubkeychain pub {{}, {}, "receive_0", "change_0"};
+        pubkeys pub {{}, {}, "receive_0", "change_0"};
 
         for (int account = 0; account < Accounts; account++) {
             list<uint32> path {
@@ -94,20 +94,31 @@ namespace Cosmos {
         u.set_pubkeys (pub);
     }
 
-    void Interface::writable::broadcast (const spent &x) {
+    broadcast_error Interface::writable::broadcast (const spend::spent &x) {
 
-        std::cout << "broadcasting tx " << x.Transaction.Key;
+        auto ww = I.watch_wallet ();
+        if (!bool (ww)) throw exception {1} << "could not load wallet";
+        Cosmos::watch_wallet next_wallet = *ww;
+        // if a broadcast fails, the keys will still be updated. Hopefully not more than max_look_ahead!
+        next_wallet.Pubkeys = x.Pubkeys;
 
-        wait_for_enter ();
+        broadcast_error err;
+        for (const auto &[extx, diff] : x.Transactions) {
+            std::cout << "broadcasting tx " << diff.TXID;
+            wait_for_enter ();
+            auto err = txdb ()->broadcast ({diff.TXID, extx});
+            if (bool (err)) {
+                std::cout << "tx broadcast failed;\n\ttx: " << extx << "\n\terror: " << err << std::endl;
+                break;
+            }
 
-        auto w = I.wallet ();
-        if (!bool (w)) throw exception {1} << "could not load wallet";
-
-        auto err = txdb ()->broadcast (x.Transaction);
-        if (bool (err)) throw exception {3} << "tx broadcast failed;\n\ttx: " << x.Transaction << "\n\terror: " << err;
+            next_wallet.Account <<= diff;
+        }
 
         // save new wallet.
-        set_wallet (x.Wallet);
+        set_watch_wallet (next_wallet);
+        return err;
+
     }
 
     void read_both_chains_options (Interface &e, const arg_parser &p) {
@@ -116,25 +127,25 @@ namespace Cosmos {
         if (bool (name)) return;
 
         auto &keychain_filepath = e.keychain_filepath ();
-        auto &pubkeychain_filepath = e.pubkeychain_filepath ();
+        auto &pubkeys_filepath = e.pubkeys_filepath ();
         p.get ("keychain_filepath", keychain_filepath);
-        p.get ("pubkeychain_filepath", pubkeychain_filepath);
+        p.get ("pubkeys_filepath", pubkeys_filepath);
         if (!bool (keychain_filepath)) throw data::exception {1} << "could not read filepath of keychain";
-        if (!bool (pubkeychain_filepath)) throw data::exception {1} << "could not read filepath of pubkeychain";
+        if (!bool (pubkeys_filepath)) throw data::exception {1} << "could not read filepath of pubkeys";
     }
 
-    void read_pubkeychain_options (Interface &e, const arg_parser &p) {
+    void read_pubkeys_options (Interface &e, const arg_parser &p) {
         auto &name = e.wallet_name ();
         p.get (2, "name", name);
         if (bool (name)) return;
 
-        auto &filepath = e.pubkeychain_filepath ();
+        auto &filepath = e.pubkeys_filepath ();
         p.get ("filepath", filepath);
         if (bool (filepath)) return;
-        p.get ("pubkeychain_filepath", filepath);
+        p.get ("pubkeys_filepath", filepath);
         if (bool (filepath)) return;
 
-        throw data::exception {1} << "could not read filepath of pubkeychain";
+        throw data::exception {1} << "could not read filepath of pubkeys";
     }
 
     void read_account_and_txdb_options (Interface &e, const arg_parser &p) {
@@ -164,10 +175,10 @@ namespace Cosmos {
         return KeychainFilepath;
     }
 
-    maybe<std::string> &Interface::pubkeychain_filepath () {
+    maybe<std::string> &Interface::pubkeys_filepath () {
         if (!bool (PubkeychainFilepath) && bool (Name)) {
             std::stringstream ss;
-            ss << *Name << ".pubkeychain.json";
+            ss << *Name << ".pubkeys.json";
             PubkeychainFilepath = ss.str ();
         }
 
@@ -214,6 +225,16 @@ namespace Cosmos {
         return HistoryFilepath;
     }
 
+    maybe<std::string> &Interface::payments_filepath () {
+        if (!bool (PaymentsFilepath) && bool (Name)) {
+            std::stringstream ss;
+            ss << *Name << ".payments.json";
+            PaymentsFilepath = ss.str ();
+        }
+
+        return PaymentsFilepath;
+    }
+
     network *Interface::net () {
         if (!bool (Net)) Net = std::make_shared<network> ();
 
@@ -254,11 +275,11 @@ namespace Cosmos {
         return Account.get ();
     }
 
-    pubkeychain *Interface::get_pubkeys () {
+    pubkeys *Interface::get_pubkeys () {
 
         if (!bool (Pubkeys)) {
-            auto pf = pubkeychain_filepath ();
-            if (bool (pf)) Pubkeys = std::make_shared<pubkeychain> (read_pubkeychain_from_file (*pf));
+            auto pf = pubkeys_filepath ();
+            if (bool (pf)) Pubkeys = std::make_shared<Cosmos::pubkeys> (read_pubkeys_from_file (*pf));
         }
 
         return Pubkeys.get ();
@@ -294,7 +315,7 @@ namespace Cosmos {
 
         if (!bool (acc) || !bool (pkc)) return {};
 
-        return {Cosmos::watch_wallet {*acc, *pkc}};
+        return {Cosmos::watch_wallet {*pkc, *acc}};
     }
 
     maybe<wallet> Interface::get_wallet () {
@@ -304,7 +325,7 @@ namespace Cosmos {
 
         if (!bool (watch) || !bool (k)) return {};
 
-        return {Cosmos::wallet {*k, watch->Account, watch->Pubkeys}};
+        return {Cosmos::wallet {*k, watch->Pubkeys, watch->Account}};
     }
 
     events *Interface::get_history () {
@@ -314,6 +335,15 @@ namespace Cosmos {
         }
 
         return Events.get ();
+    }
+
+    payments *Interface::get_payments () {
+        if (!bool (Payments)) {
+            auto pf = payments_filepath ();
+            if (bool (pf)) Payments = std::make_shared<Cosmos::payments> (read_from_file (*pf));
+        }
+
+        return Payments.get ();
     }
 
     crypto::random *Interface::random () {
@@ -337,9 +367,10 @@ namespace Cosmos {
         auto tf = txdb_filepath ();
         auto af = account_filepath ();
         auto hf = history_filepath ();
-        auto pf = pubkeychain_filepath ();
+        auto pf = pubkeys_filepath ();
         auto kf = keychain_filepath ();
         auto pdf = price_data_filepath ();
+        auto yf = payments_filepath ();
 
         if (bool (tf) && bool (LocalTXDB))
             write_to_file (JSON (dynamic_cast<JSON_local_txdb &> (*LocalTXDB)), *tf);
@@ -352,6 +383,9 @@ namespace Cosmos {
 
         if (bool (pf) && bool (Pubkeys))
             write_to_file (JSON (*Pubkeys), *pf);
+
+        if (bool (yf) && bool (Payments))
+            write_to_file (JSON (*Payments), *yf);
 
         if (bool (kf) && bool (Keys))
             write_to_file (JSON (*Keys), *kf);

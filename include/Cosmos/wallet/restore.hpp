@@ -7,6 +7,8 @@ namespace Cosmos {
 
     struct restore {
         uint32 MaxLookAhead;
+        // whether to check for derived addresses as well.
+        bool CheckDerived;
 
         // result of a restored wallet
         struct restored {
@@ -23,7 +25,7 @@ namespace Cosmos {
 
         restored operator () (txdb &TXDB, address_sequence pubkey);
 
-        watch_wallet operator () (txdb &TXDB, pubkeychain);
+        watch_wallet operator () (txdb &TXDB, pubkeys);
     };
 
 

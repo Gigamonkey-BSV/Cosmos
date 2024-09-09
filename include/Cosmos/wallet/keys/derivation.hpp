@@ -49,7 +49,7 @@ namespace Cosmos {
         }
 
         explicit operator JSON () const;
-        derivation (const JSON &);
+        explicit derivation (const JSON &);
 
         bool operator == (const derivation &d) const {
             return Key == d.Key && Path == d.Path;

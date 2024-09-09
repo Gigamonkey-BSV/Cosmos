@@ -12,11 +12,14 @@ namespace Cosmos {
         Bitcoin::satoshi MinSatsPerOutput {123456};
         double MeanSatsPerOutput {1234567};
 
-        spent operator () (redeem, data::crypto::random &, wallet, list<entry<Bitcoin::outpoint, redeemable>> selected, double fee_rate) const;
+        spend::spent operator ()
+            (redeem, data::crypto::random &, wallet, list<entry<Bitcoin::outpoint, redeemable>> selected, double fee_rate) const;
+
+        spend::spent_unsigned operator ()
+            (redeem, data::crypto::random &, watch_wallet, list<entry<Bitcoin::outpoint, redeemable>> selected, double fee_rate) const;
 
         struct result {
-            entry<Bitcoin::TXID, extended_transaction> Transaction;
-            account Account;
+            list<std::pair<extended_transaction, account_diff>> Transactions;
             uint32 Last;
         };
 
@@ -33,10 +36,10 @@ namespace Cosmos {
             Bitcoin::satoshi value, double fee_rate) const;
     };
 
-    spent inline split::operator () (redeem ree, data::crypto::random &rand, wallet w,
+    spend::spent inline split::operator () (redeem ree, data::crypto::random &rand, wallet w,
         list<entry<Bitcoin::outpoint, redeemable>> selected, double fee_rate) const {
         result rr = (*this) (ree, rand, w.Account, w.Keys, w.Pubkeys.Sequences[w.Pubkeys.Change], selected, fee_rate);
-        return spent {rr.Transaction, wallet {w.Keys, w.Account, w.Pubkeys.update (w.Pubkeys.Change, rr.Last)}};
+        return spend::spent {rr.Transactions, w.Pubkeys.update (w.Pubkeys.Change, rr.Last)};
     }
 }
 

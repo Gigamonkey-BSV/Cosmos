@@ -9,7 +9,7 @@
 namespace Cosmos {
 
     struct change {
-        list<redeemable> Change;
+        cross<redeemable> Change;
 
         // last key used (+1)
         uint32 Last;

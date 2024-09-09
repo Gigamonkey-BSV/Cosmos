@@ -3,6 +3,17 @@
 
 namespace Cosmos {
 
+    account &account::operator <<= (const account_diff &d) {
+        for (const auto &o : d.Remove) {
+            auto x = Account.find (o);
+            if (x == Account.end ()) throw exception {} << "invalid account for diff";
+            Account.erase (x);
+        }
+
+        for (const auto &e: d.Insert) Account[Bitcoin::outpoint {d.TXID, e.Key}] = e.Value;
+        return *this;
+    }
+
     redeemable::operator JSON () const {
         JSON::array_t deriv;
 
@@ -38,19 +49,26 @@ namespace Cosmos {
     }
 
     account::account (const JSON &j) {
-        if (j == nullptr) return;
-        if (!j.is_object ()) throw exception {} << "invalid account JSON format";
 
-        for (const auto &[key, value] : j.items ()) Account [read_outpoint (key)] = redeemable {value};
-        return;
+        if (j == nullptr) return;
+        if (!j.is_object ()) throw exception {} << "invalid account JSON format 1";
+
+        auto account = j.find ("account");
+        if (account == j.end ()) throw exception {} << "invalid account JSON format 2";
+
+        if (!account->is_object ()) throw exception {} << "invalid account JSON format 3";
+
+        for (const auto &[key, value] : account->items ()) Account [read_outpoint (key)] = redeemable {value};
+
     }
 
     account::operator JSON () const {
         JSON::object_t a;
-
         for (const auto &[key, value] : Account) a[write (key)] = JSON (value);
 
-        return a;
+        JSON::object_t o;
+        o["account"] = a;
+        return o;
     }
 
     ray read_ray (const JSON &j, const Bitcoin::timestamp &when) {

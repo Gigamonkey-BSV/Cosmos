@@ -42,6 +42,7 @@ namespace Cosmos {
 
         address_sequence next () const;
 
+        // TODO: this should be an xpub rather than an address.
         entry<Bitcoin::address, signing> last () const;
 
         explicit address_sequence (const JSON &);

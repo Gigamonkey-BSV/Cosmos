@@ -26,19 +26,21 @@ Cosmos::error run (const arg_parser &);
 
 enum class method {
     UNSET,
-    HELP,
-    VERSION,
-    GENERATE,
-    RESTORE,
-    UPDATE,
-    REQUEST,
-    PAY,
-    VALUE,
-    IMPORT,
-    SEND,
-    BOOST,
-    SPLIT,
-    TAXES
+    HELP,     // print help messages
+    VERSION,  // print a version message
+    GENERATE, // generate a wallet
+    RESTORE,  // restore a wallet
+    VALUE,    // the value in the wallet.
+    UPDATE,   // check pending txs for having been mined.
+    REQUEST,  // request a payment
+    RECEIVE,  // receive a payment
+    PAY,      // make a payment.
+    SIGN,     // sign an unsigned transaction
+    IMPORT,   // import a utxo with private key
+    SEND,     // (depricated) send bitcoin to an address.
+    BOOST,    // boost some content
+    SPLIT,    // split your wallet into tiny pieces for privacy.
+    TAXES     // calculate income and capital gain for a given year.
 };
 
 int main (int arg_count, char **arg_values) {
@@ -55,16 +57,22 @@ void version ();
 
 void help (method meth = method::UNSET);
 
-void command_generate (const arg_parser &);
+void command_generate (const arg_parser &); // offline
 void command_update (const arg_parser &);
 void command_restore (const arg_parser &);
-void command_request (const arg_parser &);
-void command_value (const arg_parser &);
-void command_send (const arg_parser &);
+void command_request (const arg_parser &);  // offline
+void command_value (const arg_parser &);    // offline
+void command_request (const arg_parser &);  // offline
+void command_receive (const arg_parser &);  // offline
+void command_pay (const arg_parser &);      // offline
+void command_sign (const arg_parser &);     // offline
+void command_send (const arg_parser &);     // depricated
 void command_import (const arg_parser &);
-void command_boost (const arg_parser &);
+void command_boost (const arg_parser &);    // offline
 void command_split (const arg_parser &);
-void command_taxes (const arg_parser &);
+void command_taxes (const arg_parser &);    // offline
+
+// TODO offline methods function without an internet connection.
 
 method read_method (const io::arg_parser &, uint32 index = 1);
 
@@ -113,6 +121,21 @@ Cosmos::error run (const io::arg_parser &p) {
 
                 case method::REQUEST: {
                     command_request (p);
+                    break;
+                }
+
+                case method::RECEIVE: {
+                    command_receive (p);
+                    break;
+                }
+
+                case method::PAY: {
+                    command_pay (p);
+                    break;
+                }
+
+                case method::SIGN: {
+                    command_sign (p);
                     break;
                 }
 
@@ -187,12 +210,17 @@ method read_method (const arg_parser &p, uint32 index) {
     if (*m == "help") return method::HELP;
     if (*m == "version") return method::VERSION;
     if (*m == "generate") return method::GENERATE;
-    if (*m == "request") return method::REQUEST;
+    if (*m == "restore") return method::RESTORE;
     if (*m == "value") return method::VALUE;
+    if (*m == "request") return method::REQUEST;
+    if (*m == "receive") return method::RECEIVE;
+    if (*m == "pay") return method::PAY;
+    if (*m == "sign") return method::SIGN;
     if (*m == "import") return method::IMPORT;
     if (*m == "send") return method::SEND;
     if (*m == "boost") return method::BOOST;
-    if (*m == "restore") return method::RESTORE;
+    if (*m == "split") return method::SPLIT;
+    if (*m == "taxes") return method::TAXES;
 
     return method::UNSET;
 }
@@ -205,9 +233,12 @@ void help (method meth) {
                 "\n\tgenerate   -- create a new wallet."
                 "\n\tupdate     -- get Merkle proofs for txs that were pending last time the program ran."
                 "\n\tvalue      -- print the total value in the wallet."
-                "\n\treceive    -- generate a new xpub + address."
+                "\n\trequest    -- generate a payment_request."
+                "\n\tpay        -- create a transaction based on a payment request."
+                "\n\treceive    -- accept a new transaction for a payment request."
+                "\n\tsign       -- sign an unsigned transaction."
                 "\n\timport     -- add a utxo to this wallet."
-                "\n\tsend       -- send to an address or script."
+                "\n\tsend       -- send to an address or script. (depricated)"
                 "\n\tboost      -- boost content."
                 "\n\tsplit      -- split an output into many pieces"
                 "\n\trestore    -- restore a wallet from words, a key, or many other options."
@@ -215,27 +246,41 @@ void help (method meth) {
         } break;
         case method::GENERATE : {
             std::cout << "Generate a new wallet in terms of 24 words (BIP 39) or as an extended private key."
-                "\narguments for method split:"
+                "\narguments for method generate:"
                 "\n\t(--name=)<wallet name>"
                 "\n\t(--words) (use BIP 39)"
                 "\n\t(--no_words) (don't use BIP 39)"
                 "\n\t(--accounts=<uint32> (=10)) (how many accounts to pre-generate)"
+                // TODO: as in method restore, a string should be accepted here which
+                // could have "bitcoin" "bitcoin_cash" or "bitcoinSV" as its values,
+                // ignoring case, spaces, and '_'.
                 "\n\t(--coin_type=<uint32> (=0)) (value of BIP 44 coin_type)" << std::endl;
         } break;
         case method::VALUE : {
             std::cout << "Print the value in a wallet. No parameters." << std::endl;
         } break;
+        case method::REQUEST : {
+            std::cout << "Generate a new payment request."
+                "\narguments for method request:"
+                "\n\t(--name=)<wallet name>"
+                "\n\t(--expires=<number of minutes before expiration>)"
+                "\n\t(--memo=\"<explanation of the nature of the payment>\")"
+                "\n\t(--amount=<expected amount of payment>)" << std::endl;
+        } break;
+        case method::RECEIVE : {
+            std::cout << "arguments for method receive not yet available." << std::endl;
+        } break;
         case method::PAY : {
             std::cout << "arguments for method pay not yet available." << std::endl;
         } break;
-        case method::REQUEST : {
-            std::cout << "arguments for method receive not yet available." << std::endl;
+        case method::SIGN : {
+            std::cout << "arguments for method sign not yet available." << std::endl;
         } break;
         case method::IMPORT : {
             std::cout << "arguments for method import not yet available." << std::endl;
         } break;
         case method::SEND : {
-            std::cout << "arguments for method send not yet available." << std::endl;
+            std::cout << "This method is DEPRICATED" << std::endl;
         } break;
         case method::BOOST : {
             std::cout << "arguments for method boost not yet available." << std::endl;
@@ -290,7 +335,7 @@ void command_generate (const arg_parser &p) {
     e.update<void> (gen);
 
     std::cout << "private keys will be saved in " << *e.keychain_filepath () << "." << std::endl;
-    std::cout << "private keys will be saved in " << *e.pubkeychain_filepath () << "." << std::endl;
+    std::cout << "private keys will be saved in " << *e.pubkeys_filepath () << "." << std::endl;
 }
 
 void command_value (const arg_parser &p) {
@@ -301,7 +346,7 @@ void command_value (const arg_parser &p) {
     return Cosmos::display_value (*e.watch_wallet ());
 }
 
-// find all pending transactions and
+// find all pending transactions and check if merkle proofs are available.
 void command_update (const arg_parser &p) {
     Cosmos::Interface e {};
     Cosmos::read_account_and_txdb_options (e, p);
@@ -309,17 +354,48 @@ void command_update (const arg_parser &p) {
 }
 
 void command_request (const arg_parser &p) {
+    using namespace Cosmos;
     Cosmos::Interface e {};
-    Cosmos::read_pubkeychain_options (e, p);
-    std::cout << "about to do check pending txs" << std::endl;
+    Cosmos::read_pubkeys_options (e, p);
     e.update<void> (Cosmos::update_pending_transactions);
-    std::cout << "updating pubkeys " << std::endl;
-    e.update<void> ([] (Cosmos::Interface::writable u) {
-        std::cout << " meep moop" << std::endl;
-        const auto *p = u.get ().pubkeys ();
-        if (p == nullptr) throw exception {} << "could not read wallet";
-        u.set_pubkeys (Cosmos::generate_new_xpub (*p));
+
+    Bitcoin::timestamp now = Bitcoin::timestamp::now ();
+    payments::invoice invoice {now};
+
+    maybe<uint32> expiration_minutes;
+    p.get ("expires", expiration_minutes);
+    if (bool (expiration_minutes)) invoice.set_expiration (Bitcoin::timestamp {uint32 (now) + *expiration_minutes * 60});
+
+    maybe<int64> satoshi_amount;
+    p.get ("amount", satoshi_amount);
+    if (bool (satoshi_amount)) invoice.set_amount (Bitcoin::satoshi {*satoshi_amount});
+
+    maybe<std::string> memo;
+    p.get ("memo", memo);
+    if (bool (memo)) invoice.set_memo (*memo);
+
+    e.update<void> ([&invoice] (Cosmos::Interface::writable u) {
+        const auto *pub = u.get ().pubkeys ();
+        const auto *pay = u.get ().payments ();
+        if (pub == nullptr || pay == nullptr) throw exception {} << "could not read wallet";
+        auto pr = request_payment (*pay, *pub, invoice);
+        std::cout << "Copy and paste the following to your customer to request payment. " << std::endl;
+        std::cout << "\t" << pr.ID << ": " << pr.Invoice << std::endl;
+        u.set_pubkeys (pr.Pubkeys);
+        u.set_payments (pr.Payments);
     });
+}
+
+void command_receive (const arg_parser &p) {
+    throw exception {} << "Commond receive not yet implemented";
+}
+
+void command_pay (const arg_parser &p) {
+    throw exception {} << "Commond pay not yet implemented";
+}
+
+void command_sign (const arg_parser &p) {
+    throw exception {} << "Commond sign not yet implemented";
 }
 
 void command_import (const arg_parser &p) {
@@ -369,8 +445,8 @@ void command_import (const arg_parser &p) {
 }
 
 // TODO get fee rate from options.
-// TODO send is not a good name.
 void command_send (const arg_parser &p) {
+    std::cout << "WARNING: This command is depricated!" << std::endl;
     using namespace Cosmos;
     Cosmos::Interface e {};
     Cosmos::read_wallet_options (e, p);
@@ -587,22 +663,31 @@ void command_split (const arg_parser &p) {
         Bitcoin::timestamp now = Bitcoin::timestamp::now ();
         uint32 fake_block_index = 1;
 
-        list<spent> split_txs;
+        list<spend::spent> split_txs;
         wallet old = *u.get ().wallet ();
         for (const entry<digest256, list<entry<Bitcoin::outpoint, redeemable>>> &e : x) {
-            auto spent = split (Gigamonkey::redeem_p2pkh_and_p2pk, *rand, old, e.Value, *fee_rate);
+            spend::spent spent = split (Gigamonkey::redeem_p2pkh_and_p2pk, *rand, old, e.Value, *fee_rate);
+
+            account new_account = old.Account;
+
+            // each split may give us several new transactions to work with.
+            for (const auto &[extx, diff] : spent.Transactions) {
+
+                new_account <<= diff;
+
+                stack<ray> new_events;
+                uint32 index = 0;
+
+                for (const Gigamonkey::extended::input &input : extx.Inputs)
+                    new_events <<= ray {now, fake_block_index,
+                        inpoint {diff.TXID, index++}, static_cast<Bitcoin::input> (input), input.Prevout.Value};
+
+                h <<= ordered_list<ray> (reverse (new_events));
+                fake_block_index++;
+            }
+
             split_txs <<= spent;
-            old = spent.Wallet;
-
-            stack<ray> new_events;
-
-            uint32 index = 0;
-            for (const Gigamonkey::extended::input &input : spent.Transaction.Value.Inputs)
-                new_events <<= ray {now, fake_block_index,
-                    inpoint {spent.Transaction.Key, index++}, static_cast<Bitcoin::input> (input), input.Prevout.Value};
-
-            h <<= ordered_list<ray> (reverse (new_events));
-            fake_block_index++;
+            old = wallet {old.Keys, spent.Pubkeys, new_account};
         }
 
         std::cout << "Tax implications: " << std::endl;
@@ -615,7 +700,7 @@ void command_split (const arg_parser &p) {
         std::cout << "broadcasting split transactions" << std::endl;
 
         // TODO how do these get in my wallet?
-        for (const spent &x : split_txs) u.broadcast (x);
+        for (const spend::spent &x : split_txs) u.broadcast (x);
     });
 }
 
@@ -817,19 +902,19 @@ void command_restore (const arg_parser &p) {
     // to check.
 
     // the list of derivations we will look at to restore the wallet.
-    pubkeychain derivations;
+    pubkeys derivations;
 
     if (key_type == master_key_type::HD_sequence) {
         std::cout << "\tfirst address: " << pk.derive (HD::BIP_32::path {0}).address () << std::endl;
 
-        derivations = pubkeychain {{{pk, {pk, {}}}}, {{"receive", {pk, {}}}}, "receive", "receive"};
+        derivations = pubkeys {{{pk, {pk, {}}}}, {{"receive", {pk, {}}}}, "receive", "receive"};
     } else if (key_type == master_key_type::BIP44_account) {
         std::cout
             << "this is a bip 44 account"
             << "\n\tfirst receive address: " << pk.derive (HD::BIP_32::path {0, 0}).address ()
             << "\n\tfirst change address: " << pk.derive (HD::BIP_32::path {1, 0}).address () << std::endl;
 
-        derivations = pubkeychain {{{pk, {pk, {}}}}, {{"receive", {pk, {0}}}, {"change", {pk, {1}}}}, "receive", "change"};
+        derivations = pubkeys {{{pk, {pk, {}}}}, {{"receive", {pk, {0}}}, {"change", {pk, {1}}}}, "receive", "change"};
     } else if (key_type == master_key_type::BIP44_master) {
         maybe<uint32> coin_type_option;
 
@@ -876,9 +961,9 @@ void command_restore (const arg_parser &p) {
 
         if (coin_type) {
             auto construct_derivation = []
-            (const HD::BIP_32::secret &master, list<uint32> to_account_master, list<uint32> to_receive, list<uint32> to_change) ->pubkeychain {
+            (const HD::BIP_32::secret &master, list<uint32> to_account_master, list<uint32> to_receive, list<uint32> to_change) ->pubkeys {
                 HD::BIP_32::pubkey account_master = master.derive (to_account_master).to_public ();
-                return pubkeychain {
+                return pubkeys {
                     {{account_master, {master.to_public (), to_account_master}}},
                     {{"receive", {account_master, to_receive}}, {"change", {account_master, to_change}}}, "receive", "change"};
             };
@@ -907,7 +992,7 @@ void command_restore (const arg_parser &p) {
 
             // there is a problem because the receive and change address sequences will be set incorrectly.
             // I'm not sure how to fix this right now.
-            derivations = pubkeychain {{
+            derivations = pubkeys {{
                 {bitcoin_account_master, {pk, bitcoin_to_account_master}},
                 {bitcoin_cash_account_master, {pk, bitcoin_cash_to_account_master}},
                 {bitcoin_sv_account_master, {pk, bitcoin_sv_to_account_master}},
