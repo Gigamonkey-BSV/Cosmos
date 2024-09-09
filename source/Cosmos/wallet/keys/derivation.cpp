@@ -12,6 +12,7 @@ namespace Cosmos {
     }
 
     HD::BIP_32::path read_path (const JSON &j) {
+        if (!j.is_array ()) throw exception {} << "invalid JSON path format";
         HD::BIP_32::path p;
         for (const JSON &jj : j) {
             if (!jj.is_number ()) throw exception {} << " could not read path " << j;

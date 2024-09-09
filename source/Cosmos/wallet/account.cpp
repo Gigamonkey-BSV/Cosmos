@@ -31,14 +31,22 @@ namespace Cosmos {
         return j;
     }
 
-    redeemable::redeemable (const JSON &j) : signing {derivation (), uint32 (j["expected_size"])} {
+    redeemable::redeemable (const JSON &j) : signing {} {
+
+        this->ExpectedScriptSize = uint32 (j["expected_size"]);
+
         Prevout = read_output (j["prevout"]);
         const JSON &p = j["derivation"];
 
-        for (const JSON &d : p) {
-            auto dd = derivation {d};
+        if (!p.is_array ()) throw exception {} << "invalid redeemable format";
+
+        auto bd = p.begin ();
+
+        while (bd != p.end ()) {
+            auto dd = derivation {*bd};
             if (!dd.valid ()) throw exception {} << "invalid derivation";
             Derivation <<= dd;
+            bd++;
         }
 
         if (j.contains ("script_code")) {
@@ -46,19 +54,16 @@ namespace Cosmos {
             if (!bool (x)) throw exception {} << "could not read hex value from \"" + p["script"].dump () + "\"";
             UnlockScriptSoFar = *x;
         }
+
     }
 
     account::account (const JSON &j) {
 
         if (j == nullptr) return;
+
         if (!j.is_object ()) throw exception {} << "invalid account JSON format 1";
 
-        auto account = j.find ("account");
-        if (account == j.end ()) throw exception {} << "invalid account JSON format 2";
-
-        if (!account->is_object ()) throw exception {} << "invalid account JSON format 3";
-
-        for (const auto &[key, value] : account->items ()) Account [read_outpoint (key)] = redeemable {value};
+        for (const auto &[key, value] : j.items ()) Account [read_outpoint (key)] = redeemable {value};
 
     }
 
@@ -66,16 +71,33 @@ namespace Cosmos {
         JSON::object_t a;
         for (const auto &[key, value] : Account) a[write (key)] = JSON (value);
 
-        JSON::object_t o;
-        o["account"] = a;
-        return o;
+        return a;
     }
 
     ray read_ray (const JSON &j, const Bitcoin::timestamp &when) {
-        if (j.contains ("output")) return ray {when, static_cast<uint64> (int64 (j["index"])),
-            read_outpoint (j["outpoint"]), read_output (j["output"])};
+
+        auto index = j.find ("index");
+        if (index == j.end ()) throw exception {} << "invalid ray format JSON: index";
+
+        auto output = j.find ("output");
+
+        if (output != j.end ()) {
+            return ray {when,
+                static_cast<uint64> (int64 (j["index"])),
+                read_outpoint (j["outpoint"]),
+                read_output (*output)};
+        }
+
+        auto inpoint = j.find ("inpoint");
+        auto input = j.find ("input");
+        auto value = j.find ("value");
+
+        if (inpoint == j.end ()) throw exception {} << "invalid ray format JSON: inpoint";
+        if (input == j.end ()) throw exception {} << "invalid ray format JSON: input";
+        if (value == j.end ()) throw exception {} << "invalid ray format JSON: value";
+
         return ray {when, static_cast<uint64> (int64 (j["index"])), inpoint {read_outpoint (j["inpoint"])},
-            read_input (j["input"]), Bitcoin::satoshi {int64 (j["value"])}};
+            read_input (j["input"]), read_satoshi (j["value"])};
     }
 
     JSON write_ray (const ray &r) {
@@ -89,14 +111,15 @@ namespace Cosmos {
             o["output"] = write (Bitcoin::output {r.Put});
             o["outpoint"] = write (Bitcoin::outpoint {r.Point});
         } else {
-            o["value"] = uint64 (r.Value);
-            o["input"] = write (Bitcoin::output {r.Put});
+            o["input"] = write (Bitcoin::input {r.Put});
             o["inpoint"] = write (Bitcoin::outpoint {r.Point});
+            o["value"] = write (r.Value);
         }
         return o;
     }
 
     JSON write_event (const events::event &e) {
+
         JSON::object_t o;
         o["txid"] = write (e.TXID);
         o["when"] = uint32 (e.When);
@@ -109,19 +132,37 @@ namespace Cosmos {
         for (const ray &r : e.Events) a[i++] = write_ray (r);
         o["events"] = a;
         return o;
+
     }
 
     events::event read_event (const JSON &j) {
+
+        if (!j.is_object ()) throw exception {} << "invalid event JSON format";
+        auto txid = j.find ("txid");
+        auto when = j.find ("when");
+        auto received = j.find ("received");
+        auto spent = j.find ("spent");
+        auto moved = j.find ("moved");
+        auto events = j.find ("events");
+
+        if (txid == j.end ()) throw exception {} << "invalid event JSON format: 'txid'";
+        if (when == j.end () || !when->is_number ()) throw exception {} << "invalid event JSON format: 'when'";
+        if (received == j.end ()) throw exception {} << "invalid event JSON format: 'received'";
+        if (spent == j.end ()) throw exception {} << "invalid event JSON format: 'spent'";
+        if (moved == j.end ()) throw exception {} << "invalid event JSON format: 'moved'";
+        if (events == j.end () || !events->is_array ()) throw exception {} << "invalid event JSON format: 'events'";
+
         events::event e {};
-        e.TXID = read_txid (std::string (j["txid"]));
-        e.When = Bitcoin::timestamp (uint32 (j["when"]));
-        e.Received = read_satoshi (j["received"]);
-        e.Spent = read_satoshi (j["spent"]);
-        e.Moved = read_satoshi (j["moved"]);
-        stack<ray> events;
-        for (const auto &jj : j["events"]) events <<= read_ray (jj, e.When);
-        e.Events = ordered_list<ray> (data::reverse (events));
+        e.TXID = read_txid (std::string (*txid));
+        e.When = Bitcoin::timestamp (uint32 (*when));
+        e.Received = read_satoshi (*received);
+        e.Spent = read_satoshi (*spent);
+        e.Moved = read_satoshi (*moved);
+        stack<ray> evv;
+        for (const auto &jj : *events) evv <<= read_ray (jj, e.When);
+        e.Events = ordered_list<ray> (data::reverse (evv));
         return e;
+
     }
 
     events::operator JSON () const {
@@ -173,6 +214,7 @@ namespace Cosmos {
         for (const auto &[key, value] : j["account"].items ()) Account[read_outpoint (key)] = read_output (value);
 
         for (const auto &jj : j["events"]) Events <<= read_event (jj);
+
     }
 
     // get all events corresponding to the same tx.
@@ -194,7 +236,6 @@ namespace Cosmos {
     events &events::operator <<= (ordered_list<ray> e) {
         if (data::size (e) == 0) return *this;
 
-        std::cout << "adding histories starting from " << e.first ().When << " to events lasting to " << Latest << std::endl;
         if (e.first ().When <= Latest) throw exception {} << "must be later than latest time";
 
         while (true) {

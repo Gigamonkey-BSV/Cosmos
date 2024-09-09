@@ -15,16 +15,6 @@ namespace Cosmos {
         set<Bitcoin::TXID> pending = txdb->Local.pending ();
         for (const Bitcoin::TXID &txid : pending) txdb->import_transaction (txid);
     }
-/*
-    pubkeys generate_new_xpub (const pubkeys &p) {
-        const auto *v = p.Sequences.contains (p.Receive);
-        if (v == nullptr) throw exception {} << "pubkey map has no receive sequence";
-        address_sequence receive_sequence = p.Sequences[p.Receive];
-        HD::BIP_32::pubkey next_pubkey = receive_sequence.Key.derive (receive_sequence.Path << receive_sequence.Last);
-        Bitcoin::address::decoded next_address = next_pubkey.address ();
-        std::cout << "next xpub is " << next_pubkey << " and its address is " << next_address;
-        return p.next (p.Receive);
-    }*/
 
     void generate_wallet::operator () (Interface::writable u) {
         const auto w = u.get ().wallet ();
@@ -375,20 +365,15 @@ namespace Cosmos {
         if (bool (tf) && bool (LocalTXDB))
             write_to_file (JSON (dynamic_cast<JSON_local_txdb &> (*LocalTXDB)), *tf);
 
-        if (bool (af) && bool (Account))
-            write_to_file (JSON (*Account), *af);
+        if (bool (af) && bool (Account)) write_to_file (JSON (*Account), *af);
 
-        if (bool (hf) && bool (Events))
-            write_to_file (JSON (*Events), *hf);
+        if (bool (hf) && bool (Events)) write_to_file (JSON (*Events), *hf);
 
-        if (bool (pf) && bool (Pubkeys))
-            write_to_file (JSON (*Pubkeys), *pf);
+        if (bool (pf) && bool (Pubkeys)) write_to_file (JSON (*Pubkeys), *pf);
 
-        if (bool (yf) && bool (Payments))
-            write_to_file (JSON (*Payments), *yf);
+        if (bool (yf) && bool (Payments)) write_to_file (JSON (*Payments), *yf);
 
-        if (bool (kf) && bool (Keys))
-            write_to_file (JSON (*Keys), *kf);
+        if (bool (kf) && bool (Keys)) write_to_file (JSON (*Keys), *kf);
 
         if (bool (pdf) && bool (LocalPriceData))
             write_to_file (JSON (dynamic_cast<JSON_price_data &> (*LocalPriceData)), *pdf);

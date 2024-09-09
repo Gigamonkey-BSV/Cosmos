@@ -538,6 +538,16 @@ namespace Cosmos {
     };
 }
 
+bool get_user_bool (std::string message = "") {
+    char q;
+    do {
+        std::cout << message << " (Y/N)" << std::endl;
+        q = 0;
+        std::cin >> q;
+    } while (q != 'n' && q != 'y' && q != 'Y' && q != 'N');
+    return q == 'Y' || q == 'y';
+}
+
 void command_split (const arg_parser &p) {
     using namespace Cosmos;
     Interface e {};
@@ -651,7 +661,7 @@ void command_split (const arg_parser &p) {
     std::cout << "found " << x.size () << " scripts in " << num_outputs <<
         " outputs to split with a total value of " << total_split_value << std::endl;
 
-    wait_for_enter ();
+    if (!get_user_bool ("Do you want to continue?")) throw exception {} << "program aborted";
 
     e.update<void> ([rand = e.random (), &split, &x, fee_rate] (Cosmos::Interface::writable u) {
 
@@ -660,6 +670,7 @@ void command_split (const arg_parser &p) {
         // halts before this function is complete, the txs will not be broadcast and the new
         // wallets will not be saved.
         events h = *u.history ();
+
         Bitcoin::timestamp now = Bitcoin::timestamp::now ();
         uint32 fake_block_index = 1;
 
@@ -693,9 +704,7 @@ void command_split (const arg_parser &p) {
         std::cout << "Tax implications: " << std::endl;
         std::cout << tax::calculate (*u.txdb (), *u.price_data (), h.get_history (now)).CapitalGain << std::endl;
 
-        std::cout << "last chance to quit the program before broadcasting these!" << std::endl;
-
-        wait_for_enter ();
+        if (!get_user_bool ("Do you want broadcast these transactions?")) throw exception {} << "program aborted";
 
         std::cout << "broadcasting split transactions" << std::endl;
 
