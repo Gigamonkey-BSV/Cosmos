@@ -710,6 +710,7 @@ void command_split (const arg_parser &p) {
 
         // TODO how do these get in my wallet?
         for (const spend::spent &x : split_txs) u.broadcast (x);
+
     });
 }
 

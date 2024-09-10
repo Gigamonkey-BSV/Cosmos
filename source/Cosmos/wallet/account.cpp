@@ -96,8 +96,11 @@ namespace Cosmos {
         if (input == j.end ()) throw exception {} << "invalid ray format JSON: input";
         if (value == j.end ()) throw exception {} << "invalid ray format JSON: value";
 
-        return ray {when, static_cast<uint64> (int64 (j["index"])), inpoint {read_outpoint (j["inpoint"])},
-            read_input (j["input"]), read_satoshi (j["value"])};
+        return ray {when,
+            static_cast<uint64> (int64 (j["index"])),
+            Cosmos::inpoint {read_outpoint (j["inpoint"])},
+            read_input (j["input"]),
+            read_satoshi (j["value"])};
     }
 
     JSON write_ray (const ray &r) {
@@ -107,13 +110,13 @@ namespace Cosmos {
             throw exception {} << "index in block is too big to represent as an integer in the JSON library we are using";
 
         o["index"] = static_cast<int64> (r.Index);
-        if (r.Direction == direction::out) {
+        if (r.direction () == direction::out) {
             o["output"] = write (Bitcoin::output {r.Put});
             o["outpoint"] = write (Bitcoin::outpoint {r.Point});
         } else {
             o["input"] = write (Bitcoin::input {r.Put});
             o["inpoint"] = write (Bitcoin::outpoint {r.Point});
-            o["value"] = write (r.Value);
+            o["value"] = write (r.value ());
         }
         return o;
     }
@@ -254,16 +257,16 @@ namespace Cosmos {
             Bitcoin::satoshi received = 0;
             Bitcoin::satoshi spent = 0;
 
-            for (const ray &current : next_event.Events) if (current.Direction == direction::in) {
+            for (const ray &current : next_event.Events) if (current.direction () == direction::in) {
                 // delete the output from the account
                 this->Account.erase (Bitcoin::input {current.Put}.Reference);
 
-                spent += current.Value;
+                spent += current.value ();
             } else {
                 Bitcoin::output output = Bitcoin::output {current.Put};
                 this->Account[current.Point] = output;
 
-                received += current.Value;
+                received += current.value ();
             }
 
             // this is not correct. It is theoretically possible to

@@ -27,24 +27,25 @@ namespace Cosmos {
             Bitcoin::satoshi current_income {0};
 
             for (const ray &n : e.Events)
-                if (n.Direction == direction::in) {
+                if (n.direction () == direction::in) {
                     // this is either a potential income or a move event.
                     auto op = Bitcoin::input {n.Put}.Reference;
                     if (auto x = current_account.find (op); x != current_account.end ()) {
                         // this is a move event, which means we have to calculate capital gain.
-                        current_moved += n.Value;
+                        auto value = n.value ();
+                        current_moved += value;
                         // when was the original output created?
                         Bitcoin::timestamp when = txs[op.Digest].when ();
                         // At what price was it bought?
                         double buy_price = *pd.get (when);
                         // if the buy price is greater than the sell price, it's a capital loss.
                         if (potential.Price < buy_price) {
-                            cg.Loss += (buy_price - potential.Price) * double (n.Value);
+                            cg.Loss += (buy_price - potential.Price) * double (value);
                         // otherwise it's either a long or a short term capital gain.
                         } else (n.When - when < one_year ? cg.ShortTerm : cg.LongTerm) +=
-                            (potential.Price - buy_price) * double (n.Value);
+                            (potential.Price - buy_price) * double (value);
                     } else potential.Incoming <<= n;
-                } else current_income += n.Value;
+                } else current_income += n.value ();
 
             events v {};
             v.Account = current_account;

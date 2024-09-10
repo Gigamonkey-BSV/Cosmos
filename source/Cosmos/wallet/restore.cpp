@@ -45,7 +45,7 @@ namespace Cosmos {
             for (const auto &e : ev) {
                 events = events.insert (e);
                 std::cout << "    " << new_addr << " received " << e.Value << " on " << e.When;
-                received += e.Value;
+                received += e.value ();
 
                 // has this output been redeemed?
                 auto r = TXDB.redeeming (e.Point);
@@ -53,10 +53,10 @@ namespace Cosmos {
                 if (r != nullptr) {
                     std::cout << "; spent on " << r->When;
                     events = events.insert (*r);
-                    spent += e.Value;
+                    spent += e.value ();
                 } else {
                     a[e.Point] = redeemable {Bitcoin::output {e.Put}, next.Value};
-                    in_wallet += e.Value;
+                    in_wallet += e.value ();
                 }
 
             }

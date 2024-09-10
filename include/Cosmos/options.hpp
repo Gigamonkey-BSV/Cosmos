@@ -9,9 +9,9 @@ namespace Cosmos {
     struct options {
         Bitcoin::satoshi MaxSatsPerOutput {5000000};
 
-        Bitcoin::satoshi MinSatsPerOutput {1234567};
+        Bitcoin::satoshi MinSatsPerOutput {123456};
 
-        double MeanSatsPerOutput {123456};
+        double MeanSatsPerOutput {1234567};
 
         satoshis_per_byte FeeRate {50, 1000};
     };

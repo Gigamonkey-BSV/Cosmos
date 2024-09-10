@@ -49,8 +49,6 @@ namespace Cosmos {
 
     // a tx with a complete merkle proof and an indication of a specific input or output.
     struct ray {
-        // in our out.
-        direction Direction;
         // output or input.
         bytes Put;
 
@@ -62,36 +60,37 @@ namespace Cosmos {
         // outpoint or inpoint.
         Bitcoin::outpoint Point;
 
-        // value received or spent.
-        Bitcoin::satoshi Value;
+        // value received.
+        maybe<Bitcoin::satoshi> Value;
 
-        ray (Bitcoin::timestamp w, uint64 i, const Bitcoin::outpoint &op, const Bitcoin::output &o) :
-            Direction {direction::out}, Put {bytes (o)}, When {w}, Index {i}, Point {op}, Value {o.Value} {
-            if (When == Bitcoin::timestamp {0}) throw exception {} << "Warning: invalid timestamp detected A";
+        Bitcoin::satoshi value () const {
+            return bool (Value) ? *Value : Bitcoin::output::value (Put);
         }
 
+        Cosmos::direction direction () const {
+            return bool (Value) ? Cosmos::direction::in : Cosmos::direction::out;
+        }
+
+        ray (Bitcoin::timestamp w, uint64 i, const Bitcoin::outpoint &op, const Bitcoin::output &o) :
+            Put {bytes (o)}, When {w}, Index {i}, Point {op}, Value {o.Value} {}
+
         ray (Bitcoin::timestamp w, uint64 i, const inpoint &ip, const Bitcoin::input &in, const Bitcoin::satoshi &v) :
-            Direction {direction::in}, Put {bytes (in)}, When {w}, Index {i}, Point {ip}, Value {v} {
-            if (When == Bitcoin::timestamp {0}) throw exception {} << "Warning: invalid timestamp detected B";
+            Put {bytes (in)}, When {w}, Index {i}, Point {ip}, Value {v} {
+            if (!Bitcoin::input {Put}.Reference.Digest.valid ()) throw exception {} << "WARNING: invalid input! X";
         }
 
         ray (const vertex &t, const Bitcoin::outpoint &op):
-            Direction {direction::out},
             Put {bytes (t.Transaction->Outputs[op.Index])},
             When {t.when ()},
             Index {t.Confirmation.Path.Index},
-            Point {op}, Value {Bitcoin::output::value (Put)} {
-            std::cout << "     " << " creating ray from vertex ... " << std::endl;
-            if (When == Bitcoin::timestamp {0}) throw exception {} << "Warning: invalid timestamp detected C";
-        }
+            Point {op}, Value {} {}
 
         ray (const vertex &t, const inpoint &ip, const Bitcoin::satoshi &v):
-            Direction {direction::in},
             Put {bytes (t.Transaction->Inputs[ip.Index])},
             When {t.when ()},
             Index {t.Confirmation.Path.Index},
             Point {ip}, Value {v} {
-            if (When == Bitcoin::timestamp {0}) throw exception {} << "Warning: invalid timestamp detected D";
+            if (!Bitcoin::input {Put}.Reference.Digest.valid ()) throw exception {} << "WARNING: invalid input! Y";
         }
 
         std::strong_ordering operator <=> (const ray &e) const {
@@ -99,19 +98,19 @@ namespace Cosmos {
             if (compare_time != std::strong_ordering::equal) return compare_time;
             auto compare_index = Index <=> e.Index;
             if (compare_index != std::strong_ordering::equal) return compare_index;
-            if (Direction != e.Direction) return Direction == direction::in ? std::strong_ordering::less : std::strong_ordering::greater;
+            if (direction () != e.direction ()) return direction () == direction::in ? std::strong_ordering::less : std::strong_ordering::greater;
             return Point.Index <=> e.Point.Index;
         }
 
         bool operator == (const ray &e) const {
             return Put == e.Put && When == e.When &&
-                Direction == e.Direction && Point.Index == e.Point.Index;
+                direction () == e.direction () && Point.Index == e.Point.Index;
         }
 
     };
 
     std::ostream inline &operator << (std::ostream &o, const ray &r) {
-        return o << "\n\t" << r.Value << " " << (r.Direction == direction::in ? "received in " : "spent from ") << r.Point << std::endl;
+        return o << "\n\t" << r.Value << " " << (r.direction () == direction::in ? "received in " : "spent from ") << r.Point << std::endl;
     }
 
     // a database of transactions.

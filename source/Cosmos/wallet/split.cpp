@@ -70,7 +70,7 @@ namespace Cosmos {
 
         if (MaxSatsPerOutput < MinSatsPerOutput) throw exception {} << "MaxSatsPerOutput must not be less than MinSatsPerOutput";
         if (MeanSatsPerOutput > double (MaxSatsPerOutput)) throw exception {} << "MeanSatsPerOutput must not be greater than MaxSatsPerOutput";
-        if (MeanSatsPerOutput < double (MinSatsPerOutput)) throw exception {} << "MeanSatsPerOutput must not be less than MixSatsPerOutput";
+        if (MeanSatsPerOutput < double (MinSatsPerOutput)) throw exception {} << "MeanSatsPerOutput must not be less than MinSatsPerOutput";
 
         double a = ln (double (MinSatsPerOutput));
         double b = ln (double (MaxSatsPerOutput));
@@ -106,7 +106,7 @@ namespace Cosmos {
             if (expected_remainder < MinSatsPerOutput) throw exception {} << "too few sats to split!";
 
             // round up.
-            int64 random_value = int64 (d (r) + .5);
+            int64 random_value = int64 (exp (d (r)) + .5);
 
             // if the remaining sats will be too few, just make a final output using all that's left.
             bool we_are_done = expected_remainder - random_value < MinSatsPerOutput;
