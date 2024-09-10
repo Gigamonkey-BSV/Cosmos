@@ -121,7 +121,7 @@ namespace Cosmos {
         ptr<Cosmos::payments> Payments {nullptr};
 
         ptr<crypto::user_entropy> Entropy;
-        ptr<crypto::random> Random {nullptr};
+        ptr<crypto::NIST::DRBG> Random {nullptr};
 
         // if this is set to true, then everything will be
         // saved to disk on destruction of the Interface.

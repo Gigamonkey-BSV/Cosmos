@@ -54,15 +54,14 @@ namespace Cosmos {
         double min = a;
         double max = b;
         double guess, m;
-        do {
+
+        while (true) {
             // it's possible to converge a lot faster than this but let's see if this works well enough.
             double m = (max - min) / 2 + min;
             double guess = log_triangular_distribution_mean (a, b, m, e_a, e_b);
-            (guess > mean ? min : max) = m;
-        } while (std::max (mean - guess, guess - mean) > 1);
-
-        return m;
-
+            if (std::max (mean - guess, guess - mean) > 1) return m;
+            (guess > mean ? max : min) = m;
+        }
     }
 
     split::result_outputs split::operator () (data::crypto::random &r, address_sequence key,
