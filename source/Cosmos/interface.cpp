@@ -344,7 +344,7 @@ namespace Cosmos {
                 "We need some entropy for this operation. Please type random characters.",
                 "Sufficient entropy provided.", std::cout, std::cin);
 
-            Random = std::make_shared<crypto::NIST::DRBG> (crypto::NIST::DRBG::Hash, *Entropy);
+            Random = std::make_shared<crypto::NIST::DRBG> (crypto::NIST::DRBG::Hash, *Entropy, std::numeric_limits<uint32>::max ());
         }
 
         return Random.get ();

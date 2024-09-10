@@ -3,6 +3,12 @@
 
 namespace Cosmos {
 
+    pubkey secret::to_public () const {
+        if (Bitcoin::secret x {*this}; x.valid ()) return x.to_public ();
+        if (HD::BIP_32::secret x {*this}; x.valid ()) return x.to_public ();
+        throw exception {"invalid secret key"};
+    };
+
     keychain::keychain (const JSON &j) {
         data::map<pubkey, secret> db {};
 

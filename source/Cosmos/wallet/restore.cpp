@@ -7,6 +7,8 @@ namespace Cosmos {
         txdb &TXDB,
         address_sequence m) {
 
+        if (CheckSubKeys) throw exception {} << "TODO: option CheckSubKeys enabled but not implemented.";
+
         address_sequence last = m;
         uint32 last_used = 0;
 
@@ -21,7 +23,7 @@ namespace Cosmos {
 
         while (true) {
             // generate next address
-            entry<Bitcoin::address, signing> next = m.last ();
+            entry<Bitcoin::address, signing> next = pay_to_address_signing (m.last ());
             const Bitcoin::address &new_addr = next.Key;
 
             std::cout << "  recovering address " << m.Last << ": " << new_addr << std::endl;

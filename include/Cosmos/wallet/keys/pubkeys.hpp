@@ -25,8 +25,7 @@ namespace Cosmos {
         operator JSON () const;
 
         pubkeys next (const string &name) const;
-        // TODO: this should be an xpub rather than an address.
-        entry<Bitcoin::address, signing> last (const string &name) const;
+        derived_pubkey last (const string &name) const;
 
         pubkeys insert (const pubkey &name, const derivation &x) {
             return pubkeys {Derivations.insert (name, x), Sequences, Receive, Change};
@@ -52,7 +51,7 @@ namespace Cosmos {
         return pubkeys {Derivations, data::replace_part (Sequences, name, Sequences[name].next ()), Receive, Change};
     }
 
-    entry<Bitcoin::address, signing> inline pubkeys::last (const string &name) const {
+    derived_pubkey inline pubkeys::last (const string &name) const {
         auto seq = Sequences[name];
         auto der = Derivations[seq.Key];
         return address_sequence {HD::BIP_32::pubkey {der.Key}, seq.Path, seq.Last}.last ();

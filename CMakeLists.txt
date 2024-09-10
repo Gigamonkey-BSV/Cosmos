@@ -11,12 +11,13 @@ add_library (cosmos_lib STATIC
     source/Cosmos/network/whatsonchain.cpp
     source/Cosmos/network.cpp
     source/Cosmos/wallet/keys/derivation.cpp
+    source/Cosmos/wallet/keys/sequence.cpp
+    source/Cosmos/wallet/keys/pubkeys.cpp
+    source/Cosmos/wallet/keys/secret.cpp
     source/Cosmos/wallet/account.cpp
     source/Cosmos/wallet/restore.cpp
     source/Cosmos/wallet/select.cpp
     source/Cosmos/wallet/change.cpp
-    source/Cosmos/wallet/keys/chain.cpp
-    source/Cosmos/wallet/keys/secret.cpp
     source/Cosmos/wallet/wallet.cpp
     source/Cosmos/wallet/split.cpp
     source/Cosmos/tax.cpp

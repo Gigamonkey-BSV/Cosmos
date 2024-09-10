@@ -31,7 +31,7 @@ namespace Cosmos {
         network *net ();
         crypto::random *random ();
 
-        const Cosmos::local_txdb *local_txdb ();
+        const Cosmos::local_txdb *local_txdb () const;
         const maybe<Cosmos::cached_remote_txdb> txdb () const;
         const SPV::database *spvdb () const;
         const ptr<Cosmos::price_data> price_data () const;
@@ -206,12 +206,20 @@ namespace Cosmos {
         return I.get_txdb ();
     }
 
+    local_txdb inline *Interface::writable::local_txdb () {
+        return I.get_local_txdb ();
+    }
+
     events inline *Interface::writable::history () {
         return I.get_history ();
     }
 
     ptr<Cosmos::price_data> inline Interface::writable::price_data () {
         return I.get_price_data ();
+    }
+
+    const Cosmos::local_txdb inline *Interface::local_txdb () const {
+        return const_cast<Interface *> (this)->get_local_txdb ();
     }
 
     const Cosmos::keychain inline *Interface::keys () const {

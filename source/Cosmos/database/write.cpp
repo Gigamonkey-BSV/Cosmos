@@ -4,6 +4,24 @@
 
 namespace Cosmos {
 
+    JSON write_path (HD::BIP_32::path p) {
+        JSON::array_t a;
+        a.resize (p.size ());
+        int index = 0;
+        for (const uint32 &u : p) a[index++] = u;
+        return a;
+    }
+
+    HD::BIP_32::path read_path (const JSON &j) {
+        if (!j.is_array ()) throw exception {} << "invalid JSON path format";
+        HD::BIP_32::path p;
+        for (const JSON &jj : j) {
+            if (!jj.is_number ()) throw exception {} << " could not read path " << j;
+            p <<= uint32 (jj);
+        }
+        return p;
+    }
+
     Bitcoin::outpoint read_outpoint (const string &x) {
         list<string_view> z = data::split (x, ":");
         if (z.size () != 2) throw exception {} << "invalid outpoint format: " << x;

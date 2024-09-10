@@ -3,6 +3,35 @@
 
 namespace Cosmos {
 
+    payments::new_request request_payment (payment_type t, const payments &p, const pubkeys &k, const payments::invoice &x) {
+        derived_pubkey d = k.last (k.Receive);
+        switch (t) {
+            case payment_type::address: {
+                entry<Bitcoin::address, signing> addr = pay_to_address_signing (d);
+                return payments::new_request {
+                    addr.Key, x,
+                    payments {p.Requests.insert (addr.Key, payments::request {x, addr.Value.Derivation[0]}), p.Proposals},
+                    k.next (k.Receive)};
+            }
+            case payment_type::xpub: {
+                string ww = string (d.Key);
+                return payments::new_request {
+                    ww, x,
+                    payments {p.Requests.insert (ww, payments::request {x, derivation {d.Key, d.Path}}), p.Proposals},
+                    k.next (k.Receive)};
+            }
+            case payment_type::pubkey: {
+                entry<Bitcoin::pubkey, signing> ppk = pay_to_pubkey_signing (d);
+                string ww = string (ppk.Key);
+                return payments::new_request {
+                    ww, x,
+                    payments {p.Requests.insert (ww, payments::request {x, ppk.Value.Derivation[0]}), p.Proposals},
+                    k.next (k.Receive)};
+            }
+            default : throw exception {} << "unknown payment type";
+        }
+    }
+
     account_diff read_account_diff (const JSON &j) {
         account_diff d;
         d.TXID = read_txid (std::string (j["txid"]));
@@ -34,6 +63,21 @@ namespace Cosmos {
         return o;
     }
 
+    JSON write_account_diffs (const list<account_diff> &d) {
+        JSON::array_t a;
+        a.resize (d.size ());
+        int index = 0;
+        for (const account_diff &dd : d) a[index++] = write_account_diff (dd);
+        return a;
+    }
+
+    list<account_diff> read_account_diffs (const JSON &j) {
+        if (!j.is_array ()) throw exception {} << "invalid JSON format for account diffs";
+        list<account_diff> diffs;
+        for (const auto &jj : j) diffs <<= read_account_diff (jj);
+        return diffs;
+    }
+
     JSON write_request (const payments::request &r) {
         JSON::object_t o;
         o["invoice"] = r.Invoice;
@@ -47,16 +91,16 @@ namespace Cosmos {
 
     payments::payment read_payment (const JSON &j) {
         return payments::payment {
-            read_request (j["request"]),
+            payments::invoice (j["invoice"]),
             BEEF (*encoding::base64::read (std::string (j["transfer"]))),
-            read_account_diff (j["diff"])};
+            read_account_diffs (j["diff"])};
     }
 
     JSON write_payment (const payments::payment &p) {
         JSON::object_t o;
-        o["request"] = write_request (p.Request);
+        o["invoice"] = p.Invoice;
         o["transfer"] = encoding::base64::write (bytes (p.Transfer));
-        o["diff"] = write_account_diff (p.Diff);
+        o["diff"] = write_account_diffs (p.Diff);
         return o;
     }
 

@@ -2,31 +2,25 @@
 #define COSMOS_WALLET_KEYS_SEQUENCE
 
 #include <Cosmos/wallet/keys/derivation.hpp>
-#include <gigamonkey/script/pattern/pay_to_address.hpp>
 
 namespace Cosmos {
     namespace HD = Gigamonkey::HD;
-    using pay_to_address = Gigamonkey::pay_to_address;
 
-    // information required to make signatures to redeem an output.
-    struct signing {
+    // Like derivation, derived_pubkey includes a pubkey and a path.
+    // However, address_sequence is guaranteed to include only a non-hardened
+    // path, and therefore an xpub can always be derived from it.
+    struct derived_pubkey {
+        // the master pubkey
+        HD::BIP_32::pubkey Key;
+        // derivation from this pubkey to the address. Must be non-hardened
+        HD::BIP_32::path Path;
 
-        // derivation paths to required keys.
-        list<derivation> Derivation;
-
-        // expected size of the completed input script.
-        uint64 ExpectedScriptSize;
-
-        // we may need a partially completed script.
-        bytes UnlockScriptSoFar;
-
-        signing () : Derivation {}, ExpectedScriptSize {}, UnlockScriptSoFar {} {}
-        signing (list<derivation> d, uint64 ez, const bytes &script_code = {}) :
-            Derivation {d}, ExpectedScriptSize {ez}, UnlockScriptSoFar {script_code} {}
-
-        uint64 expected_input_size () const {
-            return ExpectedScriptSize + Bitcoin::var_int::size (ExpectedScriptSize) + 40;
+        // the derived pubkey
+        HD::BIP_32::pubkey derive () const {
+            return Key.derive (Path);
         }
+
+        bool valid () const;
     };
 
     struct address_sequence {
@@ -40,10 +34,10 @@ namespace Cosmos {
         address_sequence (const HD::BIP_32::pubkey &s, HD::BIP_32::path p, uint32 l = 0) :
             Key {s}, Path {p}, Last {l} {}
 
+        derived_pubkey last () const;
         address_sequence next () const;
 
-        // TODO: this should be an xpub rather than an address.
-        entry<Bitcoin::address, signing> last () const;
+        address_sequence sub () const;
 
         explicit address_sequence (const JSON &);
         explicit operator JSON () const;
@@ -65,15 +59,12 @@ namespace Cosmos {
         return address_sequence {this->Key, this->Path, Last + 1};
     }
 
-    entry<Bitcoin::address, signing> inline address_sequence::last () const {
-        auto path = Path << Last;
-        return entry<Bitcoin::address, signing> {
-            Bitcoin::address::decoded {Bitcoin::address::main, this->Key.derive (path).address ().Digest}.encode (),
-            signing {{derivation {Key, path}}, pay_to_address::redeem_expected_size ()}};
-    }
-
     bool inline address_sequence::operator == (const address_sequence &x) const {
         return Key == x.Key && Path == x.Path && Last == x.Last;
+    }
+
+    derived_pubkey inline address_sequence::last () const {
+        return {this->Key, Path << Last};
     }
 }
 

@@ -60,7 +60,6 @@ void help (method meth = method::UNSET);
 void command_generate (const arg_parser &); // offline
 void command_update (const arg_parser &);
 void command_restore (const arg_parser &);
-void command_request (const arg_parser &);  // offline
 void command_value (const arg_parser &);    // offline
 void command_request (const arg_parser &);  // offline
 void command_receive (const arg_parser &);  // offline
@@ -263,6 +262,7 @@ void help (method meth) {
             std::cout << "Generate a new payment request."
                 "\narguments for method request:"
                 "\n\t(--name=)<wallet name>"
+                "\n\t(--payment_type=\"pubkey\"|\"address\"|\"xpub\") (= \"address\")"
                 "\n\t(--expires=<number of minutes before expiration>)"
                 "\n\t(--memo=\"<explanation of the nature of the payment>\")"
                 "\n\t(--amount=<expected amount of payment>)" << std::endl;
@@ -290,7 +290,7 @@ void help (method meth) {
                 "\narguments for method split:"
                 "\n\t(--name=)<wallet name>"
                 "\n\t(--address=)<address | xpub>"
-                "\n\t(--max_look_ahead=)<integer> (= 25) ; (only used if parameter 'address' is provided as an xpub"
+                "\n\t(--max_look_ahead=)<integer> (= 10) ; (only used if parameter 'address' is provided as an xpub"
                 "\n\t(--min_sats=<float>) (= 123456)"
                 "\n\t(--max_sats=<float>) (= 5000000)"
                 "\n\t(--mean_sats=<float>) (= 1234567) " << std::endl;
@@ -299,7 +299,7 @@ void help (method meth) {
             std::cout << "arguments for method restore:"
                 "\n\t(--name=)<wallet name>"
                 "\n\t(--key=)<xpub | xpriv>"
-                "\n\t(--max_look_ahead=)<integer> (= 25)"
+                "\n\t(--max_look_ahead=)<integer> (= 10)"
                 "\n\t(--words=<string>)"
                 "\n\t(--key_type=\"HD_sequence\"|\"BIP44_account\"|\"BIP44_master\") (= \"HD_sequence\")"
                 "\n\t(--coin_type=\"Bitcoin\"|\"BitcoinCash\"|\"BitcoinSV\"|<integer>)"
@@ -374,11 +374,23 @@ void command_request (const arg_parser &p) {
     p.get ("memo", memo);
     if (bool (memo)) invoice.set_memo (*memo);
 
-    e.update<void> ([&invoice] (Cosmos::Interface::writable u) {
+    maybe<std::string> payment_option_string;
+    p.get ("payment_type", payment_option_string);
+
+    payment_type payment_option = bool (payment_option_string) ?
+        [] (const std::string &payment_option) -> payment_type {
+            std::cout << "payment type is " << payment_option << std::endl;
+            if (payment_option == "address") return payment_type::address;
+            if (payment_option == "pubkey") return payment_type::pubkey;
+            if (payment_option == "xpub") return payment_type::xpub;
+            throw exception {} << "could not read payment type";
+        } (sanitize (*payment_option_string)) : payment_type::address;
+
+    e.update<void> ([&invoice, &payment_option] (Cosmos::Interface::writable u) {
         const auto *pub = u.get ().pubkeys ();
         const auto *pay = u.get ().payments ();
         if (pub == nullptr || pay == nullptr) throw exception {} << "could not read wallet";
-        auto pr = request_payment (*pay, *pub, invoice);
+        auto pr = request_payment (payment_option, *pay, *pub, invoice);
         std::cout << "Copy and paste the following to your customer to request payment. " << std::endl;
         std::cout << "\t" << pr.ID << ": " << pr.Invoice << std::endl;
         u.set_pubkeys (pr.Pubkeys);
@@ -386,12 +398,103 @@ void command_request (const arg_parser &p) {
     });
 }
 
-void command_receive (const arg_parser &p) {
-    throw exception {} << "Commond receive not yet implemented";
+void command_pay (const arg_parser &p) {
+    using namespace Cosmos;
+    Cosmos::Interface e {};
+    Cosmos::read_wallet_options (e, p);
+
+    // first look for a payment request.
+    maybe<std::string> payment_request_string;
+    p.get ("request", payment_request_string);
+
+    // if we cannot find one, maybe there's an address.
+    maybe<std::string> address_string;
+    p.get ("address", address_string);
+
+    // if there is no amount specified, check for one.
+    maybe<int64> amount_sats;
+    p.get ("amount", amount_sats);
+
+    maybe<string> memo_input;
+    p.get ("memo", memo_input);
+
+    payment_request *request;
+    if (bool (payment_request_string)) {
+        request = new payment_request {payments::read_invoice (*payment_request_string)};
+
+        maybe<Bitcoin::satoshi> requested_amount = request->Value.amount ();
+        if (bool (requested_amount) && bool (amount_sats) && *requested_amount != Bitcoin::satoshi {*amount_sats})
+            throw exception {} << "WARNING: amount provided in payment request and as an option and do not agree";
+
+        if (!bool (requested_amount)) {
+            if (!bool (amount_sats)) throw exception {} << "no amount provided";
+            else request->Value.set_amount (Bitcoin::satoshi {*amount_sats});
+        }
+
+        maybe<string> requested_memo = request->Value.memo ();
+        if (bool (requested_memo) && bool (memo_input) && *requested_memo != *memo_input)
+            throw exception {} << "WARNING: memo provided in payment request and as an option and do not agree";
+
+        if (!bool (requested_memo) && bool (memo_input)) request->Value.set_memo (*memo_input);
+
+    } else {
+        if (!bool (address_string)) throw exception {} << "no address provided";
+        if (!bool (amount_sats)) throw exception {} << "no amount provided";
+        request = new payment_request {*address_string, payments::invoice {Bitcoin::timestamp::now ()}};
+        request->Value.set_amount (*amount_sats);
+        if (bool (memo_input)) request->Value.set_memo (*memo_input);
+    }
+
+    // TODO if other incomplete payments exist, be sure to subtract
+    // them from the account so as not to create a double spend.
+    Bitcoin::satoshi value = e.watch_wallet ()->value ();
+
+    std::cout << "This is a payment for " << request->Value.amount () << " sats; wallet value: " << value << std::endl;
+
+    // TODO estimate fee to send this tx.
+    if (value < request->Value.amount ()) throw exception {} << "Wallet does not have sufficient funds to make this payment";
+
+    // TODO encrypt payment request in OP_RETURN.
+    std::cout << "please show this string to your seller and he will broadcast the payment if he accepts it:\n\t" <<
+        encoding::base64::write (bytes (e.update<BEEF> ([request] (Interface::writable u) -> BEEF {
+
+        Bitcoin::address addr {request->Key};
+        Bitcoin::pubkey pubkey {request->Key};
+        HD::BIP_32::pubkey xpub {request->Key};
+
+        spend::spent spent;
+        if (addr.valid ()) {
+            spent = u.make_tx ({Bitcoin::output {*request->Value.amount (), pay_to_address::script (addr.digest ())}});
+        } else if (pubkey.valid ()) {
+            spent = u.make_tx ({Bitcoin::output {*request->Value.amount (), pay_to_pubkey::script (pubkey)}});
+        } else if (xpub.valid ()) {
+            throw exception {} << "pay to xpub not yet implemented";
+        } else throw exception {} << "could not read payment address " << request->Key;
+
+        maybe<SPV::proof> ppp = generate_proof (*u.local_txdb (),
+            for_each ([] (const auto &e) -> Bitcoin::transaction {
+                return Bitcoin::transaction (e.first);
+            }, spent.Transactions));
+
+        if (!bool (ppp)) throw exception {} << "failed to generate payment";
+
+        BEEF beef {*ppp};
+
+        // save to proposed payments.
+        auto payments = *u.get ().payments ();
+        u.set_payments (Cosmos::payments {payments.Requests, payments.Proposals.insert (request->Key, payments::payment
+            {request->Value, beef, for_each ([] (const auto &e) -> account_diff {
+                return e.second;
+            }, spent.Transactions)})});
+
+        return beef;
+    }))) << std::endl;
+
+    delete request;
 }
 
-void command_pay (const arg_parser &p) {
-    throw exception {} << "Commond pay not yet implemented";
+void command_receive (const arg_parser &p) {
+    throw exception {} << "Commond receive not yet implemented";
 }
 
 void command_sign (const arg_parser &p) {
@@ -538,16 +641,6 @@ namespace Cosmos {
     };
 }
 
-bool get_user_bool (std::string message = "") {
-    char q;
-    do {
-        std::cout << message << " (Y/N)" << std::endl;
-        q = 0;
-        std::cin >> q;
-    } while (q != 'n' && q != 'y' && q != 'Y' && q != 'N');
-    return q == 'Y' || q == 'y';
-}
-
 void command_split (const arg_parser &p) {
     using namespace Cosmos;
     Interface e {};
@@ -589,7 +682,7 @@ void command_split (const arg_parser &p) {
             // if we're using a pubkey we need a max_look_ahead.
             maybe<uint32> max_look_ahead;
             p.get (4, "max_look_ahead", max_look_ahead);
-            if (!bool (max_look_ahead)) max_look_ahead = 25;
+            if (!bool (max_look_ahead)) max_look_ahead = options {}.MaxLookAhead;
 
             x = e.update<splitable> ([&pk, &max_look_ahead] (Interface::writable u) {
 
@@ -599,7 +692,7 @@ void command_split (const arg_parser &p) {
 
                 while (since_last_unused < *max_look_ahead) {
                     size_t last_size = z.size ();
-                    z = get_split_address (u, z, seq.last ().Key);
+                    z = get_split_address (u, z, pay_to_address_signing (seq.last ()).Key);
                     seq = seq.next ();
                     if (z.size () == last_size) {
                         since_last_unused++;
@@ -661,7 +754,7 @@ void command_split (const arg_parser &p) {
     std::cout << "found " << x.size () << " scripts in " << num_outputs <<
         " outputs to split with a total value of " << total_split_value << std::endl;
 
-    if (!get_user_bool ("Do you want to continue?")) throw exception {} << "program aborted";
+    if (!get_user_yes_or_no ("Do you want to continue?")) throw exception {} << "program aborted";
 
     e.update<void> ([rand = e.random (), &split, &x, fee_rate] (Cosmos::Interface::writable u) {
 
@@ -704,7 +797,7 @@ void command_split (const arg_parser &p) {
         std::cout << "Tax implications: " << std::endl;
         std::cout << tax::calculate (*u.txdb (), *u.price_data (), h.get_history (now)).CapitalGain << std::endl;
 
-        if (!get_user_bool ("Do you want broadcast these transactions?")) throw exception {} << "program aborted";
+        if (!get_user_yes_or_no ("Do you want broadcast these transactions?")) throw exception {} << "program aborted";
 
         std::cout << "broadcasting split transactions" << std::endl;
 
@@ -1040,7 +1133,7 @@ void command_restore (const arg_parser &p) {
 
     maybe<uint32> max_look_ahead;
     p.get (4, "max_look_ahead", max_look_ahead);
-    if (!bool (max_look_ahead)) max_look_ahead = 25;
+    if (!bool (max_look_ahead)) max_look_ahead = options {}.MaxLookAhead;
 
     std::cout << "max look ahead is " << *max_look_ahead << std::endl;
 
@@ -1063,7 +1156,7 @@ void command_restore (const arg_parser &p) {
         ordered_list<ray> history {};
         for (const data::entry<string, address_sequence> ed : derivations.Sequences) {
             std::cout << "checking address sequence " << ed.Key << std::endl;
-            auto restored = restore {*max_look_ahead} (*u.txdb (), ed.Value);
+            auto restored = restore {*max_look_ahead, true} (*u.txdb (), ed.Value);
             acc += restored.Account;
             history = history + restored.History;
             derivations = derivations.update (ed.Key, restored.Last);

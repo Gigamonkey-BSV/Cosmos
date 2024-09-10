@@ -41,6 +41,7 @@ namespace Cosmos {
 
             explicit transaction (const JSON &);
             explicit operator JSON () const;
+
         };
 
         using write_scripts = function<script (pubkeys &, const Bitcoin::output &, const Bitcoin::sighash::document &,

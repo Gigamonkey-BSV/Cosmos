@@ -32,6 +32,10 @@ namespace Cosmos {
     JSON write (const Bitcoin::input &j);
     Bitcoin::input read_input (const JSON &j);
 
+    JSON write_path (HD::BIP_32::path p);
+
+    HD::BIP_32::path read_path (const JSON &j);
+
     void write_to_file (const JSON &, const std::string &filename);
     JSON read_from_file (const std::string &filename);
 

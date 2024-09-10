@@ -5,15 +5,19 @@
 
 namespace Cosmos {
 
-    // note: we want to load these options from a file at some point.
+    // TODO we want to load these options from a file at some point.
     struct options {
+        constexpr static double DefaultMeanSatsPerOutput {1234567};
+
         Bitcoin::satoshi MaxSatsPerOutput {5000000};
 
         Bitcoin::satoshi MinSatsPerOutput {123456};
 
-        double MeanSatsPerOutput {1234567};
+        double MeanSatsPerOutput {DefaultMeanSatsPerOutput};
 
         satoshis_per_byte FeeRate {50, 1000};
+
+        uint32 MaxLookAhead {10};
     };
 }
 

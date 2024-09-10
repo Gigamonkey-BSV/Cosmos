@@ -8,7 +8,7 @@ namespace Cosmos {
     struct restore {
         uint32 MaxLookAhead;
         // whether to check for derived addresses as well.
-        bool CheckDerived;
+        bool CheckSubKeys;
 
         // result of a restored wallet
         struct restored {

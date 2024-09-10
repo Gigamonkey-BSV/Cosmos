@@ -2,33 +2,10 @@
 #define COSMOS_WALLET_ACCOUNT
 
 #include <data/math/infinite.hpp>
-#include <Cosmos/wallet/keys/sequence.hpp>
+#include <Cosmos/wallet/keys/redeemer.hpp>
 #include <Cosmos/database/txdb.hpp>
 
 namespace Cosmos {
-    struct redeemable : signing {
-
-        // the output to be redeemeed.
-        Bitcoin::output Prevout;
-
-        redeemable (): signing {}, Prevout {} {}
-        redeemable (const Bitcoin::output &p, list<derivation> d, uint64 ez, const bytes &script_code = {}) :
-            signing {d, ez, script_code}, Prevout {p} {}
-        redeemable (const Bitcoin::output &p, const signing &x) : signing {x}, Prevout {p} {}
-
-        explicit operator JSON () const;
-        redeemable (const JSON &);
-
-        bool operator == (const redeemable &d) const {
-            return Prevout == d.Prevout && this->Derivation == d.Derivation && this->UnlockScriptSoFar == d.UnlockScriptSoFar;
-        }
-    };
-
-    std::ostream inline &operator << (std::ostream &o, const redeemable &r) {
-        return o << "redeemable {" << r.Prevout << ", derivation: " << r.Derivation << "}";
-    }
-
-    size_t estimated_size (const redeemable &);
 
     // the effect of a single transaction on an account.
     struct account_diff {

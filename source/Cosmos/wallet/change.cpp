@@ -26,7 +26,7 @@ namespace Cosmos {
 
                 uint64 expected_size = pay_to_address::redeem_expected_size (true);
 
-                entry<Bitcoin::address, signing> derived = x.last ();
+                entry<Bitcoin::address, signing> derived = pay_to_address_signing (x.last ());
                 x = x.next ();
 
                 cx <<= redeemable {

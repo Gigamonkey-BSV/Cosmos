@@ -27,6 +27,9 @@ namespace Cosmos {
             invoice &set_memo (const string &);
         };
 
+        static entry<string, invoice> read_invoice (const JSON &);
+        static JSON write_invoice (const entry<string, invoice> &);
+
         struct request {
             invoice Invoice;
             derivation Derivation;
@@ -35,11 +38,11 @@ namespace Cosmos {
         };
 
         struct payment {
-            request Request;
+            invoice Invoice;
             BEEF Transfer;
-            account_diff Diff;
+            list<account_diff> Diff;
 
-            payment (const request &req, const BEEF &tr, const account_diff &d) : Request {req}, Transfer {tr}, Diff {d} {}
+            payment (const invoice &in, const BEEF &tr, const list<account_diff> &d) : Invoice {in}, Transfer {tr}, Diff {d} {}
         };
 
         // payment requests that have been made but not fulfilled.
@@ -57,6 +60,8 @@ namespace Cosmos {
 
     };
 
+    using payment_request = entry<string, payments::invoice>;
+
     struct payments::new_request {
         string ID;          // address, pubkey, or xpub
         invoice Invoice;
@@ -64,14 +69,13 @@ namespace Cosmos {
         pubkeys Pubkeys;    // new pubkeys
     };
 
-    payments::new_request inline request_payment (const payments &p, const pubkeys &k, const payments::invoice &x) {
-        auto addr = k.last (k.Receive);
-        return payments::new_request {
-            addr.Key, x,
-            payments {p.Requests.insert (addr.Key, payments::request {x, addr.Value.Derivation[0]}), p.Proposals},
-            k.next (k.Receive)
-        };
-    }
+    enum class payment_type {
+        pubkey,
+        address,
+        xpub
+    };
+
+    payments::new_request request_payment (payment_type t, const payments &p, const pubkeys &k, const payments::invoice &x);
 
     maybe<Bitcoin::timestamp> inline payments::invoice::expires () {
         if (this->contains ("expires")) return Bitcoin::timestamp {std::string ((*this)["expires"])};
@@ -101,6 +105,17 @@ namespace Cosmos {
     payments::invoice inline &payments::invoice::set_memo (const string &x) {
         (*this)["memo"] = std::string (x);
         return *this;
+    }
+    entry<string, payments::invoice> inline payments::read_invoice (const JSON &j) {
+        if (!j.is_object ()) throw exception {} << "invalid invoice format";
+        for (const auto &[id, inv] : j.items ()) return {id, payments::invoice (inv)};
+        throw exception {} << "invalid invoice format";
+    }
+
+    JSON inline payments::write_invoice (const entry<string, invoice> &e) {
+        JSON::object_t o;
+        o[e.Key] = e.Value;
+        return o;
     }
 }
 
