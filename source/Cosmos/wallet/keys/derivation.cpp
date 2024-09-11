@@ -6,13 +6,13 @@ namespace Cosmos {
 
     derivation::operator JSON () const {
         JSON::object_t d;
-        d["key"] = Key;
+        d["parent"] = Parent;
         d["path"] = write_path (Path);
         return d;
     }
 
     derivation::derivation (const JSON &j) {
-        Key = std::string (j["key"]);
+        Parent = std::string (j["parent"]);
         Path = read_path (j["path"]);
     }
 

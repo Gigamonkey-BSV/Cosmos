@@ -40,7 +40,7 @@ namespace Cosmos {
     }
 
     Bitcoin::secret inline keychain::derive (const derivation &d) const {
-        return Bitcoin::secret (HD::BIP_32::secret {Keys[d.Key]}.derive (d.Path));
+        return Bitcoin::secret (HD::BIP_32::secret {Keys[d.Parent]}.derive (d.Path));
     }
 }
 

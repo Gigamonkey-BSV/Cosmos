@@ -35,7 +35,7 @@ namespace Cosmos {
         pubkeys update (const string &name, uint32 last) const {
             return pubkeys {Derivations, Sequences.insert (name, address_sequence {},
                 [last] (const address_sequence &o, const address_sequence &n) -> address_sequence {
-                    return address_sequence (o.Key, o.Path, last);
+                    return address_sequence (o.Parent, o.Path, last);
                 }), Receive, Change};
         }
 
@@ -53,12 +53,12 @@ namespace Cosmos {
 
     derived_pubkey inline pubkeys::last (const string &name) const {
         auto seq = Sequences[name];
-        auto der = Derivations[seq.Key];
-        return address_sequence {HD::BIP_32::pubkey {der.Key}, seq.Path, seq.Last}.last ();
+        auto der = Derivations[seq.Parent];
+        return address_sequence {HD::BIP_32::pubkey {der.Parent}, seq.Path, seq.Last}.last ();
     }
 
     Bitcoin::pubkey inline pubkeys::derive (const derivation &d) const {
-        return HD::BIP_32::pubkey {Derivations[d.Key].Key}.derive (d.Path).Pubkey;
+        return HD::BIP_32::pubkey {Derivations[d.Parent].Parent}.derive (d.Path).Pubkey;
     }
 }
 

@@ -3,36 +3,68 @@
 
 namespace Cosmos {
 
-    payments::new_request request_payment (payment_type t, const payments &p, const pubkeys &k, const payments::invoice &x) {
+    payments::request::request (const JSON &j) {
+        if (!j.is_object ()) throw exception {} << "Invalid payments::request format";
+
+        auto created = j.find ("created");
+        auto expires = j.find ("expires");
+        auto amount = j.find ("amount");
+        auto memo = j.find ("memo");
+
+        if (created == j.end ()) throw exception {} << "invalid payments::request format";
+        Created = Bitcoin::timestamp {std::string (*created)};
+        if (expires != j.end ()) Expires = Bitcoin::timestamp {std::string (*expires)};
+        if (amount != j.end ()) Amount = read_satoshi (*amount);
+        if (memo != j.end ()) Memo = std::string (*memo);
+    }
+
+    payments::request::operator JSON () const {
+        JSON::object_t o;
+
+        o["created"] = string (Created);
+        if (bool (Expires)) o["expires"] = string (*Expires);
+        if (bool (Amount)) o["amount"] = write (*Amount);
+        if (bool (Memo)) o["memo"] = *Memo;
+
+        return o;
+    }
+
+    payments::new_request payments::request_payment (payments::type t, const payments &p, const pubkeys &k, const payments::request &x) {
         derived_pubkey d = k.last (k.Receive);
         switch (t) {
-            case payment_type::address: {
+
+            case payments::type::address: {
                 entry<Bitcoin::address, signing> addr = pay_to_address_signing (d);
-                return payments::new_request {
-                    addr.Key, x,
-                    payments {p.Requests.insert (addr.Key, payments::request {x, addr.Value.Derivation[0]}), p.Proposals},
+                payments::payment_request pr {addr.Key, x};
+                return payments::new_request {pr,
+                    payments {p.Requests.insert (addr.Key, payments::redeemable {pr, addr.Value.Derivation[0]}), p.Proposals},
                     k.next (k.Receive)};
             }
-            case payment_type::xpub: {
-                string ww = string (d.Key);
-                return payments::new_request {
-                    ww, x,
-                    payments {p.Requests.insert (ww, payments::request {x, derivation {d.Key, d.Path}}), p.Proposals},
+
+            case payments::type::xpub: {
+                string ww = string (d.Parent);
+                payments::payment_request pr {ww, x};
+                return payments::new_request {pr,
+                    payments {p.Requests.insert (ww, payments::redeemable {pr, derivation {d.Parent, d.Path}}), p.Proposals},
                     k.next (k.Receive)};
             }
-            case payment_type::pubkey: {
+
+            case payments::type::pubkey: {
                 entry<Bitcoin::pubkey, signing> ppk = pay_to_pubkey_signing (d);
                 string ww = string (ppk.Key);
-                return payments::new_request {
-                    ww, x,
-                    payments {p.Requests.insert (ww, payments::request {x, ppk.Value.Derivation[0]}), p.Proposals},
+                payments::payment_request pr {ww, x};
+                return payments::new_request {pr,
+                    payments {p.Requests.insert (ww, payments::redeemable {pr, ppk.Value.Derivation[0]}), p.Proposals},
                     k.next (k.Receive)};
             }
+
             default : throw exception {} << "unknown payment type";
         }
     }
 
     account_diff read_account_diff (const JSON &j) {
+        if (!j.is_object ()) throw "invalid payments offer format";
+
         account_diff d;
         d.TXID = read_txid (std::string (j["txid"]));
 
@@ -78,27 +110,28 @@ namespace Cosmos {
         return diffs;
     }
 
-    JSON write_request (const payments::request &r) {
+    JSON write_redeemable (const payments::redeemable &r) {
         JSON::object_t o;
-        o["invoice"] = r.Invoice;
+        o["request"] = payments::write_payment_request (r.Request);
         o["derivation"] = JSON (r.Derivation);
         return o;
     }
 
-    payments::request inline read_request (const JSON &j) {
-        return payments::request {j["invoice"], derivation (j["derivation"])};
+    payments::redeemable inline read_redeemable (const JSON &j) {
+        return payments::redeemable {payments::read_payment_request (j["request"]), derivation (j["derivation"])};
     }
 
-    payments::payment read_payment (const JSON &j) {
-        return payments::payment {
-            payments::invoice (j["invoice"]),
+    payments::offer read_offer (const JSON &j) {
+        if (!j.is_object ()) throw "invalid payments offer format";
+        return payments::offer {
+            payments::read_payment_request (j["request"]),
             BEEF (*encoding::base64::read (std::string (j["transfer"]))),
             read_account_diffs (j["diff"])};
     }
 
-    JSON write_payment (const payments::payment &p) {
+    JSON write_offer (const payments::offer &p) {
         JSON::object_t o;
-        o["invoice"] = p.Invoice;
+        o["request"] = payments::write_payment_request (p.Request);
         o["transfer"] = encoding::base64::write (bytes (p.Transfer));
         o["diff"] = write_account_diffs (p.Diff);
         return o;
@@ -115,19 +148,19 @@ namespace Cosmos {
 
         if (!requests->is_object () || !proposals->is_object ()) throw exception {} << "invalid payments JSON format C";
 
-        for (const auto &[key, value] : requests->items ()) Requests = Requests.insert (string (key), read_request (value));
+        for (const auto &[key, value] : requests->items ()) Requests = Requests.insert (string (key), read_redeemable (value));
 
-        for (const auto &[key, value] : proposals->items ()) Proposals = Proposals.insert (string (key), read_payment (value));
+        for (const auto &[key, value] : proposals->items ()) Proposals = Proposals.insert (string (key), read_offer (value));
 
     }
 
     payments::operator JSON () const {
 
         JSON::object_t r;
-        for (const auto &e : Requests) r[std::string (e.Key)] = write_request (e.Value);
+        for (const auto &e : Requests) r[std::string (e.Key)] = write_redeemable (e.Value);
 
         JSON::object_t p;
-        for (const auto &e : Proposals) p[std::string (e.Key)] = write_payment (e.Value);
+        for (const auto &e : Proposals) p[std::string (e.Key)] = write_offer (e.Value);
 
         JSON::object_t o;
         o["requests"] = r;

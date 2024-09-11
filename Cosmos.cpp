@@ -360,39 +360,44 @@ void command_request (const arg_parser &p) {
     e.update<void> (Cosmos::update_pending_transactions);
 
     Bitcoin::timestamp now = Bitcoin::timestamp::now ();
-    payments::invoice invoice {now};
+    payments::request request {now};
 
     maybe<uint32> expiration_minutes;
     p.get ("expires", expiration_minutes);
-    if (bool (expiration_minutes)) invoice.set_expiration (Bitcoin::timestamp {uint32 (now) + *expiration_minutes * 60});
+    if (bool (expiration_minutes)) request.Expires = Bitcoin::timestamp {uint32 (now) + *expiration_minutes * 60};
 
     maybe<int64> satoshi_amount;
     p.get ("amount", satoshi_amount);
-    if (bool (satoshi_amount)) invoice.set_amount (Bitcoin::satoshi {*satoshi_amount});
+    if (bool (satoshi_amount)) request.Amount = Bitcoin::satoshi {*satoshi_amount};
 
     maybe<std::string> memo;
     p.get ("memo", memo);
-    if (bool (memo)) invoice.set_memo (*memo);
+    if (bool (memo)) request.Memo = *memo;
 
     maybe<std::string> payment_option_string;
     p.get ("payment_type", payment_option_string);
 
-    payment_type payment_option = bool (payment_option_string) ?
-        [] (const std::string &payment_option) -> payment_type {
+    payments::type payment_option = bool (payment_option_string) ?
+        [] (const std::string &payment_option) -> payments::type {
             std::cout << "payment type is " << payment_option << std::endl;
-            if (payment_option == "address") return payment_type::address;
-            if (payment_option == "pubkey") return payment_type::pubkey;
-            if (payment_option == "xpub") return payment_type::xpub;
+            if (payment_option == "address") return payments::type::address;
+            if (payment_option == "pubkey") return payments::type::pubkey;
+            if (payment_option == "xpub") return payments::type::xpub;
             throw exception {} << "could not read payment type";
-        } (sanitize (*payment_option_string)) : payment_type::address;
+        } (sanitize (*payment_option_string)) : payments::type::address;
 
-    e.update<void> ([&invoice, &payment_option] (Cosmos::Interface::writable u) {
+    if (payment_option == payments::type::xpub || payment_option == payments::type::pubkey)
+        std::cout << "NOTE: the payment type you have chosen is not safe against a quantum attack. "
+            "Please don't use it if you think your customer may have access to a quantum computer." << std::endl;
+
+    e.update<void> ([&request, &payment_option] (Cosmos::Interface::writable u) {
         const auto *pub = u.get ().pubkeys ();
         const auto *pay = u.get ().payments ();
         if (pub == nullptr || pay == nullptr) throw exception {} << "could not read wallet";
-        auto pr = request_payment (payment_option, *pay, *pub, invoice);
-        std::cout << "Copy and paste the following to your customer to request payment. " << std::endl;
-        std::cout << "\t" << pr.ID << ": " << pr.Invoice << std::endl;
+
+        auto pr = payments::request_payment (payment_option, *pay, *pub, request);
+        std::cout << "Show the following string to your customer to request payment. " << std::endl;
+        std::cout << "\t" << payments::write_payment_request (pr.Request) << std::endl;
         u.set_pubkeys (pr.Pubkeys);
         u.set_payments (pr.Payments);
     });
@@ -418,58 +423,58 @@ void command_pay (const arg_parser &p) {
     maybe<string> memo_input;
     p.get ("memo", memo_input);
 
-    payment_request *request;
-    if (bool (payment_request_string)) {
-        request = new payment_request {payments::read_invoice (*payment_request_string)};
+    maybe<string> output;
+    p.get ("output", output);
 
-        maybe<Bitcoin::satoshi> requested_amount = request->Value.amount ();
-        if (bool (requested_amount) && bool (amount_sats) && *requested_amount != Bitcoin::satoshi {*amount_sats})
+    payments::payment_request *pr;
+    if (bool (payment_request_string)) {
+        pr = new payments::payment_request {payments::read_payment_request (*payment_request_string)};
+
+        if (bool (pr->Value.Amount) && bool (amount_sats) && *pr->Value.Amount != Bitcoin::satoshi {*amount_sats})
             throw exception {} << "WARNING: amount provided in payment request and as an option and do not agree";
 
-        if (!bool (requested_amount)) {
+        if (!bool (pr->Value.Amount)) {
             if (!bool (amount_sats)) throw exception {} << "no amount provided";
-            else request->Value.set_amount (Bitcoin::satoshi {*amount_sats});
+            else pr->Value.Amount = Bitcoin::satoshi {*amount_sats};
         }
 
-        maybe<string> requested_memo = request->Value.memo ();
-        if (bool (requested_memo) && bool (memo_input) && *requested_memo != *memo_input)
+        if (bool (pr->Value.Memo) && bool (memo_input) && *pr->Value.Memo != *memo_input)
             throw exception {} << "WARNING: memo provided in payment request and as an option and do not agree";
 
-        if (!bool (requested_memo) && bool (memo_input)) request->Value.set_memo (*memo_input);
+        if (!bool (pr->Value.Memo) && bool (memo_input)) pr->Value.Memo = *memo_input;
 
     } else {
         if (!bool (address_string)) throw exception {} << "no address provided";
         if (!bool (amount_sats)) throw exception {} << "no amount provided";
-        request = new payment_request {*address_string, payments::invoice {Bitcoin::timestamp::now ()}};
-        request->Value.set_amount (*amount_sats);
-        if (bool (memo_input)) request->Value.set_memo (*memo_input);
+        pr = new payments::payment_request {*address_string, payments::request {}};
+        pr->Value.Amount = *amount_sats;
+        if (bool (memo_input)) pr->Value.Memo = *memo_input;
     }
 
     // TODO if other incomplete payments exist, be sure to subtract
     // them from the account so as not to create a double spend.
     Bitcoin::satoshi value = e.watch_wallet ()->value ();
 
-    std::cout << "This is a payment for " << request->Value.amount () << " sats; wallet value: " << value << std::endl;
+    std::cout << "This is a payment for " << *pr->Value.Amount << " sats; wallet value: " << value << std::endl;
 
     // TODO estimate fee to send this tx.
-    if (value < request->Value.amount ()) throw exception {} << "Wallet does not have sufficient funds to make this payment";
+    if (value < pr->Value.Amount) throw exception {} << "Wallet does not have sufficient funds to make this payment";
 
     // TODO encrypt payment request in OP_RETURN.
-    std::cout << "please show this string to your seller and he will broadcast the payment if he accepts it:\n\t" <<
-        encoding::base64::write (bytes (e.update<BEEF> ([request] (Interface::writable u) -> BEEF {
+    BEEF beef = e.update<BEEF> ([pr] (Interface::writable u) -> BEEF {
 
-        Bitcoin::address addr {request->Key};
-        Bitcoin::pubkey pubkey {request->Key};
-        HD::BIP_32::pubkey xpub {request->Key};
+        Bitcoin::address addr {pr->Key};
+        Bitcoin::pubkey pubkey {pr->Key};
+        HD::BIP_32::pubkey xpub {pr->Key};
 
         spend::spent spent;
         if (addr.valid ()) {
-            spent = u.make_tx ({Bitcoin::output {*request->Value.amount (), pay_to_address::script (addr.digest ())}});
+            spent = u.make_tx ({Bitcoin::output {*pr->Value.Amount, pay_to_address::script (addr.digest ())}});
         } else if (pubkey.valid ()) {
-            spent = u.make_tx ({Bitcoin::output {*request->Value.amount (), pay_to_pubkey::script (pubkey)}});
+            spent = u.make_tx ({Bitcoin::output {*pr->Value.Amount, pay_to_pubkey::script (pubkey)}});
         } else if (xpub.valid ()) {
             throw exception {} << "pay to xpub not yet implemented";
-        } else throw exception {} << "could not read payment address " << request->Key;
+        } else throw exception {} << "could not read payment address " << pr->Key;
 
         maybe<SPV::proof> ppp = generate_proof (*u.local_txdb (),
             for_each ([] (const auto &e) -> Bitcoin::transaction {
@@ -482,15 +487,22 @@ void command_pay (const arg_parser &p) {
 
         // save to proposed payments.
         auto payments = *u.get ().payments ();
-        u.set_payments (Cosmos::payments {payments.Requests, payments.Proposals.insert (request->Key, payments::payment
-            {request->Value, beef, for_each ([] (const auto &e) -> account_diff {
+        u.set_payments (Cosmos::payments {payments.Requests, payments.Proposals.insert (pr->Key, payments::offer
+            {*pr, beef, for_each ([] (const auto &e) -> account_diff {
                 return e.second;
             }, spent.Transactions)})});
 
         return beef;
-    }))) << std::endl;
+    });
 
-    delete request;
+    if (bool (output)) {
+        // TODO make sure that the output doesn't already exist.
+        write_to_file (encoding::base64::write (bytes (beef)), *output);
+        std::cout << "offer written to " << *output << std::endl;
+    } else std::cout << "please show this string to your seller and he will broadcast the payment if he accepts it:\n\t" <<
+        encoding::base64::write (bytes (beef)) << std::endl;
+
+    delete pr;
 }
 
 void command_receive (const arg_parser &p) {
@@ -1075,13 +1087,13 @@ void command_restore (const arg_parser &p) {
                 construct_derivation (*sk, {HD::BIP_44::purpose}, {0, 0, 0}, {0, 0, 1}) :
                 construct_derivation (*sk, {HD::BIP_44::purpose, *coin_type, HD::BIP_32::harden (0)}, {0}, {1});
 
-            auto first_receive = derivations.last ("receive").Key;
-            auto first_change = derivations.last ("change").Key;
+            HD::BIP_32::pubkey first_receive = derivations.last ("receive").derive ();
+            HD::BIP_32::pubkey first_change = derivations.last ("change").derive ();
 
             std::cout
                 << "\nthis is a bip 44 master, coin type " << *coin_type
-                << "\n\tfirst receive address: " << first_receive
-                << "\n\tfirst change address: " << first_change << std::endl;
+                << "\n\tfirst receive address: " << first_receive.address ()
+                << "\n\tfirst change address: " << first_change.address () << std::endl;
 
         } else {
             HD::BIP_32::path bitcoin_to_account_master {HD::BIP_44::purpose, HD::BIP_44::coin_type_Bitcoin, HD::BIP_32::harden (0)};
@@ -1113,19 +1125,19 @@ void command_restore (const arg_parser &p) {
                 << "coin type could not be determined."
                 << "\nassuming this is a bip 44 master, coin type Bitcoin "
                 << "\n\tfirst receive address: "
-                << derivations.last ("receiveBitcoin").Key
+                << derivations.last ("receiveBitcoin").derive ().address ()
                 << "\n\tfirst change address: "
-                << derivations.last ("changeBitcoin").Key
+                << derivations.last ("changeBitcoin").derive ().address ()
                 << "\nassuming this is a bip 44 master, coin type Bitcoin Cash"
                 << "\n\tfirst receive address: "
-                << derivations.last ("receiveBitcoinCash").Key
+                << derivations.last ("receiveBitcoinCash").derive ().address ()
                 << "\n\tfirst change address: "
-                << derivations.last ("changeBitcoin").Key
+                << derivations.last ("changeBitcoin").derive ().address ()
                 << "\nassuming this is a bip 44 master, coin type Bitcoin SV"
                 << "\n\tfirst receive address: "
-                << derivations.last ("receiveBitcoinSV").Key
+                << derivations.last ("receiveBitcoinSV").derive ().address ()
                 << "\n\tfirst change address: "
-                << derivations.last ("changeBitcoin").Key
+                << derivations.last ("changeBitcoin").derive ().address ()
                 << std::endl;
 
         }

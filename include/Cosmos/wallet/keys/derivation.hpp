@@ -34,30 +34,30 @@ namespace Cosmos {
     // derivation path for a key. Includes a name and a path, which may be empty.
     struct derivation {
         // the key to derive from.
-        pubkey Key;
+        pubkey Parent;
 
         // the derivation path from the key.
         // if the derivation includes hardened derivations, the private key
         // must be used.
         HD::BIP_32::path Path;
 
-        derivation () : Key {}, Path {} {}
-        derivation (const pubkey &k, HD::BIP_32::path path): Key {k}, Path {path} {}
+        derivation () : Parent {}, Path {} {}
+        derivation (const pubkey &k, HD::BIP_32::path path): Parent {k}, Path {path} {}
 
         bool valid () const {
-            return Key.valid ();
+            return Parent.valid ();
         }
 
         explicit operator JSON () const;
         explicit derivation (const JSON &);
 
         bool operator == (const derivation &d) const {
-            return Key == d.Key && Path == d.Path;
+            return Parent == d.Parent && Path == d.Path;
         }
     };
 
     std::ostream inline &operator << (std::ostream &o, const derivation &d) {
-        return o << "derivation {" << d.Key << ", " << d.Path << "}";
+        return o << "derivation {" << d.Parent << ", " << d.Path << "}";
     }
 
     bool inline secret::valid () const {

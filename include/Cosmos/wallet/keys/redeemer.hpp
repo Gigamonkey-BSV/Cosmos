@@ -60,12 +60,12 @@ namespace Cosmos {
 
     entry<Bitcoin::address, signing> inline pay_to_address_signing (const derived_pubkey &d) {
         return {d.derive ().address ().encode (),
-            signing {{derivation {d.Key, d.Path}}, pay_to_address::redeem_expected_size ()}};
+            signing {{derivation {d.Parent, d.Path}}, pay_to_address::redeem_expected_size ()}};
     }
 
     entry<Bitcoin::pubkey, signing> inline pay_to_pubkey_signing (const derived_pubkey &d) {
         return {Bitcoin::pubkey {d.derive ().Pubkey},
-            signing {{derivation {d.Key, d.Path}}, pay_to_pubkey::redeem_expected_size ()}};
+            signing {{derivation {d.Parent, d.Path}}, pay_to_pubkey::redeem_expected_size ()}};
     }
 
     std::ostream inline &operator << (std::ostream &o, const redeemable &r) {

@@ -11,28 +11,28 @@ namespace Cosmos {
     // path, and therefore an xpub can always be derived from it.
     struct derived_pubkey {
         // the master pubkey
-        HD::BIP_32::pubkey Key;
+        HD::BIP_32::pubkey Parent;
         // derivation from this pubkey to the address. Must be non-hardened
         HD::BIP_32::path Path;
 
         // the derived pubkey
         HD::BIP_32::pubkey derive () const {
-            return Key.derive (Path);
+            return Parent.derive (Path);
         }
 
         bool valid () const;
     };
 
     struct address_sequence {
-        HD::BIP_32::pubkey Key;
+        HD::BIP_32::pubkey Parent;
         // derivation from this pubkey to the address. Must be non-hardened
         HD::BIP_32::path Path;
         // last element of the derivation.
         uint32 Last;
 
-        address_sequence () : Key {}, Path {}, Last {0} {}
+        address_sequence () : Parent {}, Path {}, Last {0} {}
         address_sequence (const HD::BIP_32::pubkey &s, HD::BIP_32::path p, uint32 l = 0) :
-            Key {s}, Path {p}, Last {l} {}
+            Parent {s}, Path {p}, Last {l} {}
 
         derived_pubkey last () const;
         address_sequence next () const;
@@ -43,7 +43,7 @@ namespace Cosmos {
         explicit operator JSON () const;
 
         bool valid () const {
-            if (!Key.valid ()) return false;
+            if (!Parent.valid ()) return false;
             for (uint32 u : Path) if (HD::BIP_32::hardened (u)) return false;
             return true;
         }
@@ -52,19 +52,19 @@ namespace Cosmos {
     };
 
     std::ostream inline &operator << (std::ostream &o, const address_sequence &a) {
-        return o << "{" << a.Key << ", " << a.Path << ", " << a.Last << "}";
+        return o << "{" << a.Parent << ", " << a.Path << ", " << a.Last << "}";
     }
 
     address_sequence inline address_sequence::next () const {
-        return address_sequence {this->Key, this->Path, Last + 1};
+        return address_sequence {this->Parent, this->Path, Last + 1};
     }
 
     bool inline address_sequence::operator == (const address_sequence &x) const {
-        return Key == x.Key && Path == x.Path && Last == x.Last;
+        return Parent == x.Parent && Path == x.Path && Last == x.Last;
     }
 
     derived_pubkey inline address_sequence::last () const {
-        return {this->Key, Path << Last};
+        return {this->Parent, Path << Last};
     }
 }
 
