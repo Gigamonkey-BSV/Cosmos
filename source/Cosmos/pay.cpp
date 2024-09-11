@@ -42,7 +42,7 @@ namespace Cosmos {
             }
 
             case payments::type::xpub: {
-                string ww = string (d.Parent);
+                string ww = string (d.derive ());
                 payments::payment_request pr {ww, x};
                 return payments::new_request {pr,
                     payments {p.Requests.insert (ww, payments::redeemable {pr, derivation {d.Parent, d.Path}}), p.Proposals},
