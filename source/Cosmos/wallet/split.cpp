@@ -57,9 +57,14 @@ namespace Cosmos {
 
     split::log_triangular_distribution::log_triangular_distribution (double min, double max, double mean) {
 
-        if (max < min) throw exception {} << "log triangular distribution: max must not be less than min";
-        if (mean > max) throw exception {} << "log triangular distribution: mean must not be greater than max";
-        if (mean < min) throw exception {} << "log triangular distribution: mean must not be less than min";
+        if (max < min) throw exception {} <<
+            "log triangular distribution: max (" << max << ") must not be less than min (" << min << ")";
+
+        if (mean > max) throw exception {} <<
+            "log triangular distribution: mean (" << mean << ") must not be greater than max (" << max << ")";
+
+        if (mean < min) throw exception {} <<
+            "log triangular distribution: mean (" << mean << ") must not be less than min (" << min << ")";
 
         double a = ln (double (min));
         double b = ln (double (max));
@@ -72,6 +77,8 @@ namespace Cosmos {
 
         if (mean > max_mean) throw exception {} <<
             "Maximum possible mean value for max " << max << " and min " << min << " is " << max_mean;
+
+        Triangular = math::triangular_distribution<double> {a, find_triangle_mode (a, b, mean, min, max), b};
     }
 
     split::result_outputs split::operator () (data::crypto::random &r, address_sequence key,
@@ -82,7 +89,6 @@ namespace Cosmos {
         int64 remaining_split_value = split_value;
 
         while (true) {
-
             // how many outputs will we have by the next iteration?
             uint32 outputs_size_next = outputs.size () + 1;
 
@@ -113,7 +119,7 @@ namespace Cosmos {
 
             if (we_are_done) return result_outputs {shuffle (outputs, r), key.Last};
 
-            remaining_split_value += output_value;
+            remaining_split_value -= output_value;
 
             key = key.next ();
         }
@@ -147,17 +153,15 @@ namespace Cosmos {
         // generate new outputs
         result_outputs split_outputs = operator () (rand, x, split_value, fee_rate);
 
-        list<Bitcoin::output> outputs;
-
-        for (const auto &o : split_outputs.Outputs) outputs <<= o.Prevout;
-
         extended_transaction completed = redeemable_transaction {1,
             for_each ([k] (const entry<Bitcoin::outpoint, redeemable> &e) -> redeemer {
                 return redeemer {
                     list<sigop> {sigop {k.derive (first (e.Value.Derivation))}},
                     Bitcoin::prevout {e.Key, e.Value.Prevout},
                     e.Value.ExpectedScriptSize};
-            }, selected), outputs, 0}.redeem (ree);
+            }, selected), for_each ([] (const auto &x) -> Bitcoin::output {
+                return x.Prevout;
+            }, split_outputs.Outputs), 0}.redeem (ree);
 
         if (!completed.valid ()) throw exception {6} << "invalid tx generated";
 
@@ -171,11 +175,7 @@ namespace Cosmos {
         for (const auto &o : split_outputs.Outputs) diff.Insert = diff.Insert.insert (i++, o);
 
         // construct the final result.
-        result r {{{completed, diff}}, x.Last};
-
-
-
-        return r;
+        return result {{{completed, diff}}, x.Last};
 
     }
 

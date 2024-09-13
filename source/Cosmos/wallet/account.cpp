@@ -110,6 +110,7 @@ namespace Cosmos {
             throw exception {} << "index in block is too big to represent as an integer in the JSON library we are using";
 
         o["index"] = static_cast<int64> (r.Index);
+
         if (r.direction () == direction::out) {
             o["output"] = write (Bitcoin::output {r.Put});
             o["outpoint"] = write (Bitcoin::outpoint {r.Point});
@@ -118,6 +119,7 @@ namespace Cosmos {
             o["inpoint"] = write (Bitcoin::outpoint {r.Point});
             o["value"] = write (r.value ());
         }
+
         return o;
     }
 

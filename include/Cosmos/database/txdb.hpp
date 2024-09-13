@@ -72,12 +72,10 @@ namespace Cosmos {
         }
 
         ray (Bitcoin::timestamp w, uint64 i, const Bitcoin::outpoint &op, const Bitcoin::output &o) :
-            Put {bytes (o)}, When {w}, Index {i}, Point {op}, Value {o.Value} {}
+            Put {bytes (o)}, When {w}, Index {i}, Point {op}, Value {} {}
 
         ray (Bitcoin::timestamp w, uint64 i, const inpoint &ip, const Bitcoin::input &in, const Bitcoin::satoshi &v) :
-            Put {bytes (in)}, When {w}, Index {i}, Point {ip}, Value {v} {
-            if (!Bitcoin::input {Put}.Reference.Digest.valid ()) throw exception {} << "WARNING: invalid input! X";
-        }
+            Put {bytes (in)}, When {w}, Index {i}, Point {ip}, Value {v} {}
 
         ray (const vertex &t, const Bitcoin::outpoint &op):
             Put {bytes (t.Transaction->Outputs[op.Index])},

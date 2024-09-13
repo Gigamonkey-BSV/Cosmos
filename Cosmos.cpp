@@ -651,6 +651,33 @@ namespace Cosmos {
         return x.insert (Gigamonkey::SHA2_256 (pay_to_address::script (addr.digest ())), outputs);
 
     };
+
+    struct top_splitable {
+        digest256 ScriptHash;
+        Bitcoin::satoshi Value;
+        list<Bitcoin::outpoint> Outputs;
+
+        bool operator < (const top_splitable &t) const {
+            return Value > t.Value;
+        }
+
+        bool operator <= (const top_splitable &t) const {
+            return Value >= t.Value;
+        }
+    };
+
+    priority_queue<top_splitable> get_top_splitable (splitable x) {
+        priority_queue<top_splitable> top;
+        for (const auto &e : x) {
+                top = top.insert (top_splitable {e.Key,
+                fold ([] (const Bitcoin::satoshi val, const entry<Bitcoin::outpoint, redeemable> &e) {
+                    return val + e.Value.Prevout.Value;
+            }, Bitcoin::satoshi {0}, e.Value), for_each ([] (const auto &p) {
+                return p.Key;
+            }, e.Value)});
+        }
+        return top;
+    }
 }
 
 void command_split (const arg_parser &p) {
@@ -659,17 +686,17 @@ void command_split (const arg_parser &p) {
     read_wallet_options (e, p);
     read_random_options (e, p);
 
-    maybe<double> max_sats_per_output = double (options {}.MaxSatsPerOutput);
-    maybe<double> mean_sats_per_output = double (options {}.MeanSatsPerOutput);
-    maybe<double> min_sats_per_output = double (options {}.MinSatsPerOutput);
-    maybe<double> fee_rate = double (options {}.FeeRate);
+    maybe<double> max_sats_per_output = double (options::DefaultMaxSatsPerOutput);
+    maybe<double> mean_sats_per_output = double (options::DefaultMeanSatsPerOutput);
+    maybe<double> min_sats_per_output = double (options::DefaultMinSatsPerOutput);
+    maybe<double> fee_rate = double (options::default_fee_rate ());
 
     p.get ("min_sats", min_sats_per_output);
     p.get ("max_sats", max_sats_per_output);
     p.get ("mean_sats", mean_sats_per_output);
     p.get ("fee_rate", fee_rate);
 
-    Cosmos::split split {int64 (*max_sats_per_output), int64 (*min_sats_per_output), *mean_sats_per_output};
+    Cosmos::split split {int64 (*min_sats_per_output), int64 (*max_sats_per_output), *mean_sats_per_output};
 
     splitable x;
 
@@ -765,6 +792,18 @@ void command_split (const arg_parser &p) {
 
     std::cout << "found " << x.size () << " scripts in " << num_outputs <<
         " outputs to split with a total value of " << total_split_value << std::endl;
+
+    // TODO estimate fees here.
+
+    auto top = get_top_splitable (x);
+
+    int count = 0;
+    std::cout << "top 10 splittable scripts: " << std::endl;
+    for (const auto &t : top) {
+        std::cout << "\t" << t.Value << " sats in script " << t.ScriptHash << " in " << std::endl;
+        for (const auto &o : t.Outputs) std::cout << "\t\t" << o << std::endl;
+        if (count++ >= 10) break;
+    }
 
     if (!get_user_yes_or_no ("Do you want to continue?")) throw exception {} << "program aborted";
 
@@ -1145,7 +1184,7 @@ void command_restore (const arg_parser &p) {
 
     maybe<uint32> max_look_ahead;
     p.get (4, "max_look_ahead", max_look_ahead);
-    if (!bool (max_look_ahead)) max_look_ahead = options {}.MaxLookAhead;
+    if (!bool (max_look_ahead)) max_look_ahead = options::DefaultMaxLookAhead;
 
     std::cout << "max look ahead is " << *max_look_ahead << std::endl;
 
@@ -1168,7 +1207,7 @@ void command_restore (const arg_parser &p) {
         ordered_list<ray> history {};
         for (const data::entry<string, address_sequence> ed : derivations.Sequences) {
             std::cout << "checking address sequence " << ed.Key << std::endl;
-            auto restored = restore {*max_look_ahead, true} (*u.txdb (), ed.Value);
+            auto restored = restore {*max_look_ahead, false} (*u.txdb (), ed.Value);
             acc += restored.Account;
             history = history + restored.History;
             derivations = derivations.update (ed.Key, restored.Last);

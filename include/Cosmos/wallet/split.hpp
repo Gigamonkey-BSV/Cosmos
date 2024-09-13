@@ -10,13 +10,13 @@
 namespace Cosmos {
 
     struct split {
-        Bitcoin::satoshi MinSatsPerOutput {123456};
-        Bitcoin::satoshi MaxSatsPerOutput {5000000};
+        Bitcoin::satoshi MinSatsPerOutput {options::DefaultMinSatsPerOutput};
+        Bitcoin::satoshi MaxSatsPerOutput {options::DefaultMaxSatsPerOutput};
         double MeanSatsPerOutput {options::DefaultMeanSatsPerOutput};
 
         split (
-            Bitcoin::satoshi min_sats_per_output = 123456,
-            Bitcoin::satoshi max_sats_per_output = 5000000,
+            Bitcoin::satoshi min_sats_per_output = options::DefaultMinSatsPerOutput,
+            Bitcoin::satoshi max_sats_per_output = options::DefaultMaxSatsPerOutput,
             double mean_sats_per_output = options::DefaultMeanSatsPerOutput);
 
         spend::spent operator ()
