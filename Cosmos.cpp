@@ -797,30 +797,53 @@ void command_split (const arg_parser &p) {
 
     e.update<void> ([&split, &top, fee_rate] (Cosmos::Interface::writable u) {
 
-        auto &price_data = *u.price_data ();
+        int count = 0;
+        std::cout << "top 10 splittable scripts: " << std::endl;
+        {
+            auto view_top = top;
+            while (!view_top.empty ()) {
+                const auto &t = view_top.first ();
+
+                if (count++ >= 10) break;
+                std::cout << "\t" << t.Value << " sats in script " << t.ScriptHash << " in " << std::endl;
+                for (const auto &o : t.Outputs) std::cout << "\t\t" << o.Key << std::endl;
+
+                view_top = view_top.rest ();
+            }
+        }
+
+        // we had a problem earlier where I tried to dereference this pointer
+        // which destroyed the ptr object. This is definitely kinda confusing,
+        // since you can safely dereference other pointers returned by Interface.
+        ptr<Cosmos::price_data> price_data = u.price_data ();
         auto &txdb = *u.txdb ();
 
         Bitcoin::timestamp now = Bitcoin::timestamp::now ();
-        double current_price = *price_data.get (now);
+        double current_price = *(price_data->get (now));
         tax::capital_gain Gain {};
 
-        int count = 0;
-        std::cout << "top 10 splittable scripts: " << std::endl;
-        for (const auto &t : top) {
-            for (const auto &o : t.Outputs) {
-                Bitcoin::satoshi amount = o.Value.Prevout.Value;
-                Bitcoin::timestamp buy_time = txdb[o.Key.Digest].when ();
-                double buy_price = *price_data.get (buy_time);
-                if (buy_price > current_price) Gain.Loss += (buy_price - current_price) * int64 (amount);
-                // we assume no leap days or seconds.
-                else if (uint32 (now) - uint32 (buy_time) < 31536000)
-                    Gain.ShortTerm += (current_price - buy_price) * int64 (amount);
-                else Gain.LongTerm += (current_price - buy_price) * int64 (amount);
-            }
+        std::cout << "generating tax implications; current price " << current_price << std::endl;
+        {
+            auto tax_top = top;
+            while (!tax_top.empty ()) {
+                const auto &t = tax_top.first ();
 
-            if (count++ < 10) {
-                std::cout << "\t" << t.Value << " sats in script " << t.ScriptHash << " in " << std::endl;
-                for (const auto &o : t.Outputs) std::cout << "\t\t" << o.Key << std::endl;
+                for (const auto &o : t.Outputs) {
+                    std::cout << " A" << std::endl;
+                    Bitcoin::satoshi amount = o.Value.Prevout.Value;
+                    std::cout << " B" << std::endl;
+                    Bitcoin::timestamp buy_time = txdb[o.Key.Digest].when ();
+                    std::cout << " C" << std::endl;
+                    double buy_price = *(price_data->get (buy_time));
+                    std::cout << "price at " << buy_time << " was " << buy_price << std::endl;
+                    if (buy_price > current_price) Gain.Loss += (buy_price - current_price) * int64 (amount);
+                    // we assume no leap days or seconds.
+                    else if (uint32 (now) - uint32 (buy_time) < 31536000)
+                        Gain.ShortTerm += (current_price - buy_price) * int64 (amount);
+                    else Gain.LongTerm += (current_price - buy_price) * int64 (amount);
+                }
+
+                tax_top = tax_top.rest ();
             }
         }
 
@@ -831,21 +854,41 @@ void command_split (const arg_parser &p) {
 
         list<spend::spent> split_txs;
         wallet old = *u.get ().wallet ();
-        for (const top_splitable &t : top) {
-            std::cout << " Splitting script with hash " << t.ScriptHash << " containing value " << t.Value << " over " <<
-                t.Outputs.size () << " output" << (t.Outputs.size () == 1 ? "" : "s") << "." << std::endl;
-            spend::spent spent = split (Gigamonkey::redeem_p2pkh_and_p2pk, *u.random (), old, t.Outputs, *fee_rate);
 
-            account new_account = old.Account;
+        {
+            while (!top.empty ()) {
+                const auto &t = top.first ();
 
-            // each split may give us several new transactions to work with.
-            for (const auto &[extx, diff] : spent.Transactions) new_account <<= diff;
+                std::cout << " Splitting script with hash " << t.ScriptHash << " containing value " << t.Value << " over " <<
+                    t.Outputs.size () << " output" << (t.Outputs.size () == 1 ? "" : "s") << "." << std::endl;
+                spend::spent spent = split (Gigamonkey::redeem_p2pkh_and_p2pk, *u.random (), old, t.Outputs, *fee_rate);
 
-            split_txs <<= spent;
-            old = wallet {old.Keys, spent.Pubkeys, new_account};
+                account new_account = old.Account;
+
+                // each split may give us several new transactions to work with.
+                for (const auto &[extx, diff] : spent.Transactions) new_account <<= diff;
+
+                split_txs <<= spent;
+                old = wallet {old.Keys, spent.Pubkeys, new_account};
+
+                top = top.rest ();
+            }
+        }
+
+        int number_of_transactions {0};
+        size_t total_size {0};
+        Bitcoin::satoshi total_fee {0};
+
+        for (const auto &x : split_txs) for (const auto &[tx, _] : x.Transactions) {
+            number_of_transactions++;
+            total_size += tx.serialized_size ();
+            total_fee += tx.fee ();
         }
 
         std::cout << "Transactions have been generated!" << std::endl;
+        std::cout << "  number of transactions: " << number_of_transactions << std::endl;
+        std::cout << "  total size: " << total_size << std::endl;
+        std::cout << "  total fees: " << total_fee << std::endl;
         // Put some data here like fees and so on.
 
         if (!get_user_yes_or_no ("Do you want broadcast these transactions?")) throw exception {} << "program aborted";
@@ -1232,10 +1275,10 @@ void command_restore (const arg_parser &p) {
 
     if (bool (sk)) {
         read_wallet_options (e, p);
-        e.update<void> (restore_from_pubkey);
+        e.update<void> (restore_from_privkey);
     } else {
         read_watch_wallet_options (e, p);
-        e.update<void> (restore_from_privkey);
+        e.update<void> (restore_from_pubkey);
     }
 
     std::cout << "Wallet restred. Total funds: " << e.watch_wallet ()->value () << std::endl;
@@ -1271,7 +1314,7 @@ void command_taxes (const arg_parser &p) {
         if (h == nullptr) throw exception {} << "could not read wallet history";
 
         std::cout << "Tax implications: " << std::endl;
-        std::cout << tax::calculate (*u.txdb (), *u.price_data (), h->get_history (begin, end)) << std::endl;
+        std::cout << tax::calculate (*u.txdb (), u.price_data (), h->get_history (begin, end)) << std::endl;
     });
 }
 

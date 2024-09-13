@@ -54,7 +54,7 @@ namespace Cosmos {
         // the account at the end of the tax period.
         account Account;
 
-        static tax calculate (txdb &, price_data &, const events::history &);
+        static tax calculate (txdb &, ptr<price_data>, const events::history &);
 
         tax () : CapitalGain {}, Income {}, Account {} {}
 

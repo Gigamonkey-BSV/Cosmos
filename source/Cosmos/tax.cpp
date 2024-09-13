@@ -5,7 +5,7 @@ namespace Cosmos {
 
     const double one_year = 365 * 24 * 60 * 60;
 
-    tax tax::calculate (txdb &txs, price_data &pd, const events::history &history) {
+    tax tax::calculate (txdb &txs, ptr<price_data> pd, const events::history &history) {
 
         if (history.Events.size () == 0) return {{}, {}, history.Account};
 
@@ -21,7 +21,7 @@ namespace Cosmos {
             // at this point we know that n != n.end ();
             potential_income potential;
             potential.TXID = e.TXID;
-            potential.Price = *pd.get (e.When);
+            potential.Price = *pd->get (e.When);
 
             Bitcoin::satoshi current_moved {0};
             Bitcoin::satoshi current_income {0};
@@ -37,7 +37,7 @@ namespace Cosmos {
                         // when was the original output created?
                         Bitcoin::timestamp when = txs[op.Digest].when ();
                         // At what price was it bought?
-                        double buy_price = *pd.get (when);
+                        double buy_price = *pd->get (when);
                         // if the buy price is greater than the sell price, it's a capital loss.
                         if (potential.Price < buy_price) {
                             cg.Loss += (buy_price - potential.Price) * double (value);
