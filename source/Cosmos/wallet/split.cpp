@@ -79,6 +79,7 @@ namespace Cosmos {
             "Maximum possible mean value for max " << max << " and min " << min << " is " << max_mean;
 
         Triangular = math::triangular_distribution<double> {a, find_triangle_mode (a, b, mean, min, max), b};
+
     }
 
     split::result_outputs split::operator () (data::crypto::random &r, address_sequence key,
@@ -125,7 +126,8 @@ namespace Cosmos {
         }
     }
 
-    split::result split::operator () (redeem ree, data::crypto::random &rand, account a, keychain k, address_sequence x,
+    split::result split::operator () (redeem ree, data::crypto::random &rand,
+        data::map<pubkey, secret> k, data::map<pubkey, derivation> p, address_sequence x,
         list<entry<Bitcoin::outpoint, redeemable>> selected, double fee_rate) const {
         using namespace Gigamonkey;
 
@@ -154,9 +156,19 @@ namespace Cosmos {
         result_outputs split_outputs = operator () (rand, x, split_value, fee_rate);
 
         extended_transaction completed = redeemable_transaction {1,
-            for_each ([k] (const entry<Bitcoin::outpoint, redeemable> &e) -> redeemer {
+            for_each ([k, p] (const entry<Bitcoin::outpoint, redeemable> &e) -> redeemer {
+                // we check in pubkeys for the parent key.
+                derivation d = first (e.Value.Derivation);
+                if (const auto *v = p.contains (d.Parent); bool (v))
+                // if it is there, we expand the derivation to include the parent's derivation.
+                    d = derivation {v->Parent, v->Path + d.Path};
+                // otherwise we check in private keys for the parent.
+                Bitcoin::secret sec;
+                if (const auto *v = k.contains (d.Parent); bool (v))
+                    sec = Bitcoin::secret (HD::BIP_32::secret {*v}.derive (d.Path));
+                else throw exception {} << "could not find secret key";
                 return redeemer {
-                    list<sigop> {sigop {k.derive (first (e.Value.Derivation))}},
+                    list<sigop> {sigop {sec}},
                     Bitcoin::prevout {e.Key, e.Value.Prevout},
                     e.Value.ExpectedScriptSize};
             }, selected), for_each ([] (const auto &x) -> Bitcoin::output {

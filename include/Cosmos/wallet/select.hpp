@@ -26,6 +26,20 @@ namespace Cosmos {
         // select outputs from a wallet sufficient for the given value.
         selected operator () (const account &, Bitcoin::satoshi, satoshis_per_byte fees, data::crypto::random &) const;
     };
+
+    // select the biggest outputs until we have enough.
+    struct select_biggest {
+
+        // The minimum amount that can go in a change output.
+        Bitcoin::satoshi MinChangeValue;
+
+        // How much of the amount spent should be change?
+        double MinChangeFraction;
+
+        // select outputs from a wallet sufficient for the given value.
+        selected operator () (const account &, Bitcoin::satoshi, satoshis_per_byte fees, data::crypto::random &) const;
+    };
+
 }
 
 #endif
