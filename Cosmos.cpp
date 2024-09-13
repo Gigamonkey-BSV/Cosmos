@@ -655,7 +655,7 @@ namespace Cosmos {
     struct top_splitable {
         digest256 ScriptHash;
         Bitcoin::satoshi Value;
-        list<Bitcoin::outpoint> Outputs;
+        list<entry<Bitcoin::outpoint, redeemable>> Outputs;
 
         bool operator < (const top_splitable &t) const {
             return Value > t.Value;
@@ -672,9 +672,7 @@ namespace Cosmos {
                 top = top.insert (top_splitable {e.Key,
                 fold ([] (const Bitcoin::satoshi val, const entry<Bitcoin::outpoint, redeemable> &e) {
                     return val + e.Value.Prevout.Value;
-            }, Bitcoin::satoshi {0}, e.Value), for_each ([] (const auto &p) {
-                return p.Key;
-            }, e.Value)});
+            }, Bitcoin::satoshi {0}, e.Value), e.Value});
         }
         return top;
     }
@@ -797,63 +795,64 @@ void command_split (const arg_parser &p) {
 
     auto top = get_top_splitable (x);
 
-    int count = 0;
-    std::cout << "top 10 splittable scripts: " << std::endl;
-    for (const auto &t : top) {
-        std::cout << "\t" << t.Value << " sats in script " << t.ScriptHash << " in " << std::endl;
-        for (const auto &o : t.Outputs) std::cout << "\t\t" << o << std::endl;
-        if (count++ >= 10) break;
-    }
+    e.update<void> ([&split, &top, fee_rate] (Cosmos::Interface::writable u) {
 
-    if (!get_user_yes_or_no ("Do you want to continue?")) throw exception {} << "program aborted";
-
-    e.update<void> ([rand = e.random (), &split, &x, fee_rate] (Cosmos::Interface::writable u) {
-
-        // we will generate some txs and then add fake events, as if they had been broadcast,
-        // to the history to determine tax implications before broadcasting them. If the program
-        // halts before this function is complete, the txs will not be broadcast and the new
-        // wallets will not be saved.
-        events h = *u.history ();
+        auto &price_data = *u.price_data ();
+        auto &txdb = *u.txdb ();
 
         Bitcoin::timestamp now = Bitcoin::timestamp::now ();
-        uint32 fake_block_index = 1;
+        double current_price = *price_data.get (now);
+        tax::capital_gain Gain {};
+
+        int count = 0;
+        std::cout << "top 10 splittable scripts: " << std::endl;
+        for (const auto &t : top) {
+            for (const auto &o : t.Outputs) {
+                Bitcoin::satoshi amount = o.Value.Prevout.Value;
+                Bitcoin::timestamp buy_time = txdb[o.Key.Digest].when ();
+                double buy_price = *price_data.get (buy_time);
+                if (buy_price > current_price) Gain.Loss += (buy_price - current_price) * int64 (amount);
+                // we assume no leap days or seconds.
+                else if (uint32 (now) - uint32 (buy_time) < 31536000)
+                    Gain.ShortTerm += (current_price - buy_price) * int64 (amount);
+                else Gain.LongTerm += (current_price - buy_price) * int64 (amount);
+            }
+
+            if (count++ < 10) {
+                std::cout << "\t" << t.Value << " sats in script " << t.ScriptHash << " in " << std::endl;
+                for (const auto &o : t.Outputs) std::cout << "\t\t" << o.Key << std::endl;
+            }
+        }
+
+        std::cout << "tax implications should these splits be created now are \n" << std::endl;
+        std::cout << Gain << std::endl;
+
+        if (!get_user_yes_or_no ("Do you want to continue?")) throw exception {} << "program aborted";
 
         list<spend::spent> split_txs;
         wallet old = *u.get ().wallet ();
-        for (const entry<digest256, list<entry<Bitcoin::outpoint, redeemable>>> &e : x) {
-            spend::spent spent = split (Gigamonkey::redeem_p2pkh_and_p2pk, *rand, old, e.Value, *fee_rate);
+        for (const top_splitable &t : top) {
+            std::cout << " Splitting script with hash " << t.ScriptHash << " containing value " << t.Value << " over " <<
+                t.Outputs.size () << " output" << (t.Outputs.size () == 1 ? "" : "s") << "." << std::endl;
+            spend::spent spent = split (Gigamonkey::redeem_p2pkh_and_p2pk, *u.random (), old, t.Outputs, *fee_rate);
 
             account new_account = old.Account;
 
             // each split may give us several new transactions to work with.
-            for (const auto &[extx, diff] : spent.Transactions) {
-
-                new_account <<= diff;
-
-                stack<ray> new_events;
-                uint32 index = 0;
-
-                for (const Gigamonkey::extended::input &input : extx.Inputs)
-                    new_events <<= ray {now, fake_block_index,
-                        inpoint {diff.TXID, index++}, static_cast<Bitcoin::input> (input), input.Prevout.Value};
-
-                h <<= ordered_list<ray> (reverse (new_events));
-                fake_block_index++;
-            }
+            for (const auto &[extx, diff] : spent.Transactions) new_account <<= diff;
 
             split_txs <<= spent;
             old = wallet {old.Keys, spent.Pubkeys, new_account};
         }
 
-        std::cout << "Tax implications: " << std::endl;
-        std::cout << tax::calculate (*u.txdb (), *u.price_data (), h.get_history (now)).CapitalGain << std::endl;
+        std::cout << "Transactions have been generated!" << std::endl;
+        // Put some data here like fees and so on.
 
         if (!get_user_yes_or_no ("Do you want broadcast these transactions?")) throw exception {} << "program aborted";
 
         std::cout << "broadcasting split transactions" << std::endl;
 
-        // TODO how do these get in my wallet?
-        for (const spend::spent &x : split_txs) u.broadcast (x);
+        for (const spend::spent &sp : split_txs) u.broadcast (sp);
 
     });
 }

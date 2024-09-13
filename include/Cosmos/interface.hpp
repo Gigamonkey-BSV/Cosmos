@@ -67,6 +67,7 @@ namespace Cosmos {
             ptr<Cosmos::price_data> price_data ();
 
             Cosmos::events *history ();
+            crypto::random *random ();
 
             void set_keys (const Cosmos::keychain &);
             void set_pubkeys (const Cosmos::pubkeys &);
@@ -212,6 +213,10 @@ namespace Cosmos {
 
     events inline *Interface::writable::history () {
         return I.get_history ();
+    }
+
+    crypto::random inline *Interface::writable::random () {
+        return I.random ();
     }
 
     ptr<Cosmos::price_data> inline Interface::writable::price_data () {
