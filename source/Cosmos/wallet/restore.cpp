@@ -13,7 +13,7 @@ namespace Cosmos {
         uint32 last_used = 0;
 
         ordered_list<ray> events {};
-        std::map<Bitcoin::outpoint, redeemable> a {};
+        std::map<Bitcoin::TXID, map<Bitcoin::index, redeemable>> a {};
 
         auto expected_p2pkh_size = pay_to_address::redeem_expected_size (true);
 
@@ -57,7 +57,8 @@ namespace Cosmos {
                     events = events.insert (*r);
                     spent += e.value ();
                 } else {
-                    a[e.Point] = redeemable {Bitcoin::output {e.Put}, next.Value};
+                    auto &ins = a[e.Point.Digest];
+                    ins = ins.insert (e.Point.Index, redeemable {Bitcoin::output {e.Put}, next.Value});
                     in_wallet += e.value ();
                 }
 
@@ -71,7 +72,10 @@ namespace Cosmos {
 
         }
 
-        return restored {events, a, last.Last};
+        list<account_diff> diffs;
+        for (const auto &[txid, ins] : a) diffs <<= account_diff {txid, ins, {}};
+
+        return restored {events, diffs, last.Last};
     }
 
 }

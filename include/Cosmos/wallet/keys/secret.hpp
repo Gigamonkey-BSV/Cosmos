@@ -6,32 +6,23 @@
 
 namespace Cosmos {
 
-    struct keychain {
-        map<pubkey, secret> Keys;
-
-        keychain (): Keys {} {}
-
-        explicit keychain (map<pubkey, secret> keys): Keys {keys} {}
+    struct keychain : tool::base_rb_map<pubkey, secret, keychain> {
+        using tool::base_rb_map<pubkey, secret, keychain>::base_rb_map;
 
         explicit keychain (const JSON &);
         operator JSON () const;
 
         Bitcoin::secret derive (const derivation &) const;
 
-        keychain insert (const secret &x) const {
-            return insert (x.to_public (), x);
-        }
+        using tool::base_rb_map<pubkey, secret, keychain>::insert;
 
         // please don't confuse people by putting in a different pubkey from secret key.
-        keychain insert (const pubkey &p, const secret &x) const {
-            return keychain {Keys.insert (p, x, [] (const secret &o, const secret &n) {
-                if (o != n) throw exception {} << "Different key in map under the same name!";
-                return o;
-            })};
+        keychain insert (const secret &x) const {
+            return keychain {tool::base_rb_map<pubkey, secret, keychain>::insert (x.to_public (), x)};
         }
 
         bool valid () const {
-            return data::size (Keys) > 0;
+            return tool::base_rb_map<pubkey, secret, keychain>::valid () && this->size () > 0;
         }
     };
 
@@ -40,7 +31,7 @@ namespace Cosmos {
     }
 
     Bitcoin::secret inline keychain::derive (const derivation &d) const {
-        return Bitcoin::secret (HD::BIP_32::secret {Keys[d.Parent]}.derive (d.Path));
+        return Bitcoin::secret (HD::BIP_32::secret {(*this)[d.Parent]}.derive (d.Path));
     }
 }
 

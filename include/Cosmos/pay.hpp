@@ -64,13 +64,13 @@ namespace Cosmos {
             xpub
         };
 
-        static new_request request_payment (type t, const payments &p, const pubkeys &k, const request &x);
+        static new_request request_payment (type t, const payments &p, const addresses &k, const request &x);
     };
 
     struct payments::new_request {
         payments::payment_request Request;
-        payments Payments;  // new payments
-        pubkeys Pubkeys;    // new pubkeys
+        payments Payments;      // new payments
+        addresses Addresses;    // new addresses
     };
 
     payments::payment_request inline payments::read_payment_request (const JSON &j) {

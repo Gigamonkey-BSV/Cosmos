@@ -19,18 +19,23 @@ namespace Cosmos {
             Bitcoin::satoshi max_sats_per_output = options::DefaultMaxSatsPerOutput,
             double mean_sats_per_output = options::DefaultMeanSatsPerOutput);
 
-        spend::spent operator ()
-            (redeem, data::crypto::random &, wallet, list<entry<Bitcoin::outpoint, redeemable>> selected, double fee_rate) const;
+        spend::spent operator () (
+            redeem, data::crypto::random &,
+            keychain, wallet,
+            list<entry<Bitcoin::outpoint, redeemable>> selected,
+            double fee_rate) const;
 
-        spend::spent_unsigned operator ()
-            (redeem, data::crypto::random &, watch_wallet, list<entry<Bitcoin::outpoint, redeemable>> selected, double fee_rate) const;
+        spend::spent_unsigned operator () (
+            redeem, data::crypto::random &, wallet,
+            list<entry<Bitcoin::outpoint, redeemable>> selected,
+            double fee_rate) const;
 
         struct result {
             list<std::pair<extended_transaction, account_diff>> Transactions;
             uint32 Last;
         };
 
-        result operator () (redeem, data::crypto::random &, data::map<pubkey, secret>, data::map<pubkey, derivation>,
+        result operator () (redeem, data::crypto::random &, keychain, data::map<pubkey, derivation>,
             address_sequence, list<entry<Bitcoin::outpoint, redeemable>> selected, double fee_rate) const;
 
         struct result_outputs {
@@ -72,11 +77,10 @@ namespace Cosmos {
         change operator () (address_sequence, Bitcoin::satoshi, satoshis_per_byte fees, data::crypto::random &) const;
     };
 
-    spend::spent inline split::operator () (redeem ree, data::crypto::random &rand, wallet w,
+    spend::spent inline split::operator () (redeem ree, data::crypto::random &rand, keychain k, wallet w,
         list<entry<Bitcoin::outpoint, redeemable>> selected, double fee_rate) const {
-        result rr = (*this) (ree, rand, w.Keys.Keys, w.Pubkeys.Derivations,
-            w.Pubkeys.Sequences[w.Pubkeys.Change], selected, fee_rate);
-        return spend::spent {rr.Transactions, w.Pubkeys.update (w.Pubkeys.Change, rr.Last)};
+        result rr = (*this) (ree, rand, k, w.Pubkeys, w.Addresses.change (), selected, fee_rate);
+        return spend::spent {rr.Transactions, w.Addresses.update (w.Addresses.Change, rr.Last)};
     }
 
     template <std::uniform_random_bit_generator engine>

@@ -3,7 +3,7 @@
 
 #include <gigamonkey/satoshi.hpp>
 #include <Cosmos/database/price_data.hpp>
-#include <Cosmos/wallet/account.hpp>
+#include <Cosmos/history.hpp>
 
 namespace Cosmos {
 

@@ -52,6 +52,23 @@ namespace Cosmos {
 
     }
 
+    struct wallet {
+        pubkeys Pubkeys;
+        addresses Addresses;
+        account Account;
+
+        Bitcoin::satoshi value () const {
+            return Account.value ();
+        }
+
+        wallet (): Pubkeys {}, Addresses {}, Account {} {}
+        wallet (pubkeys p, addresses ad, account ac) : Pubkeys {p}, Addresses {ad}, Account {ac} {}
+
+        bool valid () const {
+            return data::valid (Account) && data::valid (Addresses) && data::valid (Pubkeys);
+        }
+    };
+
     struct spend {
         select Select;
         make_change Change;
@@ -59,18 +76,18 @@ namespace Cosmos {
 
         struct spent {
             list<std::pair<extended_transaction, account_diff>> Transactions;
-            pubkeys Pubkeys;
+            addresses Addresses;
 
             bool valid () const {
                 return data::size (Transactions) != 0;
             }
 
-            spent () : Transactions {}, Pubkeys {} {}
-            spent (list<std::pair<extended_transaction, account_diff>> txs, pubkeys p) : Transactions {txs}, Pubkeys {p} {}
+            spent () : Transactions {}, Addresses {} {}
+            spent (list<std::pair<extended_transaction, account_diff>> txs, addresses a) : Transactions {txs}, Addresses {a} {}
         };
 
         spent operator () (redeem,
-            const keychain &, const pubkeys &, const account &,
+            keychain, addresses, account,
             list<Bitcoin::output> to,
             satoshis_per_byte fees = {1, 100},
             uint32 lock = 0) const;
@@ -97,47 +114,15 @@ namespace Cosmos {
             uint32 lock = 0) const;
     };
 
-    struct watch_wallet {
-        pubkeys Pubkeys;
-        account Account;
-
-        Bitcoin::satoshi value () const {
-            return Account.value ();
-        }
-
-        watch_wallet &operator = (const watch_wallet &w) {
-            Account = w.Account;
-            Pubkeys = w.Pubkeys;
-            return *this;
-        }
-
-        watch_wallet (): Pubkeys {}, Account {} {}
-        watch_wallet (pubkeys p, account a) : Pubkeys {p}, Account {a} {}
-
-        bool valid () const {
-            return data::valid (Account) && data::valid (Pubkeys);
-        }
-    };
-
-    struct wallet : watch_wallet {
-        keychain Keys;
-
-        wallet (): watch_wallet {}, Keys {} {}
-        wallet (const keychain &k, const pubkeys &p, const account &acc) :
-            watch_wallet {p, acc}, Keys {k} {}
-
-        wallet &operator = (const wallet &w) {
-            watch_wallet::operator = (static_cast<const watch_wallet &> (w));
-            Keys = w.Keys;
-            return *this;
-        }
-
-        void import_output (const Bitcoin::prevout &p, const Bitcoin::secret &x, uint64 expected_size, const bytes &script_code = {});
-
-        bool valid () const {
-            return data::valid (static_cast<watch_wallet> (*this)) && data::valid (Keys);
-        }
-    };
+    tuple<keychain, account> inline import_output (
+        keychain k, account a,
+        const Bitcoin::prevout &p,
+        const Bitcoin::secret &x,
+        uint64 expected_size,
+        const bytes &script_code = {}) {
+        return {k.insert (secret {x}),
+            a.insert (p.Key, redeemable {p.Value, list<derivation> {derivation {x.to_public (), {}}}, expected_size})};
+    }
 
 }
 

@@ -6,8 +6,26 @@
 
 namespace Cosmos {
 
-    struct pubkeys {
-        data::map<pubkey, derivation> Derivations;
+    // master pubkeys and their derivations from secret keys.
+    struct pubkeys : tool::base_rb_map<pubkey, derivation, pubkeys> {
+        using tool::base_rb_map<pubkey, derivation, pubkeys>::base_rb_map;
+        explicit pubkeys (const JSON &);
+        operator JSON () const;
+
+        derivation operator [] (const derivation &d) const {
+            if (const auto *v = this->contains (d.Parent); bool (v))
+                return derivation {v->Parent, v->Path + d.Path};
+            return derivation {};
+        }
+
+        derivation operator [] (const derived_pubkey &d) const {
+            if (const auto *v = this->contains (pubkey (d.Parent)); bool (v))
+                return derivation {v->Parent, v->Path + d.Path};
+            return derivation {};
+        }
+    };
+
+    struct addresses {
         data::map<string, address_sequence> Sequences;
 
         // name of the receive sequence of addresses.
@@ -15,50 +33,49 @@ namespace Cosmos {
         // name of the sequences of addresses for change outputs.
         string Change;
 
-        pubkeys (): Derivations {}, Sequences {}, Receive {}, Change {} {}
-
-        explicit pubkeys (data::map<pubkey, derivation> db, data::map<string, address_sequence> x,
-            const string &receive = "receive", const string &change = "change"):
-            Derivations {db}, Sequences {x}, Receive {receive}, Change {change} {}
-
-        explicit pubkeys (const JSON &);
-        operator JSON () const;
-
-        pubkeys next (const string &name) const;
-        derived_pubkey last (const string &name) const;
-
-        pubkeys insert (const pubkey &name, const derivation &x) {
-            return pubkeys {Derivations.insert (name, x), Sequences, Receive, Change};
+        address_sequence receive () const {
+            return Sequences[Receive];
         }
 
+        address_sequence change () const {
+            return Sequences[Change];
+        }
+
+        addresses (): Sequences {}, Receive {}, Change {} {}
+
+        explicit addresses (data::map<string, address_sequence> x,
+            const string &receive = "receive", const string &change = "change"):
+            Sequences {x}, Receive {receive}, Change {change} {}
+
+        explicit addresses (const JSON &);
+        operator JSON () const;
+
+        addresses next (const string &name) const;
+        derived_pubkey last (const string &name) const;
+
         // indicate that addresses in this sequence have been used up to last.
-        pubkeys update (const string &name, uint32 last) const {
-            return pubkeys {Derivations, Sequences.insert (name, address_sequence {},
+        addresses update (const string &name, uint32 last) const {
+            return addresses {Sequences.insert (name, address_sequence {},
                 [last] (const address_sequence &o, const address_sequence &n) -> address_sequence {
                     return address_sequence (o.Parent, o.Path, last);
                 }), Receive, Change};
         }
-
-        Bitcoin::pubkey derive (const derivation &) const;
-        Bitcoin::pubkey derive (HD::BIP_32::path) const;
     };
 
     pubkeys inline read_pubkeys_from_file (const std::string &filename) {
         return pubkeys (read_from_file (filename));
     }
 
-    pubkeys inline pubkeys::next (const string &name) const {
-        return pubkeys {Derivations, data::replace_part (Sequences, name, Sequences[name].next ()), Receive, Change};
+    addresses inline read_addresses_from_file (const std::string &filename) {
+        return addresses (read_from_file (filename));
     }
 
-    derived_pubkey inline pubkeys::last (const string &name) const {
-        auto seq = Sequences[name];
-        auto der = Derivations[seq.Parent];
-        return address_sequence {HD::BIP_32::pubkey {der.Parent}, seq.Path, seq.Last}.last ();
+    addresses inline addresses::next (const string &name) const {
+        return addresses {data::replace_part (Sequences, name, Sequences[name].next ()), Receive, Change};
     }
 
-    Bitcoin::pubkey inline pubkeys::derive (const derivation &d) const {
-        return HD::BIP_32::pubkey {Derivations[d.Parent].Parent}.derive (d.Path).Pubkey;
+    derived_pubkey inline addresses::last (const string &name) const {
+        return Sequences[name].last ();
     }
 }
 

@@ -2,13 +2,8 @@
 
 namespace Cosmos {
 
-    void wallet::import_output (const Bitcoin::prevout &p, const Bitcoin::secret &x, uint64 expected_size, const bytes &script_code) {
-        Account.Account[p.Key] = redeemable {p.Value, list<derivation> {derivation {x.to_public (), {}}}, expected_size};
-        Keys = Keys.insert (secret {x});
-    }
-
     spend::spent spend::operator () (redeem r,
-        const keychain &k, const pubkeys &p, const account &a,
+        keychain k, addresses addrs, account acc,
         list<Bitcoin::output> to,
         satoshis_per_byte fees,
         uint32 lock) const {
@@ -20,7 +15,7 @@ namespace Cosmos {
                 return val + o.Value;
             }, Bitcoin::satoshi {0}, to);
 
-        Bitcoin::satoshi value_available;
+        Bitcoin::satoshi value_available = acc.value ();
 
         // do we have enough funds to spend everything we want to spend?
         if (value_available < value_to_spend) throw exception {3} << "insufficient funds: " << value_available << " < " << value_to_spend;
@@ -30,7 +25,7 @@ namespace Cosmos {
 
         // select funds to be spent and organize them into redeemers and keep
         // track of outputs that will be removed from the wallet.
-        for (const entry<Bitcoin::outpoint, redeemable> &e : Select (a, value_to_spend, fees, Random)) {
+        for (const entry<Bitcoin::outpoint, redeemable> &e : Select (acc, value_to_spend, fees, Random)) {
             inputs <<= redeemer {
                 for_each ([&k] (const derivation &x) -> sigop {
                     return sigop {k.derive (x)};
@@ -53,7 +48,7 @@ namespace Cosmos {
             {floor (double (int64 (fee_rate_before_change.Satoshis)) - double (fees) * fee_rate_before_change.Bytes)};
 
         // make change outputs.
-        change ch = Change (p.Sequences[p.Change], change_amount, fees, Random);
+        change ch = Change (addrs.Sequences[addrs.Change], change_amount, fees, Random);
 
         auto change_outputs = ch.outputs ();
 
@@ -79,7 +74,7 @@ namespace Cosmos {
         }
 
         // return new wallet.
-        return spent {{{complete, diff}}, p.update (p.Change, ch.Last)};
+        return spent {{{complete, diff}}, addrs.update (addrs.Change, ch.Last)};
     }
 }
 

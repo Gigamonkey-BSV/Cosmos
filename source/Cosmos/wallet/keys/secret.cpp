@@ -22,7 +22,7 @@ namespace Cosmos {
 
     keychain::operator JSON () const {
         JSON::object_t db {};
-        for (const data::entry<pubkey, secret> &e : Keys)
+        for (const data::entry<pubkey, secret> &e : *this)
             db [e.Key] = e.Value;
         return db;
     }

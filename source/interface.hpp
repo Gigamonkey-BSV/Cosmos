@@ -1,5 +1,5 @@
-#ifndef COSMOS_CONTEXT
-#define COSMOS_CONTEXT
+#ifndef INTERFACE
+#define INTERFACE
 
 #include <data/tools/store.hpp>
 #include <data/crypto/random.hpp>
@@ -8,7 +8,7 @@
 #include <Cosmos/wallet/wallet.hpp>
 #include <Cosmos/database/json/price_data.hpp>
 #include <Cosmos/database/json/txdb.hpp>
-#include <Cosmos/pay.hpp>
+#include <Cosmos/history.hpp>
 
 using arg_parser = data::io::arg_parser;
 
@@ -20,11 +20,12 @@ namespace Cosmos {
 
         maybe<std::string> &wallet_name ();
 
-        maybe<std::string> &pubkeys_filepath ();
-        maybe<std::string> &keychain_filepath ();
         maybe<std::string> &txdb_filepath ();
-        maybe<std::string> &account_filepath ();
         maybe<std::string> &price_data_filepath ();
+        maybe<std::string> &keychain_filepath ();
+        maybe<std::string> &pubkeys_filepath ();
+        maybe<std::string> &addresses_filepath ();
+        maybe<std::string> &account_filepath ();
         maybe<std::string> &history_filepath ();
         maybe<std::string> &payments_filepath ();
 
@@ -37,13 +38,13 @@ namespace Cosmos {
         const ptr<Cosmos::price_data> price_data () const;
 
         const Cosmos::events *history () const;
+        const Cosmos::addresses *addresses () const;
         const Cosmos::payments *payments () const;
 
         const Cosmos::keychain *keys () const;
         const Cosmos::pubkeys *pubkeys () const;
         const Cosmos::account *account () const;
 
-        const maybe<Cosmos::watch_wallet> watch_wallet () const;
         const maybe<Cosmos::wallet> wallet () const;
 
         Interface () {}
@@ -72,8 +73,8 @@ namespace Cosmos {
             void set_keys (const Cosmos::keychain &);
             void set_pubkeys (const Cosmos::pubkeys &);
             void set_account (const Cosmos::account &);
+            void set_addresses (const Cosmos::addresses &);
 
-            void set_watch_wallet (const Cosmos::watch_wallet &);
             void set_wallet (const Cosmos::wallet &);
             void set_payments (const Cosmos::payments &);
 
@@ -81,11 +82,10 @@ namespace Cosmos {
 
             // make a transaction with a bunch of default options already set
             spend::spent make_tx (list<Bitcoin::output> o) {
-                auto w = I.wallet ();
                 return spend {
                     select_output_parameters {4, 5000, .23},
                     make_change_parameters {10, 100, 1000000, .4},
-                    *I.random ()} (Gigamonkey::redeem_p2pkh_and_p2pk, w->Keys, w->Pubkeys, w->Account, o);
+                    *I.random ()} (Gigamonkey::redeem_p2pkh_and_p2pk, *I.keys (), *I.addresses (), *I.account (), o);
             }
 
             const Cosmos::Interface &get () {
@@ -108,6 +108,7 @@ namespace Cosmos {
         maybe<std::string> PubkeychainFilepath {};
         maybe<std::string> TXDBFilepath {};
         maybe<std::string> AccountFilepath {};
+        maybe<std::string> AddressesFilepath {};
         maybe<std::string> PriceDataFilepath {};
         maybe<std::string> HistoryFilepath {};
         maybe<std::string> PaymentsFilepath {};
@@ -119,6 +120,7 @@ namespace Cosmos {
         ptr<Cosmos::local_price_data> LocalPriceData {nullptr};
         ptr<Cosmos::events> Events {nullptr};
         ptr<Cosmos::account> Account {nullptr};
+        ptr<Cosmos::addresses> Addresses {nullptr};
         ptr<Cosmos::payments> Payments {nullptr};
 
         ptr<crypto::user_entropy> Entropy;
@@ -135,26 +137,15 @@ namespace Cosmos {
         Cosmos::account *get_account ();
         ptr<Cosmos::price_data> get_price_data ();
         events *get_history ();
+        Cosmos::addresses *get_addresses ();
         Cosmos::payments *get_payments ();
 
-        maybe<Cosmos::watch_wallet> get_watch_wallet ();
         maybe<Cosmos::wallet> get_wallet ();
 
         friend struct writable;
     };
 
-    struct generate_wallet {
-        bool UseBIP_39 {true};
-        uint32 Accounts {10};
-        uint32 CoinType {0};
-        generate_wallet () {}
-        generate_wallet (bool b39, uint32 accounts = 10, uint32 coin_type = 0) :
-            UseBIP_39 {b39}, Accounts {accounts}, CoinType {coin_type} {}
-
-        void operator () (Interface::writable u);
-    };
-
-    void display_value (const watch_wallet &w);
+    void display_value (const wallet &w);
 
     pubkeys generate_new_xpub (const pubkeys &p);
 
@@ -170,15 +161,6 @@ namespace Cosmos {
     void read_wallet_options (Interface &e, const arg_parser &p);
     void read_watch_wallet_options (Interface &e, const arg_parser &p);
 
-    struct error {
-        int Code;
-        maybe<std::string> Message;
-        error () : Code {0}, Message {} {}
-        error (int code) : Code {code}, Message {} {}
-        error (int code, const string &err): Code {code}, Message {err} {}
-        error (const string &err): Code {1}, Message {err} {}
-    };
-
     template <typename X> X Interface::update (function<X (writable w)> f) {
         store<X> x {f, writable {*this}};
         Written = true;
@@ -189,7 +171,7 @@ namespace Cosmos {
         return Name;
     }
 
-    void inline display_value (const watch_wallet &w) {
+    void inline display_value (const wallet &w) {
         std::cout << w.value () << std::endl;
     }
 
@@ -243,12 +225,12 @@ namespace Cosmos {
         return const_cast<Interface *> (this)->get_account ();
     }
 
-    const ptr<Cosmos::price_data> inline Interface::price_data () const {
-        return const_cast<Interface *> (this)->get_price_data ();
+    const Cosmos::addresses inline *Interface::addresses () const {
+        return const_cast<Interface *> (this)->get_addresses ();
     }
 
-    const maybe<Cosmos::watch_wallet> inline Interface::watch_wallet () const {
-        return const_cast<Interface *> (this)->get_watch_wallet ();
+    const ptr<Cosmos::price_data> inline Interface::price_data () const {
+        return const_cast<Interface *> (this)->get_price_data ();
     }
 
     const maybe<Cosmos::wallet> inline Interface::wallet () const {
@@ -278,14 +260,15 @@ namespace Cosmos {
         else I.Account = std::make_shared<Cosmos::account> (a);
     }
 
-    void inline Interface::writable::set_watch_wallet (const Cosmos::watch_wallet &ww) {
-        set_account (ww.Account);
-        set_pubkeys (ww.Pubkeys);
+    void inline Interface::writable::set_addresses (const Cosmos::addresses &a) {
+        if (I.Addresses) *I.Addresses = a;
+        else I.Addresses = std::make_shared<Cosmos::addresses> (a);
     }
 
-    void inline Interface::writable::set_wallet (const Cosmos::wallet &w) {
-        set_watch_wallet (w);
-        set_keys (w.Keys);
+    void inline Interface::writable::set_wallet (const Cosmos::wallet &ww) {
+        set_account (ww.Account);
+        set_pubkeys (ww.Pubkeys);
+        set_addresses (ww.Addresses);
     }
 
     void inline Interface::writable::set_payments (const Cosmos::payments &pk) {

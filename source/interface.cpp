@@ -4,8 +4,8 @@
 #include <gigamonkey/schema/bip_44.hpp>
 #include <gigamonkey/schema/bip_39.hpp>
 #include <Cosmos/network.hpp>
-#include <Cosmos/interface.hpp>
 #include <Cosmos/wallet/split.hpp>
+#include "interface.hpp"
 
 namespace Cosmos {
 
@@ -16,81 +16,15 @@ namespace Cosmos {
         for (const Bitcoin::TXID &txid : pending) txdb->import_transaction (txid);
     }
 
-    void generate_wallet::operator () (Interface::writable u) {
-        const auto w = u.get ().wallet ();
-        if (!bool (w)) throw exception {} << "could not read wallet.";
-
-        if (UseBIP_39) std::cout << "We will generate a new BIP 39 wallet for you." << std::endl;
-        else std::cout << "We will generate a new BIP 44 wallet for you." << std::endl;
-        std::cout << "We will pre-generate " << Accounts << " accounts in this wallet." << std::endl;
-        std::cout << "Coin type is " << CoinType << std::endl;
-        std::cout << "Type random characters to use as entropy for generating this wallet. "
-            "Press enter when you think you have enough."
-            "Around 200 characters ought to be enough as long as they are random enough." << std::endl;
-
-        std::string user_input {};
-
-        while (true) {
-            char x = std::cin.get ();
-            if (x == '\n') break;
-            user_input.push_back (x);
-        }
-
-        HD::BIP_32::secret master {};
-
-        if (UseBIP_39) {
-            digest256 bits = crypto::SHA2_256 (user_input);
-
-            std::string words = HD::BIP_39::generate (bits);
-
-            std::cout << "your words are\n\n\t" << words << "\n\nRemember, these words can be used to generate "
-                "all your keys, but at scale that is not enough to restore your funds. You need to keep the transactions"
-                " into your wallet along with Merkle proofs as well." << std::endl;
-
-            // TODO use passphrase option.
-            master = HD::BIP_32::secret::from_seed (HD::BIP_39::read (words));
-        } else {
-            digest512 bits = crypto::SHA2_512 (user_input);
-            master.ChainCode.resize (32);
-            std::copy (bits.begin (), bits.begin () + 32, master.Secret.Value.begin ());
-            std::copy (bits.begin () + 32, bits.end (), master.ChainCode.begin ());
-        }
-
-        HD::BIP_32::pubkey master_pubkey = master.to_public ();
-        keychain keys = keychain {}.insert (master_pubkey, master);
-
-        pubkeys pub {{}, {}, "receive_0", "change_0"};
-
-        for (int account = 0; account < Accounts; account++) {
-            list<uint32> path {
-                HD::BIP_44::purpose,
-                HD::BIP_32::harden (CoinType),
-                HD::BIP_32::harden (account)};
-
-            HD::BIP_32::pubkey account_master_pubkey = master.derive (path).to_public ();
-
-            std::cout << "\tmaster pubkey for account " << account << " is " << account_master_pubkey << std::endl;
-
-            pub.Derivations = pub.Derivations.insert (account_master_pubkey, derivation {master_pubkey, path});
-
-            std::string receive_name = std::string {"receive_"} + std::to_string (account);
-            std::string change_name = std::string {"change_"} + std::to_string (account);
-
-            pub.Sequences = pub.Sequences.insert (receive_name, address_sequence {account_master_pubkey, {HD::BIP_44::receive_index}});
-            pub.Sequences = pub.Sequences.insert (change_name, address_sequence {account_master_pubkey, {HD::BIP_44::change_index}});
-        }
-
-        u.set_keys (keys);
-        u.set_pubkeys (pub);
-    }
-
+    // TODO should not be spent, should simply be list<std::pair<extended_transaction, account_diff>> Transactions;
     broadcast_error Interface::writable::broadcast (const spend::spent &x) {
 
-        auto ww = I.watch_wallet ();
-        if (!bool (ww)) throw exception {1} << "could not load wallet";
-        Cosmos::watch_wallet next_wallet = *ww;
+        auto w = I.wallet ();
+        if (!bool (w)) throw exception {1} << "could not load wallet";
+        Cosmos::wallet next_wallet = *w;
         // if a broadcast fails, the keys will still be updated. Hopefully not more than max_look_ahead!
-        next_wallet.Pubkeys = x.Pubkeys;
+        // TODO: this should not be necessary, addresses should have been updated earlier when the payment request was generated.
+        next_wallet.Addresses = x.Addresses;
 
         broadcast_error err;
         for (const auto &[extx, diff] : x.Transactions) {
@@ -106,7 +40,7 @@ namespace Cosmos {
         }
 
         // save new wallet.
-        set_watch_wallet (next_wallet);
+        set_wallet (next_wallet);
         return err;
 
     }
@@ -195,6 +129,16 @@ namespace Cosmos {
         return AccountFilepath;
     }
 
+    maybe<std::string> &Interface::addresses_filepath () {
+        if (!bool (AddressesFilepath) && bool (Name)) {
+            std::stringstream ss;
+            ss << *Name << ".addresses.json";
+            AddressesFilepath = ss.str ();
+        }
+
+        return AddressesFilepath;
+    }
+
     maybe<std::string> &Interface::price_data_filepath () {
         if (!bool (PriceDataFilepath) && bool (Name)) {
             std::stringstream ss;
@@ -265,6 +209,18 @@ namespace Cosmos {
         return Account.get ();
     }
 
+    addresses *Interface::get_addresses () {
+
+        if (!bool (Addresses)) {
+            auto df = addresses_filepath ();
+            if (bool (df)) {
+                Addresses = std::make_shared<Cosmos::addresses> (read_addresses_from_file (*df));
+            }
+        }
+
+        return Addresses.get ();
+    }
+
     pubkeys *Interface::get_pubkeys () {
 
         if (!bool (Pubkeys)) {
@@ -298,24 +254,15 @@ namespace Cosmos {
         return std::static_pointer_cast<Cosmos::price_data> (std::make_shared<Cosmos::cached_remote_price_data> (*n, *LocalPriceData));
     }
 
-    maybe<watch_wallet> Interface::get_watch_wallet () {
+    maybe<wallet> Interface::get_wallet () {
 
         auto acc = account ();
         auto pkc = pubkeys ();
+        auto add = addresses ();
 
-        if (!bool (acc) || !bool (pkc)) return {};
+        if (!bool (acc) || !bool (pkc) || !bool (add)) return {};
 
-        return {Cosmos::watch_wallet {*pkc, *acc}};
-    }
-
-    maybe<wallet> Interface::get_wallet () {
-
-        auto watch = watch_wallet ();
-        auto k = keys ();
-
-        if (!bool (watch) || !bool (k)) return {};
-
-        return {Cosmos::wallet {*k, watch->Pubkeys, watch->Account}};
+        return {Cosmos::wallet {*pkc, *add, *acc}};
     }
 
     events *Interface::get_history () {
@@ -357,6 +304,7 @@ namespace Cosmos {
 
         auto tf = txdb_filepath ();
         auto af = account_filepath ();
+        auto df = addresses_filepath ();
         auto hf = history_filepath ();
         auto pf = pubkeys_filepath ();
         auto kf = keychain_filepath ();
@@ -367,6 +315,8 @@ namespace Cosmos {
             write_to_file (JSON (dynamic_cast<JSON_local_txdb &> (*LocalTXDB)), *tf);
 
         if (bool (af) && bool (Account)) write_to_file (JSON (*Account), *af);
+
+        if (bool (df) && bool (Addresses)) write_to_file (JSON (*Addresses), *df);
 
         if (bool (hf) && bool (Events)) write_to_file (JSON (*Events), *hf);
 

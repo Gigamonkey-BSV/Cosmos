@@ -20,10 +20,10 @@ add_library (cosmos_lib STATIC
     source/Cosmos/wallet/change.cpp
     source/Cosmos/wallet/wallet.cpp
     source/Cosmos/wallet/split.cpp
+    source/Cosmos/history.cpp
     source/Cosmos/tax.cpp
     source/Cosmos/boost/miner_options.cpp
     source/Cosmos/pay.cpp
-    source/Cosmos/interface.cpp
 )
 
 find_package (Gigamonkey CONFIG REQUIRED)
@@ -35,7 +35,9 @@ target_link_libraries (cosmos_lib PUBLIC gigamonkey::gigamonkey data::data)
 target_compile_features (cosmos_lib PUBLIC cxx_std_20)
 set_target_properties (cosmos_lib PROPERTIES CXX_EXTENSIONS OFF)
 
-add_executable (CosmosWallet Cosmos.cpp)
+add_executable (CosmosWallet
+    source/interface.cpp
+    source/Cosmos.cpp)
 
 target_link_libraries (CosmosWallet PUBLIC
     cosmos_lib

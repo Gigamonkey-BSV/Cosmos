@@ -29,7 +29,7 @@ namespace Cosmos {
         return o;
     }
 
-    payments::new_request payments::request_payment (payments::type t, const payments &p, const pubkeys &k, const payments::request &x) {
+    payments::new_request payments::request_payment (payments::type t, const payments &p, const addresses &k, const payments::request &x) {
         derived_pubkey d = k.last (k.Receive);
         switch (t) {
 

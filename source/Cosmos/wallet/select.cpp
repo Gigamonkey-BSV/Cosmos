@@ -7,6 +7,13 @@ namespace Cosmos {
     selected select_output_parameters::operator ()
         (const account &acc, Bitcoin::satoshi value_to_spend, satoshis_per_byte fees, data::crypto::random &r) const {
 
+        // we go through a process of selecting inputs to spend out of those in the wallet.
+        // We do this by selecting all inputs and then removing outputs one by one until we can
+        // no longer remove any and still satisfy MinChangeFraction and MinChangeValue.
+
+        // We do it this way because it's easier to find outputs that we don't want to spend
+        // than outputs that we do want to spend.
+
         // select all funds, determine total value of account.
         Bitcoin::satoshi spendable_value = acc.value ();
 
@@ -15,13 +22,9 @@ namespace Cosmos {
 
         // generate expected size of the inputs to the tx.
         uint64 inputs_expected_size;
-        for (const auto &[key, value] : acc.Account) inputs_expected_size += value.expected_input_size ();
+        for (const auto &[key, value] : acc) inputs_expected_size += value.expected_input_size ();
 
-        // next we go through a process of selecting inputs to spend out of those in the wallet.
-        // We do this by selecting all inputs and then removing outputs one by one until we can
-        // no longer remove any and still satisfy MinChangeFraction and MinChangeValue.
-
-        auto result = acc.Account;
+        auto result = acc;
         auto spent_value = spendable_value;
 
         // in these cases, we cannot satisfy MinChangeFraction or MinChangeValue with the funds
@@ -77,13 +80,12 @@ namespace Cosmos {
             uint32 selected_removable_index = crypto::select_index_by_weight (weights, r);
             auto remove_key = rmv[selected_removable_index].Point;
 
-            auto removed = result.find (remove_key);
-            if (removed == result.end ()) throw exception {} << "some weird error happened here, not sure how to explain it.";
+            auto removed = result[remove_key];
 
-            inputs_expected_size -= removed->second.expected_input_size ();
-            spent_value -= removed->second.Prevout.Value;
+            inputs_expected_size -= removed.expected_input_size ();
+            spent_value -= removed.Prevout.Value;
 
-            result.erase (removed);
+            result = result.remove (remove_key);
 
         }
 

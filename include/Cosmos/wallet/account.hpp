@@ -14,81 +14,41 @@ namespace Cosmos {
         set<Bitcoin::outpoint> Remove {};
 
         account_diff () {}
+        account_diff (const Bitcoin::TXID &txid, map<Bitcoin::index, redeemable> ins, set<Bitcoin::outpoint> ree) :
+            TXID {txid}, Insert {ins}, Remove {ree} {}
     };
 
-    struct account {
-        std::map<Bitcoin::outpoint, redeemable> Account;
+    struct account : tool::base_rb_map<Bitcoin::outpoint, redeemable, account> {
+        using tool::base_rb_map<Bitcoin::outpoint, redeemable, account>::base_rb_map;
 
         // apply a diff to an account. Throw exception if the diff contains
         // outpoints to be removed that are not in the account.
-        static std::map<Bitcoin::outpoint, redeemable> apply (const account_diff &);
+        static account apply (const account_diff &);
 
-        account () : Account {} {}
-        account (std::map<Bitcoin::outpoint, redeemable> a) : Account {a} {}
         explicit account (const JSON &);
         explicit operator JSON () const;
         Bitcoin::satoshi value () const {
             Bitcoin::satoshi v {0};
-            for (const auto &[key, value] : Account) v += value.Prevout.Value;
+            for (const auto &[key, value] : *this) v += value.Prevout.Value;
             return v;
         }
 
-        account &operator += (const account b) {
-            for (const auto &[key, value] : b.Account) Account[key] = value;
-            return *this;
+        account operator + (const account b) const {
+            account a = *this;
+            for (const auto &[key, value] : b) a = a.insert (key, value);
+            return a;
         }
 
-        account &operator <<= (const account_diff &d);
+        account operator << (const account_diff &d) const;
 
-    };
+        account &operator += (const account b) {
+            return *this = *this + b;
+        }
 
-    // This is how we build an account out of individual events.
-    struct events {
+        account &operator <<= (const account_diff &d) {
+            return *this = *this << d;
+        }
 
-        // an event corresponds to a single transaction and everything
-        // that happens in it which is relevant to our wallet.
-        struct event {
-            Bitcoin::TXID TXID {};
-            Bitcoin::timestamp When {};
-
-            Bitcoin::satoshi Received {};
-            Bitcoin::satoshi Spent {};
-            Bitcoin::satoshi Moved {};
-
-            ordered_list<ray> Events {};
-
-            bool operator <=> (const event &) const;
-            event () {}
-        };
-
-        // timestamp of the latest event incorporated into this account.
-        Bitcoin::timestamp Latest;
-        std::map<Bitcoin::outpoint, Bitcoin::output> Account;
-        list<event> Events;
-
-        Bitcoin::satoshi Value;
-        Bitcoin::satoshi Spent;
-        Bitcoin::satoshi Received;
-
-        events () : Latest {0}, Account {}, Events {}, Value {0}, Spent {0}, Received {0} {}
-        events (Bitcoin::timestamp l, std::map<Bitcoin::outpoint, Bitcoin::output> a, list<event> e, Bitcoin::satoshi v):
-            Latest {l}, Account {a}, Events {e}, Value {v} {}
-
-        // all events must be later than Latest.
-        events &operator <<= (ordered_list<ray> e);
-
-        explicit operator JSON () const;
-        explicit events (const JSON &j);
-
-        struct history {
-            std::map<Bitcoin::outpoint, Bitcoin::output> Account;
-            ordered_list<event> Events;
-        };
-
-        // get all events within a given range.
-        history get_history (
-            math::signed_limit<Bitcoin::timestamp> from = math::signed_limit<Bitcoin::timestamp>::negative_infinity (),
-            math::signed_limit<Bitcoin::timestamp> to = math::signed_limit<Bitcoin::timestamp>::infinity ()) const;
     };
 
     account inline read_account_from_file (const std::string &filename) {

@@ -13,19 +13,14 @@ namespace Cosmos {
         // result of a restored wallet
         struct restored {
             ordered_list<ray> History;
-            account Account;
+            list<account_diff> Account;
 
             // last key used (+1)
             uint32 Last;
-
-            Bitcoin::satoshi value () const {
-                return account {Account}.value ();
-            }
         };
 
         restored operator () (txdb &TXDB, address_sequence pubkey);
 
-        watch_wallet operator () (txdb &TXDB, pubkeys);
     };
 
 

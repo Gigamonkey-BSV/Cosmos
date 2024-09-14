@@ -127,7 +127,7 @@ namespace Cosmos {
     }
 
     split::result split::operator () (redeem ree, data::crypto::random &rand,
-        data::map<pubkey, secret> k, data::map<pubkey, derivation> p, address_sequence x,
+        keychain k, data::map<pubkey, derivation> p, address_sequence x,
         list<entry<Bitcoin::outpoint, redeemable>> selected, double fee_rate) const {
         using namespace Gigamonkey;
 
