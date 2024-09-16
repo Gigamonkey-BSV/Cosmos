@@ -1,3 +1,6 @@
+#include <gigamonkey/schema/bip_44.hpp>
+#include <gigamonkey/schema/bip_39.hpp>
+
 #include "interface.hpp"
 #include "Cosmos.hpp"
 
@@ -107,6 +110,5 @@ void command_generate (const arg_parser &p) {
     e.update<void> (gen);
 
     std::cout << "private keys will be saved in " << *e.keychain_filepath () << "." << std::endl;
-    std::cout << "private keys will be saved in " << *e.pubkeys_filepath () << "." << std::endl;
+    std::cout << "public keys will be saved in " << *e.pubkeys_filepath () << "." << std::endl;
 }
-

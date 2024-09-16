@@ -37,6 +37,12 @@ set_target_properties (cosmos_lib PROPERTIES CXX_EXTENSIONS OFF)
 
 add_executable (CosmosWallet
     source/interface.cpp
+    source/generate.cpp
+    source/restore.cpp
+    source/request.cpp
+    source/accept.cpp
+    source/split.cpp
+    source/import.cpp
     source/Cosmos.cpp)
 
 target_link_libraries (CosmosWallet PUBLIC

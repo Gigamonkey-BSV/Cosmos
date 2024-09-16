@@ -1,9 +1,12 @@
 #ifndef COSMOS
 #define COSMOS
 
+#include <data/io/arg_parser.hpp>
 #include <Cosmos/types.hpp>
 
 using namespace data;
+
+using arg_parser = io::arg_parser;
 
 struct error {
     int Code;
@@ -57,8 +60,6 @@ void command_taxes (const arg_parser &);    // offline
 
 method read_method (const io::arg_parser &, uint32 index = 1);
 
-std::string inline sanitize (const std::string &in) {
-    return regex_replace (data::to_lower (in), std::regex {"_|-"}, "");
-}
+std::string sanitize (const std::string &in);
 
 #endif

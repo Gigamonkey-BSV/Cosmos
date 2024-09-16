@@ -7,8 +7,6 @@
 #include <data/io/wait_for_enter.hpp>
 
 #include <gigamonkey/timestamp.hpp>
-#include <gigamonkey/schema/bip_44.hpp>
-#include <gigamonkey/schema/bip_39.hpp>
 #include <gigamonkey/script/pattern/pay_to_address.hpp>
 
 #include <Cosmos/network.hpp>
@@ -18,18 +16,18 @@
 #include <Cosmos/options.hpp>
 #include <Cosmos/tax.hpp>
 #include <Cosmos/boost/miner_options.hpp>
-#include "generate.hpp"
-#include "restore.hpp"
-#include "request.hpp"
-#include "split.hpp"
-#include "import.hpp"
+
+#include "Cosmos.hpp"
+#include "interface.hpp"
 
 int main (int arg_count, char **arg_values) {
 
     auto err = run (arg_parser {arg_count, arg_values});
 
-    if (err.Message) std::cout << "Error: " << static_cast<std::string> (*err.Message) << std::endl;
-    else if (err.Code) std::cout << "Error: unknown." << std::endl;
+    if (err.Message) {
+        if (err.Code) std::cout << "Error: ";
+        std::cout << static_cast<std::string> (*err.Message) << std::endl;
+    } else if (err.Code) std::cout << "Error: unknown." << std::endl;
 
     return err.Code;
 }
@@ -149,6 +147,10 @@ std::string regex_replace (const std::string &x, const std::regex &r, const std:
     std::stringstream ss;
     std::regex_replace (std::ostreambuf_iterator<char> (ss), x.begin (), x.end (), r, n);
     return ss.str ();
+}
+
+std::string sanitize (const std::string &in) {
+    return regex_replace (data::to_lower (in), std::regex {"_|-"}, "");
 }
 
 method read_method (const arg_parser &p, uint32 index) {
@@ -390,7 +392,12 @@ void command_pay (const arg_parser &p) {
 
         if (!bool (ppp)) throw exception {} << "failed to generate payment";
 
+        std::cout << "SPV proof generated containing " << ppp->Payment.size () <<
+            " transactions and " << ppp->Proof.size () << " antecedents" << std::endl;
+
         BEEF beef {*ppp};
+        std::cout << "Beef produced containing " << beef.Transactions.size () <<
+            " transactions and " << beef.BUMPs.size () << " proofs" << std::endl;
 
         // save to proposed payments.
         auto payments = *u.get ().payments ();
@@ -410,11 +417,6 @@ void command_pay (const arg_parser &p) {
         encoding::base64::write (bytes (beef)) << std::endl;
 
     delete pr;
-    if (!get_user_yes_or_no ("Did the program work correctly?")) throw exception {} << "program aborted";
-}
-
-void command_accept (const arg_parser &p) {
-    throw exception {} << "Commond receive not yet implemented";
 }
 
 void command_sign (const arg_parser &p) {

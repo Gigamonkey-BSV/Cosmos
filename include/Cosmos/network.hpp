@@ -6,7 +6,7 @@
 #include <ctime>
 
 namespace Cosmos {
-    namespace MAPI = Gigamonkey::nChain::MAPI;
+    namespace MAPI = Gigamonkey::MAPI;
     using satoshis_per_byte = Gigamonkey::satoshis_per_byte;
 
     struct broadcast_error {

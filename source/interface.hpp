@@ -6,6 +6,7 @@
 #include <data/io/arg_parser.hpp>
 
 #include <Cosmos/wallet/wallet.hpp>
+#include <Cosmos/wallet/split.hpp>
 #include <Cosmos/database/json/price_data.hpp>
 #include <Cosmos/database/json/txdb.hpp>
 #include <Cosmos/history.hpp>
