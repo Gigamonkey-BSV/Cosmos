@@ -23,9 +23,6 @@ void command_accept (const arg_parser &p) {
     // eventually we will have a list of txs to import.
     list<Bitcoin::transaction> payment;
 
-    // we may have some SPV proofs by the end of this.
-    SPV::proof::map proofs;
-
     // if the txs are not already broadcast then we have
     // a choice whether to accept them or not.
     bool already_broadcast = false;
@@ -33,6 +30,7 @@ void command_accept (const arg_parser &p) {
     // first we try to read a txid.
     if (Bitcoin::TXID input_txid {*payment_string}; input_txid.valid ()) {
         // In this case we assume the tx is already broadcast and we search for it on the network.
+        throw exception {} << "You have entered a TXID. Unfortunately, this option is not yet supported";
         // TODO
         goto ready;
     }
@@ -40,6 +38,7 @@ void command_accept (const arg_parser &p) {
     // try reading an SPV envelope.
     try {
         if (Gigamonkey::SPV_envelope input_envelope {JSON::parse (*payment_string)}; input_envelope.valid ()) {
+            throw exception {} << "You have entered an SPV envelope. Unfortunately, this option is not yet supported";
             // TODO
             goto ready;
         }
@@ -59,12 +58,28 @@ void command_accept (const arg_parser &p) {
 
         // now we have two more options. Try to read
         if (Bitcoin::transaction input_tx {input_bytes}; input_tx.valid ()) {
-
+            throw exception {} << "You have entered a transaction. Unfortunately, this option is not yet supported";
+            // TODO
         } else if (BEEF beef {input_bytes}; beef.valid ()) {
-
+            payment = e.update<list<Bitcoin::transaction>> ([&beef] (Cosmos::Interface::writable w) {
+                SPV::proof p = beef.read_SPV_proof (*w.local_txdb ());
+                if (!p.validate (*w.local_txdb ())) throw exception {} << "failed to validate SPV proof";
+                std::cout << "Validated SPV proof in BEEF format" << std::endl;
+                return p.Payment;
+            });
         } else throw exception {} << "could not read payment";
     }
 
     ready:
-    throw exception {} << "Commond accept not yet implemented";
+    if (payment.size () == 0) throw exception {} << "no payment found";
+    std::cout << payment.size () << " payment transactions found" << std::endl;
+    std::cout << "When this command is finished, we will look at outstanding payment requests and attempt to determine which "
+        "is satisfied by the payment and provide an option as to whether to accept and broadcast it." << std::endl;
+    throw exception {} << "Commond accept implementation is not complete.";
+
+    // TODO check payments to see if we can figure out which payment request this satisfies.
+
+    // TODO display information about the payment to the user.
+
+    // TODO import the tx into the wallet and move the payment request to completed.
 }
