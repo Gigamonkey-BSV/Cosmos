@@ -69,6 +69,8 @@ namespace Cosmos {
         }
     };
 
+    Bitcoin::secret find_secret (keychain k, pubkeys p, derivation d);
+
     struct spend {
         select Select;
         make_change Change;
@@ -87,7 +89,8 @@ namespace Cosmos {
         };
 
         spent operator () (redeem,
-            keychain, addresses, account,
+            keychain, wallet,
+            // payee's outputs
             list<Bitcoin::output> to,
             satoshis_per_byte fees = {1, 100},
             uint32 lock = 0) const;

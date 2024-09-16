@@ -246,8 +246,14 @@ void command_split (const arg_parser &p) {
 
                 account new_account = old.Account;
 
+                std::cout << " Produced transactions " << std::endl;
+
                 // each split may give us several new transactions to work with.
-                for (const auto &[extx, diff] : spent.Transactions) new_account <<= diff;
+                for (const auto &[extx, diff] : spent.Transactions) {
+                    new_account <<= diff;
+                    std::cout << "  " << extx.id () << "\n  of size " << extx.serialized_size () <<
+                        " with " << extx.Outputs.size () << " outputs and " << extx.fee () << " in fees." << std::endl;
+                }
 
                 split_txs <<= spent;
                 old = wallet {old.Pubkeys, spent.Addresses, new_account};

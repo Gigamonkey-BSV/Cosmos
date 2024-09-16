@@ -5,6 +5,7 @@
 #include <data/crypto/random.hpp>
 #include <Cosmos/wallet/account.hpp>
 #include <Cosmos/wallet/keys/sequence.hpp>
+#include <Cosmos/options.hpp>
 
 namespace Cosmos {
 
@@ -27,7 +28,7 @@ namespace Cosmos {
     // default make_change function
     struct make_change_parameters {
         // the minimum value of a change output. Below this value, no output will be created
-        Bitcoin::satoshi MinimumCreateValue;
+        Bitcoin::satoshi MinimumCreateValue {options::DefaultMinChangeValue};
 
         // the minimum value of an output that will be created by splitting
         // a larger value.

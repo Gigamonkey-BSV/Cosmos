@@ -21,7 +21,7 @@ namespace Cosmos {
         if (spendable_value <= value_to_spend) throw exception {3} << "not enough funds to make payment.";
 
         // generate expected size of the inputs to the tx.
-        uint64 inputs_expected_size;
+        uint64 inputs_expected_size {0};
         for (const auto &[key, value] : acc) inputs_expected_size += value.expected_input_size ();
 
         auto result = acc;
@@ -42,9 +42,7 @@ namespace Cosmos {
             // go through all prevouts and figure out which ones can be removed.
             list<removable> rmv {};
 
-            uint32 i = 0;
             for (const auto &[key, value] : result) {
-                i++;
                 uint64 removed_inputs_expected_size = inputs_expected_size - value.expected_input_size ();
 
                 double output_value = double (value.Prevout.Value);
@@ -71,8 +69,8 @@ namespace Cosmos {
             // randomly select an output to remove based on the weights.
             cross<double> weights (size (rmv));
             auto wi = weights.begin ();
-            for (const removable &re : rmv) {
-                *wi = re.Weight;
+            for (const auto &[weight, _] : rmv) {
+                *wi = weight;
                 wi++;
             }
 
@@ -92,8 +90,9 @@ namespace Cosmos {
         end:
 
         // double check that the selection is good
-        double val_with_fee = double (value_to_spend) + double (fees) * double (inputs_expected_size);
-        if (val_with_fee < spent_value) throw exception {3} << "could not satisfy input selection requirements.";
+        double spend_val_with_fee = double (value_to_spend) + double (fees) * double (inputs_expected_size);
+        if (spend_val_with_fee > spent_value) throw exception {3} <<
+            "could not satisfy input selection requirements because " << spend_val_with_fee << " > " << spent_value;
 
         list<entry<Bitcoin::outpoint, redeemable>> selected_outputs;
         for (const auto &[key, value] : result) selected_outputs <<= data::entry<Bitcoin::outpoint, redeemable> {key, value};

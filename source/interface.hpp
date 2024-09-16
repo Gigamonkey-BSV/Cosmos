@@ -9,6 +9,7 @@
 #include <Cosmos/database/json/price_data.hpp>
 #include <Cosmos/database/json/txdb.hpp>
 #include <Cosmos/history.hpp>
+#include <Cosmos/boost/random.hpp>
 
 using arg_parser = data::io::arg_parser;
 
@@ -30,7 +31,9 @@ namespace Cosmos {
         maybe<std::string> &payments_filepath ();
 
         network *net ();
-        crypto::random *random ();
+        crypto::random *random ();// depricated
+        crypto::random *secure_random ();
+        crypto::random *casual_random ();
 
         const Cosmos::local_txdb *local_txdb () const;
         const maybe<Cosmos::cached_remote_txdb> txdb () const;
@@ -84,8 +87,9 @@ namespace Cosmos {
             spend::spent make_tx (list<Bitcoin::output> o) {
                 return spend {
                     select_output_parameters {4, 5000, .23},
-                    make_change_parameters {10, 100, 1000000, .4},
-                    *I.random ()} (Gigamonkey::redeem_p2pkh_and_p2pk, *I.keys (), *I.addresses (), *I.account (), o);
+                    // TODO replace this with split parameters.
+                    split_change_parameters {}, *I.random ()}
+                    (Gigamonkey::redeem_p2pkh_and_p2pk, *I.keys (), *I.wallet (), o);
             }
 
             const Cosmos::Interface &get () {
@@ -124,7 +128,8 @@ namespace Cosmos {
         ptr<Cosmos::payments> Payments {nullptr};
 
         ptr<crypto::user_entropy> Entropy;
-        ptr<crypto::NIST::DRBG> Random {nullptr};
+        ptr<crypto::NIST::DRBG> SecureRandom {nullptr};
+        ptr<crypto::linear_combination_random> CasualRandom {nullptr};
 
         // if this is set to true, then everything will be
         // saved to disk on destruction of the Interface.
@@ -274,6 +279,10 @@ namespace Cosmos {
     void inline Interface::writable::set_payments (const Cosmos::payments &pk) {
         if (I.Payments) *I.Payments = pk;
         else I.Payments = std::make_shared<Cosmos::payments> (pk);
+    }
+
+    crypto::random inline *Interface::random () {
+        return secure_random ();
     }
 
 }

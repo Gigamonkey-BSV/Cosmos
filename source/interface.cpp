@@ -5,6 +5,7 @@
 #include <gigamonkey/schema/bip_39.hpp>
 #include <Cosmos/network.hpp>
 #include <Cosmos/wallet/split.hpp>
+#include <sv/random.h>
 #include "interface.hpp"
 
 namespace Cosmos {
@@ -16,14 +17,12 @@ namespace Cosmos {
         for (const Bitcoin::TXID &txid : pending) txdb->import_transaction (txid);
     }
 
-    // TODO should not be spent, should simply be list<std::pair<extended_transaction, account_diff>> Transactions;
     broadcast_error Interface::writable::broadcast (const spend::spent &x) {
 
         auto w = I.wallet ();
         if (!bool (w)) throw exception {1} << "could not load wallet";
         Cosmos::wallet next_wallet = *w;
-        // if a broadcast fails, the keys will still be updated. Hopefully not more than max_look_ahead!
-        // TODO: this should not be necessary, addresses should have been updated earlier when the payment request was generated.
+        // if a broadcast fails, the addresses will still be updated. Hopefully not past max_look_ahead!
         next_wallet.Addresses = x.Addresses;
 
         broadcast_error err;
@@ -283,19 +282,36 @@ namespace Cosmos {
         return Payments.get ();
     }
 
-    crypto::random *Interface::random () {
+    crypto::random *Interface::secure_random () {
 
-        if (!Random) {
+        if (!SecureRandom) {
 
             Entropy = std::make_shared<crypto::user_entropy> (
                 "We need some entropy for this operation. Please type random characters.",
                 "Thank you for your entropy so far. That was not enough. Please give us more random characters.",
                 "Sufficient entropy provided.", std::cout, std::cin);
 
-            Random = std::make_shared<crypto::NIST::DRBG> (crypto::NIST::DRBG::Hash, *Entropy, std::numeric_limits<uint32>::max ());
+            SecureRandom = std::make_shared<crypto::NIST::DRBG> (crypto::NIST::DRBG::Hash, *Entropy, std::numeric_limits<uint32>::max ());
         }
 
-        return Random.get ();
+        return SecureRandom.get ();
+
+    }
+
+    crypto::random *Interface::casual_random () {
+
+        if (!CasualRandom) {
+            if (!SecureRandom) secure_random ();
+
+            uint64 seed;
+            Satoshi::GetStrongRandBytes ((byte *) &seed, 8);
+
+            CasualRandom = std::make_shared<crypto::linear_combination_random> (256,
+                std::static_pointer_cast<crypto::random> (std::make_shared<crypto::std_random<std::default_random_engine>> (seed)),
+                std::static_pointer_cast<crypto::random> (SecureRandom));
+        }
+
+        return CasualRandom.get ();
 
     }
 

@@ -72,7 +72,7 @@ namespace BoostPOW {
 
         // User nonce is for ensuring that no two scripts are identical.
         // You can increase the bounty for a boost by making an identical script.
-        uint32_little user_nonce {UserNonce ? *UserNonce : BoostPOW::casual_random {}.uint32 ()};
+        uint32_little user_nonce {UserNonce ? *UserNonce : Cosmos::casual_random {}.uint32 ()};
 
         // we are using version 1 for now.
         // we will use version 2 when we know we have Stratum extensions right.

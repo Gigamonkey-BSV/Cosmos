@@ -18,11 +18,9 @@ namespace Cosmos {
             while (v > MinimumCreateValue) {
                 Bitcoin::satoshi next_value;
                 if (v <= MinimumSplitValue) next_value = floor (v);
-                else if (ExpectedSplitFraction * v * 2 > MaximumSplitValue) {
-                    next_value = std::ceil (std::uniform_real_distribution<double> (MinimumCreateValue, MaximumSplitValue) (r));
-                } else {
-                    next_value = std::ceil (std::uniform_real_distribution<double> (MinimumCreateValue, ExpectedSplitFraction * v * 2) (r));
-                }
+                next_value = ExpectedSplitFraction * v * 2 > MaximumSplitValue ?
+                    std::ceil (std::uniform_real_distribution<double> (MinimumCreateValue, MaximumSplitValue) (r)):
+                    std::ceil (std::uniform_real_distribution<double> (MinimumCreateValue, ExpectedSplitFraction * v * 2) (r));
 
                 uint64 expected_size = pay_to_address::redeem_expected_size (true);
 

@@ -25,7 +25,7 @@ enum class method {
     VALUE,    // the value in the wallet.
     UPDATE,   // check pending txs for having been mined.
     REQUEST,  // request a payment
-    RECEIVE,  // receive a payment
+    ACCEPT,   // accept a payment
     PAY,      // make a payment.
     SIGN,     // sign an unsigned transaction
     IMPORT,   // import a utxo with private key
@@ -44,7 +44,7 @@ void command_update (const arg_parser &);
 void command_restore (const arg_parser &);
 void command_value (const arg_parser &);    // offline
 void command_request (const arg_parser &);  // offline
-void command_receive (const arg_parser &);  // offline
+void command_accept (const arg_parser &);  // offline
 void command_pay (const arg_parser &);      // offline
 void command_sign (const arg_parser &);     // offline
 void command_send (const arg_parser &);     // depricated

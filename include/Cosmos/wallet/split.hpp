@@ -39,7 +39,7 @@ namespace Cosmos {
             address_sequence, list<entry<Bitcoin::outpoint, redeemable>> selected, double fee_rate) const;
 
         struct result_outputs {
-            // list of new outputs
+            // list of new outputs; these are not shuffled so be sure to do that if you use these in a tx.
             list<redeemable> Outputs;
             uint32 Last;
         };
@@ -71,10 +71,19 @@ namespace Cosmos {
     // use the same function that we use to split coins for generating change outputs.
     struct split_change_parameters : split {
         // the minimum value of a change output. Below this value, no output will be created.
-        Bitcoin::satoshi MinimumCreateValue;
+        Bitcoin::satoshi MinimumCreateValue {options::DefaultMinChangeValue};
 
         // construct a set of change outputs.
-        change operator () (address_sequence, Bitcoin::satoshi, satoshis_per_byte fees, data::crypto::random &) const;
+        change operator () (address_sequence x, Bitcoin::satoshi sats, satoshis_per_byte fees, data::crypto::random &rand) const;
+        using split::operator ();
+
+        split_change_parameters (
+            Bitcoin::satoshi min_change_value = options::DefaultMinChangeValue,
+            Bitcoin::satoshi min_sats_per_output = options::DefaultMinSatsPerOutput,
+            Bitcoin::satoshi max_sats_per_output = options::DefaultMaxSatsPerOutput,
+            double mean_sats_per_output = options::DefaultMeanSatsPerOutput) :
+            split {min_sats_per_output, max_sats_per_output, mean_sats_per_output},
+            MinimumCreateValue {min_change_value} {}
     };
 
     spend::spent inline split::operator () (redeem ree, data::crypto::random &rand, keychain k, wallet w,

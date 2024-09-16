@@ -82,8 +82,8 @@ error run (const io::arg_parser &p) {
                     break;
                 }
 
-                case method::RECEIVE: {
-                    command_receive (p);
+                case method::ACCEPT: {
+                    command_accept (p);
                     break;
                 }
 
@@ -167,7 +167,7 @@ method read_method (const arg_parser &p, uint32 index) {
     if (*m == "restore") return method::RESTORE;
     if (*m == "value") return method::VALUE;
     if (*m == "request") return method::REQUEST;
-    if (*m == "receive") return method::RECEIVE;
+    if (*m == "accept") return method::ACCEPT;
     if (*m == "pay") return method::PAY;
     if (*m == "sign") return method::SIGN;
     if (*m == "import") return method::IMPORT;
@@ -222,11 +222,11 @@ void help (method meth) {
                 "\n\t(--memo=\"<explanation of the nature of the payment>\")"
                 "\n\t(--amount=<expected amount of payment>)" << std::endl;
         } break;
-        case method::RECEIVE : {
-            std::cout << "arguments for method receive not yet available." << std::endl;
-        } break;
         case method::PAY : {
             std::cout << "arguments for method pay not yet available." << std::endl;
+        } break;
+        case method::ACCEPT : {
+            std::cout << "Accept a payment." << std::endl;
         } break;
         case method::SIGN : {
             std::cout << "arguments for method sign not yet available." << std::endl;
@@ -285,6 +285,26 @@ void command_update (const arg_parser &p) {
     e.update<void> (Cosmos::update_pending_transactions);
 }
 
+
+maybe<std::string> de_escape (string_view input) {
+
+    if (!valid (input)) return {};
+    string rt {};
+
+    std::ostringstream decoded;
+
+    for (std::size_t i = 0; i < input.size (); ++i) {
+        if (input[i] == '\\') {
+            if (i + 1 >= input.size ()) return {};
+            i += 1;
+        }
+
+        decoded << input[i];
+    }
+
+    return {decoded.str ()};
+}
+
 void command_pay (const arg_parser &p) {
     using namespace Cosmos;
     Cosmos::Interface e {};
@@ -292,7 +312,7 @@ void command_pay (const arg_parser &p) {
 
     // first look for a payment request.
     maybe<std::string> payment_request_string;
-    p.get ("request", payment_request_string);
+    p.get (3, "request", payment_request_string);
 
     // if we cannot find one, maybe there's an address.
     maybe<std::string> address_string;
@@ -310,7 +330,12 @@ void command_pay (const arg_parser &p) {
 
     payments::payment_request *pr;
     if (bool (payment_request_string)) {
-        pr = new payments::payment_request {payments::read_payment_request (*payment_request_string)};
+
+        std::cout << "payment request inputed as " << *payment_request_string << std::endl;
+        std::string payment_request = *de_escape (*payment_request_string);
+        std::cout << "de escaped as " << payment_request << std::endl;
+
+        pr = new payments::payment_request {payments::read_payment_request (JSON::parse (payment_request))};
 
         if (bool (pr->Value.Amount) && bool (amount_sats) && *pr->Value.Amount != Bitcoin::satoshi {*amount_sats})
             throw exception {} << "WARNING: amount provided in payment request and as an option and do not agree";
@@ -357,7 +382,7 @@ void command_pay (const arg_parser &p) {
         } else if (xpub.valid ()) {
             throw exception {} << "pay to xpub not yet implemented";
         } else throw exception {} << "could not read payment address " << pr->Key;
-
+        std::cout << " generating SPV proof " << std::endl;
         maybe<SPV::proof> ppp = generate_proof (*u.local_txdb (),
             for_each ([] (const auto &e) -> Bitcoin::transaction {
                 return Bitcoin::transaction (e.first);
@@ -385,9 +410,10 @@ void command_pay (const arg_parser &p) {
         encoding::base64::write (bytes (beef)) << std::endl;
 
     delete pr;
+    if (!get_user_yes_or_no ("Did the program work correctly?")) throw exception {} << "program aborted";
 }
 
-void command_receive (const arg_parser &p) {
+void command_accept (const arg_parser &p) {
     throw exception {} << "Commond receive not yet implemented";
 }
 

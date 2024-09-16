@@ -1,11 +1,11 @@
-#ifndef BOOSTMINER_RANDOM
-#define BOOSTMINER_RANDOM
+#ifndef COSMOS_RANDOM
+#define COSMOS_RANDOM
 
 #include <data/crypto/NIST_DRBG.hpp>
 #include <gigamonkey/types.hpp>
 #include <mutex>
 
-namespace BoostPOW {
+namespace Cosmos {
     using namespace Gigamonkey;
 
     // Some stuff having to do with random number generators. We do not need 

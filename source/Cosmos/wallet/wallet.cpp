@@ -2,20 +2,33 @@
 
 namespace Cosmos {
 
+    Bitcoin::secret find_secret (keychain k, pubkeys p, derivation d) {
+        // first we check in pubkeys for the parent key.
+        if (const auto *v = p.contains (d.Parent); bool (v))
+        // if it is there, we expand the derivation to include the parent's derivation.
+            d = derivation {v->Parent, v->Path + d.Path};
+        // otherwise we check in private keys for the parent.
+        if (const auto *v = k.contains (d.Parent); bool (v))
+            return Bitcoin::secret (HD::BIP_32::secret {*v}.derive (d.Path));
+        return Bitcoin::secret {};
+    }
+
     spend::spent spend::operator () (redeem r,
-        keychain k, addresses addrs, account acc,
+        keychain k, wallet w,
         list<Bitcoin::output> to,
         satoshis_per_byte fees,
         uint32 lock) const {
 
         using namespace Gigamonkey;
 
+        // TODO if we could we ought to estimate the size of the tx and
+        // the fees required to spend it and include that in value_to_spend.
         Bitcoin::satoshi value_to_spend = data::fold
             ([] (Bitcoin::satoshi val, const Bitcoin::output &o) -> Bitcoin::satoshi {
                 return val + o.Value;
             }, Bitcoin::satoshi {0}, to);
 
-        Bitcoin::satoshi value_available = acc.value ();
+        Bitcoin::satoshi value_available = w.Account.value ();
 
         // do we have enough funds to spend everything we want to spend?
         if (value_available < value_to_spend) throw exception {3} << "insufficient funds: " << value_available << " < " << value_to_spend;
@@ -25,16 +38,18 @@ namespace Cosmos {
 
         // select funds to be spent and organize them into redeemers and keep
         // track of outputs that will be removed from the wallet.
-        for (const entry<Bitcoin::outpoint, redeemable> &e : Select (acc, value_to_spend, fees, Random)) {
+        for (const auto &[op, re] : Select (w.Account, value_to_spend, fees, Random)) {
             inputs <<= redeemer {
-                for_each ([&k] (const derivation &x) -> sigop {
-                    return sigop {k.derive (x)};
-                }, e.Value.Derivation),
-                Bitcoin::prevout {e.Key, e.Value.Prevout},
-                e.Value.ExpectedScriptSize,
+                for_each ([&k, w] (const derivation &x) -> sigop {
+                    Bitcoin::secret sec = find_secret (k, w.Pubkeys, x);
+                    if (!sec.valid ()) throw exception {} << "could not find secret key for " << x;
+                    return sigop {sec};
+                }, re.Derivation),
+                Bitcoin::prevout {op, re.Prevout},
+                re.ExpectedScriptSize,
                 Bitcoin::input::Finalized,
-                e.Value.UnlockScriptSoFar};
-            diff.Remove = diff.Remove.insert (e.Key);
+                re.UnlockScriptSoFar};
+            diff.Remove = diff.Remove.insert (op);
         }
 
         // transform selected into inputs
@@ -48,7 +63,8 @@ namespace Cosmos {
             {floor (double (int64 (fee_rate_before_change.Satoshis)) - double (fees) * fee_rate_before_change.Bytes)};
 
         // make change outputs.
-        change ch = Change (addrs.Sequences[addrs.Change], change_amount, fees, Random);
+
+        change ch = Change (w.Addresses.Sequences[w.Addresses.Change], change_amount, fees, Random);
 
         auto change_outputs = ch.outputs ();
 
@@ -60,7 +76,8 @@ namespace Cosmos {
 
         // Is the fee for this transaction sufficient?
         if (design.fee_rate () < fees) throw exception {3} << "failed to generate tx with sufficient fees";
-
+        std::cout << " transaction design is complete. It has " << design.Inputs.size () << " inputs spending " << design.spent () << ", " <<
+            design.Outputs.size () << " outputs sending " << design.sent () << " with fees " << design.fee  () << std::endl;
         // redeem transaction.
         extended_transaction complete = design.redeem (r);
 
@@ -74,7 +91,7 @@ namespace Cosmos {
         }
 
         // return new wallet.
-        return spent {{{complete, diff}}, addrs.update (addrs.Change, ch.Last)};
+        return spent {{{complete, diff}}, w.Addresses.update (w.Addresses.Change, ch.Last)};
     }
 }
 

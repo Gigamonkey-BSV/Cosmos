@@ -1,4 +1,3 @@
-
 #include <Cosmos/wallet/split.hpp>
 
 namespace Cosmos {
@@ -118,7 +117,7 @@ namespace Cosmos {
                 last_address.Value.ExpectedScriptSize,
                 last_address.Value.UnlockScriptSoFar};
 
-            if (we_are_done) return result_outputs {shuffle (outputs, r), key.Last};
+            if (we_are_done) return result_outputs {outputs, key.Last};
 
             remaining_split_value -= output_value;
 
@@ -154,23 +153,20 @@ namespace Cosmos {
 
         // generate new outputs
         result_outputs split_outputs = operator () (rand, x, split_value, fee_rate);
+        split_outputs.Outputs = shuffle (shuffle (split_outputs.Outputs, rand));
 
         extended_transaction completed = redeemable_transaction {1,
             for_each ([k, p] (const entry<Bitcoin::outpoint, redeemable> &e) -> redeemer {
-                // we check in pubkeys for the parent key.
-                derivation d = first (e.Value.Derivation);
-                if (const auto *v = p.contains (d.Parent); bool (v))
-                // if it is there, we expand the derivation to include the parent's derivation.
-                    d = derivation {v->Parent, v->Path + d.Path};
-                // otherwise we check in private keys for the parent.
-                Bitcoin::secret sec;
-                if (const auto *v = k.contains (d.Parent); bool (v))
-                    sec = Bitcoin::secret (HD::BIP_32::secret {*v}.derive (d.Path));
-                else throw exception {} << "could not find secret key";
+
+                auto d = first (e.Value.Derivation);
+                Bitcoin::secret sec = find_secret (k, p, d);
+                if (!sec.valid ()) throw exception {} << "could not find secret key for " << d;
+
                 return redeemer {
                     list<sigop> {sigop {sec}},
                     Bitcoin::prevout {e.Key, e.Value.Prevout},
                     e.Value.ExpectedScriptSize};
+
             }, selected), for_each ([] (const auto &x) -> Bitcoin::output {
                 return x.Prevout;
             }, split_outputs.Outputs), 0}.redeem (ree);
@@ -189,6 +185,28 @@ namespace Cosmos {
         // construct the final result.
         return result {{{completed, diff}}, x.Last};
 
+    }
+
+    change split_change_parameters::operator () (
+        address_sequence x,
+        Bitcoin::satoshi val,
+        satoshis_per_byte fees,
+        data::crypto::random &rand) const {
+
+        if (val < MinimumCreateValue) return change {{}, x.Last};
+
+        if (val < this->MinSatsPerOutput) {
+            entry<Bitcoin::address, signing> derived = pay_to_address_signing (x.last ());
+            return change {{redeemable {
+                    Bitcoin::output {
+                        Bitcoin::satoshi {int64 (val) - std::ceil (double (pay_to_address::redeem_expected_size (true)) * double (fees))},
+                        pay_to_address::script (derived.Key.digest ())},
+                    derived.Value}},
+                x.Last + 1};
+        }
+
+        result_outputs z = (*this) (rand, x, val, double (fees));
+        return change {cross<redeemable> (z.Outputs), z.Last};
     }
 
 }

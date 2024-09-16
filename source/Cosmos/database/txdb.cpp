@@ -61,9 +61,7 @@ namespace Cosmos {
     }
 
     ordered_list<ray> cached_remote_txdb::by_address (const Bitcoin::address &a) {
-        std::cout << " retrieving address " << a << std::endl;
         auto x = Local.by_address (a);
-        std::cout << x.size () << " events returned; valid? " << std::boolalpha << x.valid () << std::endl;
         if (!data::empty (x) && x.valid ()) return x;
 
         auto ids = Net.WhatsOnChain.address ().get_history (a);
