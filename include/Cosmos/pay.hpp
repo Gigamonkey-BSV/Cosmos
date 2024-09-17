@@ -32,6 +32,8 @@ namespace Cosmos {
 
         struct redeemable {
             payment_request Request;
+
+            // TODO in some cases we need more information than this.
             derivation Derivation;
 
             redeemable (const payment_request &inv, const derivation &d) : Request {inv}, Derivation {d} {};

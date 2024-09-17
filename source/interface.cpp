@@ -17,26 +17,25 @@ namespace Cosmos {
         for (const Bitcoin::TXID &txid : pending) txdb->import_transaction (txid);
     }
 
-    broadcast_error Interface::writable::broadcast (const spend::spent &x) {
+    broadcast_error Interface::writable::broadcast (const extended_transaction &extx, const account_diff &diff) {
 
         auto w = I.wallet ();
         if (!bool (w)) throw exception {1} << "could not load wallet";
         Cosmos::wallet next_wallet = *w;
-        // if a broadcast fails, the addresses will still be updated. Hopefully not past max_look_ahead!
-        next_wallet.Addresses = x.Addresses;
 
-        broadcast_error err;
-        for (const auto &[extx, diff] : x.Transactions) {
-            std::cout << "broadcasting tx " << diff.TXID;
-            wait_for_enter ();
-            auto err = txdb ()->broadcast ({diff.TXID, extx});
-            if (bool (err)) {
-                std::cout << "tx broadcast failed;\n\ttx: " << extx << "\n\terror: " << err << std::endl;
-                break;
-            }
+        std::cout << "broadcasting tx " << diff.TXID;
 
-            next_wallet.Account <<= diff;
+        wait_for_enter ();
+        broadcast_error err = txdb ()->broadcast ({diff.TXID, extx});
+        if (bool (err)) {
+            // TODO right now we just ignore failed txs.
+            // We should check if we can save them and try again.
+            // the Internet might have been down.
+            std::cout << "tx broadcast failed;\n\ttx: " << extx << "\n\terror: " << err << std::endl;
+            return err;
         }
+
+        next_wallet.Account <<= diff;
 
         // save new wallet.
         set_wallet (next_wallet);

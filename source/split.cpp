@@ -282,7 +282,11 @@ void command_split (const arg_parser &p) {
 
         std::cout << "broadcasting split transactions" << std::endl;
 
-        for (const spend::spent &sp : split_txs) u.broadcast (sp);
+        for (const spend::spent &sp : split_txs) {
+            // TODO update addresses
+            // TODO update history
+            for (const auto &[extx, diff] : sp.Transactions) u.broadcast (extx, diff);
+        }
 
     });
 }

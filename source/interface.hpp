@@ -82,7 +82,7 @@ namespace Cosmos {
             void set_wallet (const Cosmos::wallet &);
             void set_payments (const Cosmos::payments &);
 
-            broadcast_error broadcast (const spend::spent &);
+            broadcast_error broadcast (const extended_transaction &, const account_diff &);
 
             // make a transaction with a bunch of default options already set
             spend::spent make_tx (list<Bitcoin::output> o) {
