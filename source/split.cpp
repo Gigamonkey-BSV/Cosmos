@@ -8,7 +8,7 @@ namespace Cosmos {
     using splitable = map<digest256, list<entry<Bitcoin::outpoint, redeemable>>>;
 
     // collect splitable scripts by addres.
-    splitable get_split_address (Interface::writable u, splitable x, const Bitcoin::address &addr) {
+    splitable get_split_address (Interface::writable u, const Bitcoin::address &addr) {
         const auto w = u.get ().wallet ();
         auto TXDB = u.txdb ();
         if (!bool (TXDB) | !bool (w)) throw exception {} << "could not load wallet";
@@ -16,19 +16,48 @@ namespace Cosmos {
         // is this address in our wallet?
         ordered_list<ray> outpoints = TXDB->by_address (addr);
 
-        list<entry<Bitcoin::outpoint, redeemable>> outputs;
+        if (outpoints.size () == 0) return {};
 
-        if (outputs.size () == 0) return x;
-
-        // this step doesn't entirely make sense because if we could
-        // redeem any output with this address we could redeem every one.
+        maybe<redeemable> redeemer;
         for (const ray &r : outpoints)
-            if (const auto *en = w->Account.contains (r.Point); bool (en)) {
-                outputs <<= entry<Bitcoin::outpoint, redeemable> {r.Point, *en};
-            } else throw exception {} << "WARNING: output " << r.Point << " for address " << addr <<
-                " was not found in our account even though we believe we own this address.";
+            if (const auto *en = w->Account.contains (r.Point); bool (en))
+                redeemer = *en;
 
+        if (!bool (redeemer)) throw exception {} << "WARNING: redeem information for address " << addr <<
+            " was not found in our account even though we believe we own it.";
+
+        list<entry<Bitcoin::outpoint, redeemable>> outputs;
+        for (const ray &r : outpoints) outputs <<= entry<Bitcoin::outpoint, redeemable> {r.Point, *redeemer};
+
+        splitable x;
         return x.insert (Gigamonkey::SHA2_256 (pay_to_address::script (addr.digest ())), outputs);
+
+    };
+
+    // collect splittable scripts by script hash.
+    splitable get_split_script_hash (Interface::writable u, const digest256 &script_hash) {
+        const auto w = u.get ().wallet ();
+        auto TXDB = u.txdb ();
+        if (!bool (TXDB) | !bool (w)) throw exception {} << "could not load wallet";
+
+        // is this address in our wallet?
+        ordered_list<ray> outpoints = TXDB->by_script_hash (script_hash);
+
+        if (outpoints.size () == 0) return {};
+
+        maybe<redeemable> redeemer;
+        for (const ray &r : outpoints)
+            if (const auto *en = w->Account.contains (r.Point); bool (en))
+                redeemer = *en;
+
+        if (!bool (redeemer)) throw exception {} << "WARNING: redeem information for script " << script_hash <<
+            " was not found in our account even though we believe we own it.";
+
+        list<entry<Bitcoin::outpoint, redeemable>> outputs;
+        for (const ray &r : outpoints) outputs <<= entry<Bitcoin::outpoint, redeemable> {r.Point, *redeemer};
+
+        splitable x;
+        return x.insert (script_hash, outputs);
 
     };
 
@@ -88,13 +117,17 @@ void command_split (const arg_parser &p) {
     if (bool (address_string)) {
         Bitcoin::address addr {*address_string};
         HD::BIP_32::pubkey pk {*address_string};
-        if (!pk.valid () && !addr.valid ()) throw exception {6} << "could not read address string";
+        Bitcoin::TXID script_hash {*address_string};
 
         if (addr.valid ())
             x = e.update<splitable> ([&addr] (Interface::writable u) {
-                return get_split_address (u, splitable {}, addr);
+                return get_split_address (u, addr);
             });
-        else {
+        else if (script_hash.valid ())
+            x = e.update<splitable> ([&script_hash] (Interface::writable u) {
+                return get_split_script_hash (u, script_hash);
+            });
+        else if (pk.valid ()) {
 
             // if we're using a pubkey we need a max_look_ahead.
             maybe<uint32> max_look_ahead;
@@ -109,7 +142,7 @@ void command_split (const arg_parser &p) {
 
                 while (since_last_unused < *max_look_ahead) {
                     size_t last_size = z.size ();
-                    z = get_split_address (u, z, pay_to_address_signing (seq.last ()).Key);
+                    z = z + get_split_address (u, pay_to_address_signing (seq.last ()).Key);
                     seq = seq.next ();
                     if (z.size () == last_size) {
                         since_last_unused++;
@@ -118,7 +151,7 @@ void command_split (const arg_parser &p) {
 
                 return z;
             });
-        }
+        } else throw exception {6} << "could not read address string";
     } else {
         // in this case, we just look for all outputs in our account that we are able to split.
         x = e.update<splitable> ([&max_sats_per_output] (Interface::writable u) {

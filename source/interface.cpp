@@ -11,6 +11,8 @@
 namespace Cosmos {
 
     void update_pending_transactions (Interface::writable u) {
+        // TODO also update proposed payments to see if they have been accepted and are in the network.
+
         auto txdb = u.txdb ();
         auto w = u.get ().wallet ();
         auto *h = u.history ();
@@ -51,10 +53,7 @@ namespace Cosmos {
 
         // save new wallet.
         set_wallet (next_wallet);
-
-
         return err;
-
     }
 
     void read_both_chains_options (Interface &e, const arg_parser &p) {

@@ -214,6 +214,8 @@ void command_accept (const arg_parser &p) {
 
         u.set_payments (payments {requests, pay->Proposals});
 
+        // TODO put the ancestors to this payment in the txdb.
+
     });
 
 }

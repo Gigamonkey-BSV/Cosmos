@@ -228,7 +228,9 @@ void help (method meth) {
             std::cout << "arguments for method pay not yet available." << std::endl;
         } break;
         case method::ACCEPT : {
-            std::cout << "Accept a payment." << std::endl;
+            std::cout << "Accept a payment."
+                "\narguments for method accept:"
+                "\n\t(--payment=)<payment tx in BEEF or SPV envelope>"<< std::endl;
         } break;
         case method::SIGN : {
             std::cout << "arguments for method sign not yet available." << std::endl;
@@ -246,7 +248,7 @@ void help (method meth) {
             std::cout << "Split outputs in your wallet into many tiny outputs with small values over a triangular distribution. "
                 "\narguments for method split:"
                 "\n\t(--name=)<wallet name>"
-                "\n\t(--address=)<address | xpub>"
+                "\n\t(--address=)<address | xpub | script hash>"
                 "\n\t(--max_look_ahead=)<integer> (= 10) ; (only used if parameter 'address' is provided as an xpub"
                 "\n\t(--min_sats=<float>) (= 123456)"
                 "\n\t(--max_sats=<float>) (= 5000000)"
@@ -287,7 +289,6 @@ void command_update (const arg_parser &p) {
     e.update<void> (Cosmos::update_pending_transactions);
 }
 
-
 maybe<std::string> de_escape (string_view input) {
 
     if (!valid (input)) return {};
@@ -307,6 +308,7 @@ maybe<std::string> de_escape (string_view input) {
     return {decoded.str ()};
 }
 
+// TODO make sure we don't invalidate existing payments.
 void command_pay (const arg_parser &p) {
     using namespace Cosmos;
     Cosmos::Interface e {};
