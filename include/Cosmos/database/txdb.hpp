@@ -162,7 +162,7 @@ namespace Cosmos {
         ordered_list<ray> by_script_hash (const digest256 &) final override;
         ptr<ray> redeeming (const Bitcoin::outpoint &) final override;
 
-        void import_transaction (const Bitcoin::TXID &);
+        bool import_transaction (const Bitcoin::TXID &);
 
         broadcast_error broadcast (const entry<Bitcoin::TXID, extended_transaction> e) {
             auto err = Net.broadcast (bytes (e.Value));

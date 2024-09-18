@@ -187,14 +187,16 @@ void command_accept (const arg_parser &p) {
             std::cout << "." << std::endl;
         }
 
-        if (!get_user_yes_or_no ("Do you want to accept this payment?")) throw exception {} << "You chose not to accept this payment.";
+        if (!get_user_yes_or_no ("Do you want to accept this payment?"))
+            throw exception {} << "You chose not to accept this payment.";
 
         // collect information about all new outputs.
         map<Bitcoin::TXID, list<entry<Bitcoin::index, redeemable>>> diffs;
 
         for (const auto &[op, re] : tg.Out)
             diffs = diffs.insert (op.Digest, {{op.Index, re}},
-                [] (const list<entry<Bitcoin::index, redeemable>> &ol, const list<entry<Bitcoin::index, redeemable>> &nl)
+                [] (const list<entry<Bitcoin::index, redeemable>> &ol,
+                    const list<entry<Bitcoin::index, redeemable>> &nl)
                     -> list<entry<Bitcoin::index, redeemable>> {
                     return ol + nl;
                 });
@@ -202,7 +204,9 @@ void command_accept (const arg_parser &p) {
         // broadcast the transactions.
         for (const auto &[txid, extx] : tg.Payment)
             u.broadcast (extx, account_diff {txid,
-                fold ([] (map<Bitcoin::index, redeemable> m, entry<Bitcoin::index, redeemable> e) -> map<Bitcoin::index, redeemable> {
+                fold ([] (
+                    map<Bitcoin::index, redeemable> m,
+                    entry<Bitcoin::index, redeemable> e) -> map<Bitcoin::index, redeemable> {
                     return m.insert (e);
                 }, map<Bitcoin::index, redeemable> {}, diffs[txid]), {}});
 

@@ -12,9 +12,21 @@ namespace Cosmos {
 
     void update_pending_transactions (Interface::writable u) {
         auto txdb = u.txdb ();
-        if (!bool (txdb)) throw exception {"could not connect to network and database"};
-        set<Bitcoin::TXID> pending = txdb->Local.pending ();
-        for (const Bitcoin::TXID &txid : pending) txdb->import_transaction (txid);
+        auto w = u.get ().wallet ();
+        auto *h = u.history ();
+        if (!bool (txdb) || !bool (w) || !bool (h)) throw exception {"could not connect to network and database"};
+
+        // all txs that have been updated with merkle proofs.
+        map<Bitcoin::TXID, vertex> mined;
+        for (const Bitcoin::TXID &txid : txdb->Local.pending ()) if (txdb->import_transaction (txid))
+            mined = mined.insert (txid, (*txdb)[txid]);
+
+        // all new events to record in our history.
+        ordered_list<ray> new_events;
+        for (const auto &[op, _] : w->Account) if (const auto *v = mined.contains (op.Digest); bool (v)) new_events <<= ray {*v, op};
+
+        // update history.
+        *h <<= new_events;
     }
 
     broadcast_error Interface::writable::broadcast (const extended_transaction &extx, const account_diff &diff) {
@@ -39,6 +51,8 @@ namespace Cosmos {
 
         // save new wallet.
         set_wallet (next_wallet);
+
+
         return err;
 
     }

@@ -39,24 +39,23 @@ namespace Cosmos {
         return true;
     }
 
-    void cached_remote_txdb::import_transaction (const Bitcoin::TXID &txid) {
+    bool cached_remote_txdb::import_transaction (const Bitcoin::TXID &txid) {
 
         auto tx = Net.get_transaction (txid);
-        if (tx.size () == 0) throw exception {} << "transaction " << txid << " does not exist.";
+        if (tx.size () == 0) return false;
         auto proof = Net.WhatsOnChain.transaction ().get_merkle_proof (txid);
 
-        if (!proof.Proof.valid ())
-            throw exception {} << "could not get Merkle proof for " << txid;
+        if (!proof.Proof.valid ()) return false;
 
         Bitcoin::transaction decoded {tx};
         auto h = Local.header (proof.BlockHash);
-        if (bool (h)) Local.import_transaction (decoded, Merkle::path (proof.Proof.Branch), h->Value);
+        if (bool (h)) return Local.import_transaction (decoded, Merkle::path (proof.Proof.Branch), h->Value);
         else {
             auto header = Net.WhatsOnChain.block ().get_header (proof.BlockHash);
-            if (!header.valid ()) return;
+            if (!header.valid ()) return false;
 
             Local.insert (header.Height, header.Header);
-            Local.import_transaction (decoded, Merkle::path (proof.Proof.Branch), header.Header);
+            return Local.import_transaction (decoded, Merkle::path (proof.Proof.Branch), header.Header);
         }
     }
 
