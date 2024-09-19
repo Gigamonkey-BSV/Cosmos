@@ -455,17 +455,16 @@ void command_send (const arg_parser &p) {
     if (net == nullptr) throw exception {5} << "could not connect to remote servers";
 
     e.update<void> (update_pending_transactions);
-    // TODO update history
     if (address.valid ()) e.update<void> ([rand, net, &address, &spend_amount] (Cosmos::Interface::writable u) {
             spend::spent spent = u.make_tx ({Bitcoin::output {spend_amount, pay_to_address::script (address.decode ().Digest)}});
-            for (const auto &[extx, diff] : spent.Transactions) u.broadcast (extx, diff);
+            for (const auto &[extx, diff] : spent.Transactions) u.broadcast ({{Bitcoin::transaction (extx), diff}});
             u.set_addresses (spent.Addresses);
         });
     else if (xpub.valid ()) e.update<void> ([rand, net, &xpub, &spend_amount] (Cosmos::Interface::writable u) {
             spend::spent spent = u.make_tx (for_each ([] (const redeemable &m) -> Bitcoin::output {
                     return m.Prevout;
                 }, Cosmos::split {} (*rand, address_sequence {xpub, {}, 0}, spend_amount, .001).Outputs));
-            for (const auto &[extx, diff] : spent.Transactions) u.broadcast (extx, diff);
+            for (const auto &[extx, diff] : spent.Transactions) u.broadcast ({{Bitcoin::transaction (extx), diff}});
             u.set_addresses (spent.Addresses);
         });
     else throw exception {2} << "Could not read address/xpub";
@@ -484,11 +483,10 @@ void command_boost (const arg_parser &p) {
         throw exception {2} << "could not read value to boost.";
 
     Bitcoin::output op {Bitcoin::satoshi {*value}, Boost::output_script (script_options::read (p.Parser, 3)).write ()};
-    // TODO update history
     e.update<void> (Cosmos::update_pending_transactions);
     e.update<void> ([net = e.net (), rand = e.random (), &op] (Cosmos::Interface::writable u) {
         Cosmos::spend::spent x = u.make_tx ({op});
-        for (const auto &[extx, diff] : x.Transactions) u.broadcast (extx, diff);
+        for (const auto &[extx, diff] : x.Transactions) u.broadcast ({{Bitcoin::transaction (extx), diff}});
         u.set_addresses (x.Addresses);
     });
 }

@@ -211,7 +211,7 @@ void command_split (const arg_parser &p) {
     e.update<void> ([&split, &top, fee_rate] (Cosmos::Interface::writable u) {
 
         int count = 0;
-        std::cout << "top 10 splittable scripts: " << std::endl;
+        if (top.size () > 10) std::cout << "top 10 splittable scripts: " << std::endl;
         {
             auto view_top = top;
             while (!view_top.empty ()) {
@@ -219,7 +219,7 @@ void command_split (const arg_parser &p) {
 
                 if (count++ >= 10) break;
                 std::cout << "\t" << t.Value << " sats in script " << t.ScriptHash << " in " << std::endl;
-                for (const auto &o : t.Outputs) std::cout << "\t\t" << o.Key << std::endl;
+                for (const auto &o : t.Outputs) std::cout << "\t\t" << write (o.Key) << " from " << (*u.txdb ())[o.Key.Digest].when () << std::endl;
 
                 view_top = view_top.rest ();
             }
@@ -267,7 +267,7 @@ void command_split (const arg_parser &p) {
         if (!get_user_yes_or_no ("Do you want to continue?")) throw exception {} << "program aborted";
 
         list<spend::spent> split_txs;
-        wallet old = *u.get ().wallet ();
+        wallet new_wallet = *u.get ().wallet ();
 
         {
             while (!top.empty ()) {
@@ -275,21 +275,22 @@ void command_split (const arg_parser &p) {
 
                 std::cout << " Splitting script with hash " << t.ScriptHash << " containing value " << t.Value << " over " <<
                     t.Outputs.size () << " output" << (t.Outputs.size () == 1 ? "" : "s") << "." << std::endl;
-                spend::spent spent = split (Gigamonkey::redeem_p2pkh_and_p2pk, *u.random (), *u.get ().keys (), old, t.Outputs, *fee_rate);
+                spend::spent spent = split (Gigamonkey::redeem_p2pkh_and_p2pk, *u.random (), *u.get ().keys (), new_wallet, t.Outputs, *fee_rate);
 
-                account new_account = old.Account;
+                account new_account = new_wallet.Account;
 
                 std::cout << " Produced transactions " << std::endl;
 
                 // each split may give us several new transactions to work with.
                 for (const auto &[extx, diff] : spent.Transactions) {
+                    auto txid = extx.id ();
                     new_account <<= diff;
-                    std::cout << "  " << extx.id () << "\n  of size " << extx.serialized_size () <<
+                    std::cout << "  " << txid << "\n  of size " << extx.serialized_size () <<
                         " with " << extx.Outputs.size () << " outputs and " << extx.fee () << " in fees." << std::endl;
                 }
 
                 split_txs <<= spent;
-                old = wallet {old.Pubkeys, spent.Addresses, new_account};
+                new_wallet = wallet {new_wallet.Pubkeys, spent.Addresses, new_account};
 
                 top = top.rest ();
             }
@@ -309,17 +310,19 @@ void command_split (const arg_parser &p) {
         std::cout << "  number of transactions: " << number_of_transactions << std::endl;
         std::cout << "  total size: " << total_size << std::endl;
         std::cout << "  total fees: " << total_fee << std::endl;
-        // Put some data here like fees and so on.
 
         if (!get_user_yes_or_no ("Do you want broadcast these transactions?")) throw exception {} << "program aborted";
 
         std::cout << "broadcasting split transactions" << std::endl;
 
-        for (const spend::spent &sp : split_txs) {
-            // TODO update addresses
-            // TODO update history
-            for (const auto &[extx, diff] : sp.Transactions) u.broadcast (extx, diff);
-        }
+        // TODO if one of these broadcasts fails we don't really have anything we can do about it right now.
+        // ideally, we would update the wallet each time we try to broadcast.
+        // We only need to update addresses here.
+        for (const spend::spent &sp : split_txs) u.broadcast (
+            for_each ([] (const auto &z) -> std::pair<Bitcoin::transaction, account_diff> {
+                return {Bitcoin::transaction (z.first), z.second};
+            }, sp.Transactions));
+        u.set_wallet (new_wallet);
 
     });
 }

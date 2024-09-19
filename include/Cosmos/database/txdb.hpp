@@ -164,11 +164,14 @@ namespace Cosmos {
 
         bool import_transaction (const Bitcoin::TXID &);
 
-        broadcast_error broadcast (const entry<Bitcoin::TXID, extended_transaction> e) {
-            auto err = Net.broadcast (bytes (e.Value));
-            if (!bool (err)) Local.insert (Bitcoin::transaction (e.Value));
+        broadcast_error broadcast (const Bitcoin::transaction &tx) {
+            auto err = Net.broadcast (bytes (tx));
+            if (!bool (err)) Local.insert (tx);
             return err;
         }
+
+        broadcast_error broadcast (SPV::proof);
+        broadcast_error broadcast (SPV::proof::map);
     };
 }
 

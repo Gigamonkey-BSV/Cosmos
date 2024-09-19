@@ -8,10 +8,13 @@
 
 namespace Cosmos {
     struct request_integrator {
-        map<Bitcoin::TXID, extended_transaction> Payment;
+        map<Bitcoin::TXID, Bitcoin::transaction> Payment;
+
+        using imap = map<Bitcoin::index, redeemable>;
 
         // all outputs that will be ours if we accept this payment.
-        map<Bitcoin::outpoint, redeemable> Out;
+        // TODO we can make things easier later on by making this a
+        map<Bitcoin::TXID, imap> Out;
 
         list<tuple<string, payments::request, Bitcoin::satoshi>> RequestsSatisfied;
 
@@ -21,11 +24,15 @@ namespace Cosmos {
 
             // does the transaction pay to this address?
             for (const auto &[txid, extx] : Payment) {
+                Out = Out.insert (txid, imap {});
                 Bitcoin::index i {0};
                 for (const auto &op : extx.Outputs) {
                     if (op.Script == script) {
                         total_value += op.Value;
-                        Out = Out.insert (Bitcoin::outpoint {txid, i++}, redeemable {op, sg});
+                        entry<Bitcoin::index, redeemable> e {i++, redeemable {op, sg}};
+                        Out = Out.replace_part (txid, [e] (const imap &m) -> imap {
+                            return m.insert (e);
+                        });
                         outputs_found++;
                     }
                     i++;
@@ -37,8 +44,8 @@ namespace Cosmos {
             return total_value;
         }
 
-        request_integrator (list<extended_transaction> txs, const map<string, payments::redeemable> &pmts) {
-            for (const auto &extx : txs) Payment = Payment.insert (extx.id (), extx);
+        request_integrator (list<Bitcoin::transaction> txs, const map<string, payments::redeemable> &pmts) {
+            for (const auto &tx : txs) Payment = Payment.insert (tx.id (), tx);
 
             // check payments to see if we can figure out which payment request this satisfies.
             for (const auto &[id, re] : pmts)
@@ -90,7 +97,11 @@ namespace Cosmos {
                 } else throw exception {} << "unrecognized payment request type";
         }
 
-        Bitcoin::satoshi total_value () const;
+        Bitcoin::satoshi total_value () const {
+            Bitcoin::satoshi val {0};
+            for (const auto &[a, b, v] : RequestsSatisfied) val += v;
+            return val;
+        }
     };
 }
 
@@ -109,7 +120,7 @@ void command_accept (const arg_parser &p) {
     // payment can be an SPV proof in BEEF format (preferred), a txid, a transaction, or an SPV envelope (depricated).
 
     // eventually we will have a list of txs to import.
-    list<extended_transaction> payment;
+    SPV::proof payment;
 
     // if the txs are not already broadcast then we have
     // a choice whether to accept them or not.
@@ -149,31 +160,23 @@ void command_accept (const arg_parser &p) {
             throw exception {} << "You have entered a transaction. Unfortunately, this option is not yet supported";
             // TODO
         } else if (BEEF beef {input_bytes}; beef.valid ()) {
-            payment = e.update<list<extended_transaction>> ([&beef] (Cosmos::Interface::writable w) {
+            payment = e.update<SPV::proof> ([&beef] (Cosmos::Interface::writable w) {
                 SPV::proof p = beef.read_SPV_proof (*w.local_txdb ());
                 if (!p.validate (*w.local_txdb ())) throw exception {} << "failed to validate SPV proof";
                 std::cout << "Validated SPV proof in BEEF format" << std::endl;
-                return list<extended_transaction> (p);
+                return p;
             });
         } else throw exception {} << "could not read payment";
     }
 
     ready:
-    if (payment.size () == 0) throw exception {} << "no payment found";
-    std::cout << payment.size () << " payment transactions found" << std::endl;
-
-    // TODO what if one transaction is valid and another isn't?
-    for (const auto &extx : payment)
-        if (!extx.valid ()) throw exception {} << "tx " << extx.id () << " is not valid ";
-
-    std::cout << "When this command is finished, we will look at outstanding payment requests and attempt to determine which "
-        "is satisfied by the payment and provide an option as to whether to accept and broadcast it." << std::endl;
-    throw exception {} << "Commond accept implementation is not complete.";
+    if (payment.Payment.size () == 0) throw exception {} << "no payment found";
+    std::cout << payment.Payment.size () << " payment transactions found" << std::endl;
 
     e.update<void> ([&payment] (Cosmos::Interface::writable u) {
         const auto *pay = u.get ().payments ();
         auto requests = pay->Requests;
-        request_integrator tg {payment, requests};
+        request_integrator tg {payment.Payment, requests};
 
         Bitcoin::satoshi total_value = tg.total_value ();
         std::cout << "  " << total_value << " sats found for you. If you accept this payment then your wallet will have " <<
@@ -190,31 +193,14 @@ void command_accept (const arg_parser &p) {
         if (!get_user_yes_or_no ("Do you want to accept this payment?"))
             throw exception {} << "You chose not to accept this payment.";
 
-        // collect information about all new outputs.
-        map<Bitcoin::TXID, list<entry<Bitcoin::index, redeemable>>> diffs;
-
-        for (const auto &[op, re] : tg.Out)
-            diffs = diffs.insert (op.Digest, {{op.Index, re}},
-                [] (const list<entry<Bitcoin::index, redeemable>> &ol,
-                    const list<entry<Bitcoin::index, redeemable>> &nl)
-                    -> list<entry<Bitcoin::index, redeemable>> {
-                    return ol + nl;
-                });
-
         // broadcast the transactions.
-        for (const auto &[txid, extx] : tg.Payment)
-            u.broadcast (extx, account_diff {txid,
-                fold ([] (
-                    map<Bitcoin::index, redeemable> m,
-                    entry<Bitcoin::index, redeemable> e) -> map<Bitcoin::index, redeemable> {
-                    return m.insert (e);
-                }, map<Bitcoin::index, redeemable> {}, diffs[txid]), {}});
+        list<std::pair<Bitcoin::transaction, account_diff>> ready;
+        for (const auto &[txid, tx] : tg.Payment) ready <<= {tx, account_diff {txid, tg.Out[txid], {}}};
+        u.broadcast (ready, payment.Proof);
 
         for (const auto &[id, a, b] : tg.RequestsSatisfied) requests = requests.remove (id);
 
         u.set_payments (payments {requests, pay->Proposals});
-
-        // TODO put the ancestors to this payment in the txdb.
 
     });
 

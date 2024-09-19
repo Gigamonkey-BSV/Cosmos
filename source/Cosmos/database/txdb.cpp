@@ -98,4 +98,23 @@ namespace Cosmos {
         import_transaction (id);
         return Local [id];
     }
+
+    broadcast_error cached_remote_txdb::broadcast (SPV::proof::map map) {
+        for (const auto &[_, pn] : map) if (pn->Proof.is<SPV::proof::confirmation> ()) {
+            const auto &conf = pn->Proof.get<SPV::proof::confirmation> ();
+            if (!Local.import_transaction (pn->Transaction, conf.Path, conf.Header)) return broadcast_error::invalid_transaction;
+        } else {
+            if (auto err = broadcast (pn->Proof.get<SPV::proof::map> ()); !bool (err)) return err;
+            return broadcast (pn->Transaction);
+        }
+        return broadcast_error::none;
+    }
+
+    broadcast_error cached_remote_txdb::broadcast (SPV::proof p) {
+
+        if (auto err = broadcast (p.Proof); !bool (err)) return err;
+        for (const auto &tx : p.Payment) if (auto err = broadcast (tx); !bool (err)) return err;
+
+        return broadcast_error::none;
+    }
 }

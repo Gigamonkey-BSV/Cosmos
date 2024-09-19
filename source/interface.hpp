@@ -82,13 +82,16 @@ namespace Cosmos {
             void set_wallet (const Cosmos::wallet &);
             void set_payments (const Cosmos::payments &);
 
-            broadcast_error broadcast (const extended_transaction &, const account_diff &);
+            // broadcast a series of transactions with account diffs
+            // to update in the wallet. Optionally, an SPV::proof::map
+            // may be provided. In this case, all antedecent transactions
+            // will be entered into the database and broadcast if appropriate.
+            broadcast_error broadcast (list<std::pair<Bitcoin::transaction, account_diff>>, SPV::proof::map = {});
 
             // make a transaction with a bunch of default options already set
             spend::spent make_tx (list<Bitcoin::output> o) {
                 return spend {
                     select_output_parameters {4, 5000, .23},
-                    // TODO replace this with split parameters.
                     split_change_parameters {}, *I.random ()}
                     (Gigamonkey::redeem_p2pkh_and_p2pk, *I.keys (), *I.wallet (), o);
             }

@@ -31,29 +31,38 @@ namespace Cosmos {
         *h <<= new_events;
     }
 
-    broadcast_error Interface::writable::broadcast (const extended_transaction &extx, const account_diff &diff) {
+    broadcast_error Interface::writable::broadcast (list<std::pair<Bitcoin::transaction, account_diff>> payment, SPV::proof::map map) {
 
         auto w = I.wallet ();
         if (!bool (w)) throw exception {1} << "could not load wallet";
         Cosmos::wallet next_wallet = *w;
 
-        std::cout << "broadcasting tx " << diff.TXID;
-
-        wait_for_enter ();
-        broadcast_error err = txdb ()->broadcast ({diff.TXID, extx});
+        // store and broadcast all antecedent txs as appropriate.
+        broadcast_error err = txdb ()->broadcast (map);
         if (bool (err)) {
-            // TODO right now we just ignore failed txs.
-            // We should check if we can save them and try again.
-            // the Internet might have been down.
-            std::cout << "tx broadcast failed;\n\ttx: " << extx << "\n\terror: " << err << std::endl;
+            std::cout << "broadcast failed with error : " << err << std::endl;
             return err;
         }
 
-        next_wallet.Account <<= diff;
+        for (const auto &[tx, diff] : payment) {
 
-        // save new wallet.
-        set_wallet (next_wallet);
-        return err;
+            std::cout << "broadcasting tx " << diff.TXID;
+
+            wait_for_enter ();
+            broadcast_error err = txdb ()->broadcast (tx);
+            if (bool (err)) {
+                // TODO right now we just ignore failed txs.
+                // We should check if we can save them and try again.
+                // the Internet might have been down.
+                std::cout << "tx broadcast failed;\n\ttx: " << tx << "\n\terror: " << err << std::endl;
+                return err;
+            }
+
+            next_wallet.Account <<= diff;
+            set_wallet (next_wallet);
+        }
+
+        return broadcast_error::none;
     }
 
     void read_both_chains_options (Interface &e, const arg_parser &p) {
