@@ -23,6 +23,8 @@ namespace Cosmos {
         broadcast_error (error e): Error {e} {}
         broadcast_error (): Error {none} {}
 
+        // broadcast_error is equivalent to true when the
+        // operation succeeds.
         operator bool () {
             return Error == none;
         }

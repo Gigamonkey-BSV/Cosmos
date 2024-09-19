@@ -104,7 +104,7 @@ namespace Cosmos {
             const auto &conf = pn->Proof.get<SPV::proof::confirmation> ();
             if (!Local.import_transaction (pn->Transaction, conf.Path, conf.Header)) return broadcast_error::invalid_transaction;
         } else {
-            if (auto err = broadcast (pn->Proof.get<SPV::proof::map> ()); !bool (err)) return err;
+            if (auto success = broadcast (pn->Proof.get<SPV::proof::map> ()); !bool (success)) return success;
             return broadcast (pn->Transaction);
         }
         return broadcast_error::none;
@@ -112,8 +112,8 @@ namespace Cosmos {
 
     broadcast_error cached_remote_txdb::broadcast (SPV::proof p) {
 
-        if (auto err = broadcast (p.Proof); !bool (err)) return err;
-        for (const auto &tx : p.Payment) if (auto err = broadcast (tx); !bool (err)) return err;
+        if (auto success = broadcast (p.Proof); !bool (success)) return success;
+        for (const auto &tx : p.Payment) if (auto success = broadcast (tx); !bool (success)) return success;
 
         return broadcast_error::none;
     }

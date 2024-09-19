@@ -38,10 +38,9 @@ namespace Cosmos {
         Cosmos::wallet next_wallet = *w;
 
         // store and broadcast all antecedent txs as appropriate.
-        broadcast_error err = txdb ()->broadcast (map);
-        if (bool (err)) {
-            std::cout << "broadcast failed with error : " << err << std::endl;
-            return err;
+        if (auto success = txdb ()->broadcast (map); !bool (success)) {
+            std::cout << "broadcast failed with error : " << success << std::endl;
+            return success;
         }
 
         for (const auto &[tx, diff] : payment) {
@@ -49,13 +48,12 @@ namespace Cosmos {
             std::cout << "broadcasting tx " << diff.TXID;
 
             wait_for_enter ();
-            broadcast_error err = txdb ()->broadcast (tx);
-            if (bool (err)) {
+            if (auto success = txdb ()->broadcast (tx); !bool (success)) {
                 // TODO right now we just ignore failed txs.
                 // We should check if we can save them and try again.
                 // the Internet might have been down.
-                std::cout << "tx broadcast failed;\n\ttx: " << tx << "\n\terror: " << err << std::endl;
-                return err;
+                std::cout << "tx broadcast failed;\n\ttx: " << tx << "\n\terror: " << success << std::endl;
+                return success;
             }
 
             next_wallet.Account <<= diff;
