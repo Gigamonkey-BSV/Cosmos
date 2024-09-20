@@ -2,11 +2,14 @@
 #define COSMOS_NETWORK
 
 #include <gigamonkey/pay/MAPI.hpp>
+#include <gigamonkey/pay/ARC.hpp>
 #include <Cosmos/network/whatsonchain.hpp>
 #include <ctime>
 
 namespace Cosmos {
     namespace MAPI = Gigamonkey::MAPI;
+    namespace ARC = Gigamonkey::ARC;
+    using extended_transaction = Gigamonkey::extended::transaction;
     using satoshis_per_byte = Gigamonkey::satoshis_per_byte;
 
     struct broadcast_error {
@@ -14,20 +17,43 @@ namespace Cosmos {
             none,
             unknown,
             network_connection_fail,
+            inauthenticated,
             insufficient_fee,
             invalid_transaction
         };
 
         error Error;
+        // an HTTP JSON error object if provided.
+        net::error Details;
 
-        broadcast_error (error e): Error {e} {}
-        broadcast_error (): Error {none} {}
+        broadcast_error (error e, net::error deets = JSON (nullptr)): Error {e}, Details {deets} {}
+        broadcast_error (): Error {none}, Details (JSON (nullptr)) {}
 
         // broadcast_error is equivalent to true when the
         // operation succeeds.
-        operator bool () {
+        operator bool () const {
             return Error == none;
         }
+
+        bool error () const {
+            return Error != none;
+        }
+
+        bool success () const {
+            return Error == none;
+        }
+    };
+
+    struct broadcast_single_result : broadcast_error {
+        ARC::status Status {JSON (nullptr)};
+        using broadcast_error::broadcast_error;
+        broadcast_single_result (const ARC::status &stat): broadcast_error {}, Status (stat) {}
+    };
+
+    struct broadcast_multiple_result : broadcast_error {
+        list<ARC::status> Status;
+        using broadcast_error::broadcast_error;
+        broadcast_multiple_result (list<ARC::status> stats): broadcast_error {}, Status (stats) {}
     };
 
     std::ostream &operator << (std::ostream &, broadcast_error);
@@ -38,10 +64,13 @@ namespace Cosmos {
         whatsonchain WhatsOnChain;
         MAPI::client Gorilla;
         net::HTTP::client_blocking CoinGecko;
-        
+        ARC::client TAAL;
+
         network () : IO {}, SSL {std::make_shared<net::HTTP::SSL> (net::HTTP::SSL::tlsv12_client)},
-            WhatsOnChain {SSL}, Gorilla {net::HTTP::REST {"https", "mapi.gorillapool.io"}},
-            CoinGecko {net::HTTP::REST {"https", "api.coingecko.com"}, tools::rate_limiter {1, 10}} {
+            WhatsOnChain {SSL}, Gorilla {SSL, net::HTTP::REST {"https", "mapi.gorillapool.io"}},
+            CoinGecko {SSL, net::HTTP::REST {"https", "api.coingecko.com"}, tools::rate_limiter {1, 10}},
+            // TODO I don't know what to put for TAAL's rate limiter.
+            TAAL {SSL, net::HTTP::REST {"https", "tapi.taal.com/arc"}, tools::rate_limiter {1, 10}} {
             SSL->set_default_verify_paths ();
             SSL->set_verify_mode (net::asio::ssl::verify_peer);
         }
@@ -50,7 +79,9 @@ namespace Cosmos {
         
         satoshis_per_byte mining_fee ();
         
-        broadcast_error broadcast (const bytes &tx);
+        // standard tx format and extended are allowed.
+        broadcast_single_result broadcast (const extended_transaction &tx);
+        broadcast_multiple_result broadcast (list<extended_transaction> tx);
 
         double price (const Bitcoin::timestamp &);
         

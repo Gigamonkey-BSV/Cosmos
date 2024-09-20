@@ -8,7 +8,7 @@ namespace Cosmos {
         for (const auto &o : d.Remove) {
             const auto *x = a.contains (o);
             if (!bool (x)) throw exception {} << "invalid account for diff";
-            a.remove (o);
+            a = a.remove (o);
         }
 
         for (const auto &e: d.Insert) a = a.insert (Bitcoin::outpoint {d.TXID, e.Key}, e.Value);

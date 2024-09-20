@@ -6,7 +6,7 @@
 std::mutex Mutex;
 
 namespace Cosmos {
-
+/*
     broadcast_error network::broadcast (const bytes &tx) {
         std::lock_guard<std::mutex> lock (Mutex);
         std::cout << "broadcasting tx " << std::endl;
@@ -24,6 +24,7 @@ namespace Cosmos {
 
         try {
             auto broadcast_result = Gorilla.submit_transaction ({tx});
+            std::cout << "GorallaPool broadcast result: " << JSON (broadcast_result) << std::endl;
             broadcast_gorilla = broadcast_result.ReturnResult == MAPI::success;
             if (!broadcast_gorilla) std::cout << "Gorilla broadcast description: " << broadcast_result.ResultDescription << std::endl;
         } catch (net::HTTP::exception ex) {
@@ -36,6 +37,60 @@ namespace Cosmos {
 
         // we don't count whatsonchain because that one seems to return false positives a lot.
         return broadcast_gorilla || broadcast_pow_co ? broadcast_error::none : broadcast_error::unknown;
+    }*/
+
+    broadcast_single_result network::broadcast (const extended_transaction &tx) {
+
+        std::cout << "attempting to broadcast tx " << tx.id () << "\n\t" << bytes (tx) << std::endl;
+        wait_for_enter ();
+
+        ARC::submit_response response;
+        try {
+            response = TAAL.submit (tx);
+        } catch (net::HTTP::exception ex) {
+            std::cout << "Could not connect: " << ex.what () << std::endl;
+            return broadcast_error::network_connection_fail;
+        }
+
+        std::cout << "response status: " << response.Status << std::endl;
+
+        if (response.Status == 401) broadcast_error::inauthenticated;
+
+        std::cout << "response body: " << response.Body << std::endl;
+
+        if (response.Status == 200) return response.status ();
+
+        if (response.Status == 465 || response.Status == 473) return {broadcast_error::insufficient_fee, *response.body ()};
+        if (response.Status >= 460) return {broadcast_error::invalid_transaction, *response.body ()};
+        return {broadcast_error::unknown, *response.body ()};
+    }
+
+    broadcast_multiple_result network::broadcast (list<extended_transaction> txs) {
+
+        std::cout << "attempting to broadcast " << std::endl;
+        for (const auto &tx: txs) std::cout << "\t" << tx.id () << "\n\t" << bytes (tx) << std::endl;
+        wait_for_enter ();
+
+        ARC::submit_txs_response response;
+        try {
+            response = TAAL.submit_txs (txs);
+        } catch (net::HTTP::exception ex) {
+            std::cout << "Could not connect: " << ex.what () << std::endl;
+            return broadcast_error::network_connection_fail;
+        }
+
+        std::cout << "response status: " << response.Status << std::endl;
+
+        if (response.Status == 401) return broadcast_error::inauthenticated;
+
+        std::cout << "response body: " << response.Body << std::endl;
+
+        if (response.Status == 200) return response.status ();
+
+        if (response.Status == 465 || response.Status == 473) return {broadcast_error::insufficient_fee, *response.body ()};
+        if (response.Status >= 460) return {broadcast_error::invalid_transaction, *response.body ()};
+        return {broadcast_error::unknown, *response.body ()};
+
     }
 
     bytes network::get_transaction (const Bitcoin::TXID &txid) {

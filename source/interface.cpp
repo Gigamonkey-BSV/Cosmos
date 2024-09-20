@@ -31,36 +31,26 @@ namespace Cosmos {
         *h <<= new_events;
     }
 
-    broadcast_error Interface::writable::broadcast (list<std::pair<Bitcoin::transaction, account_diff>> payment, SPV::proof::map map) {
+    broadcast_tree_result Interface::writable::broadcast (list<std::pair<Bitcoin::transaction, account_diff>> payment) {
 
         auto w = I.wallet ();
         if (!bool (w)) throw exception {1} << "could not load wallet";
         Cosmos::wallet next_wallet = *w;
 
-        // store and broadcast all antecedent txs as appropriate.
-        if (auto success = txdb ()->broadcast (map); !bool (success)) {
-            std::cout << "broadcast failed with error : " << success << std::endl;
-            return success;
-        }
+        // this will throw an exception if any of the diffs are incompatible.
+        for (const auto &[_, diff] : payment) next_wallet.Account <<= diff;
 
-        for (const auto &[tx, diff] : payment) {
+        // we assume that the proof exists and can be generated.
+        auto success = Cosmos::broadcast (*txdb (),
+            *SPV::generate_proof (*txdb (),
+                for_each ([] (const auto p) -> Bitcoin::transaction {
+                    return p.first;
+                }, payment)));
 
-            std::cout << "broadcasting tx " << diff.TXID;
+        // update wallet.
+        if (bool (success)) set_wallet (next_wallet);
 
-            wait_for_enter ();
-            if (auto success = txdb ()->broadcast (tx); !bool (success)) {
-                // TODO right now we just ignore failed txs.
-                // We should check if we can save them and try again.
-                // the Internet might have been down.
-                std::cout << "tx broadcast failed;\n\ttx: " << tx << "\n\terror: " << success << std::endl;
-                return success;
-            }
-
-            next_wallet.Account <<= diff;
-            set_wallet (next_wallet);
-        }
-
-        return broadcast_error::none;
+        return success;
     }
 
     void read_both_chains_options (Interface &e, const arg_parser &p) {

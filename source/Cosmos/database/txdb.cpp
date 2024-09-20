@@ -39,6 +39,20 @@ namespace Cosmos {
         return true;
     }
 
+    namespace {
+        bool import_header (local_txdb &local , network &net, const N &n) {
+            auto header = net.WhatsOnChain.block ().get_header (n);
+            if (!header.valid ()) return false;
+            return local.insert (header.Height, header.Header);
+        }
+
+        bool import_header (local_txdb &local, network &net, const digest256 &d) {
+            auto header = net.WhatsOnChain.block ().get_header (d);
+            if (!header.valid ()) return false;
+            return local.insert (header.Height, header.Header);
+        }
+    }
+
     bool cached_remote_txdb::import_transaction (const Bitcoin::TXID &txid) {
 
         auto tx = Net.get_transaction (txid);
@@ -50,13 +64,7 @@ namespace Cosmos {
         Bitcoin::transaction decoded {tx};
         auto h = Local.header (proof.BlockHash);
         if (bool (h)) return Local.import_transaction (decoded, Merkle::path (proof.Proof.Branch), h->Value);
-        else {
-            auto header = Net.WhatsOnChain.block ().get_header (proof.BlockHash);
-            if (!header.valid ()) return false;
-
-            Local.insert (header.Height, header.Header);
-            return Local.import_transaction (decoded, Merkle::path (proof.Proof.Branch), header.Header);
-        }
+        else return import_header (Local, Net, proof.BlockHash);
     }
 
     ordered_list<ray> cached_remote_txdb::by_address (const Bitcoin::address &a) {
@@ -92,29 +100,80 @@ namespace Cosmos {
         return Local.redeeming (o);
     }
 
-    vertex cached_remote_txdb::operator [] (const Bitcoin::TXID &id) {
-        auto p = Local [id];
+    SPV::database::confirmed cached_remote_txdb::tx (const Bitcoin::TXID &xd) {
+        auto p = Local.tx (xd);
         if (p.valid ()) return p;
-        import_transaction (id);
-        return Local [id];
+        import_transaction (xd);
+        return Local.tx (xd);
     }
 
-    broadcast_error cached_remote_txdb::broadcast (SPV::proof::map map) {
-        for (const auto &[_, pn] : map) if (pn->Proof.is<SPV::proof::confirmation> ()) {
-            const auto &conf = pn->Proof.get<SPV::proof::confirmation> ();
-            if (!Local.import_transaction (pn->Transaction, conf.Path, conf.Header)) return broadcast_error::invalid_transaction;
-        } else {
-            if (auto success = broadcast (pn->Proof.get<SPV::proof::map> ()); !bool (success)) return success;
-            return broadcast (pn->Transaction);
+    const Bitcoin::header *cached_remote_txdb::header (const N &n) const {
+        const auto *h = Local.header (n);
+        if (bool (h)) return h;
+        if (!import_header (Local, Net, n)) return nullptr;
+        return Local.header (n);
+    }
+
+    const entry<N, Bitcoin::header> *cached_remote_txdb::header (const digest256 &d) const {
+        const auto *e = Local.header (d);
+        if (bool (e)) return e;
+        if (!import_header (Local, Net, d)) return nullptr;
+        return Local.header (d);
+    }
+
+    namespace {
+        broadcast_single_result broadcast_tx (cached_remote_txdb &txdb, const extended_transaction &tx) {
+            auto err = txdb.Net.broadcast (tx);
+            if (!bool (err)) txdb.Local.insert (Bitcoin::transaction (tx));
+            return err;
         }
-        return broadcast_error::none;
+
+        broadcast_multiple_result broadcast_txs (cached_remote_txdb &txdb, const list<extended_transaction> &txs) {
+            auto err = txdb.Net.broadcast (txs);
+            if (!bool (err)) for (const auto &tx : txs) txdb.Local.insert (Bitcoin::transaction (tx));
+            return err;
+        }
+
+        broadcast_tree_result broadcast_map (cached_remote_txdb &txdb, SPV::proof::map map) {
+            broadcast_tree_result so_far {};
+            // go down the tree and process leaves first.
+            for (const auto &[txid, pn] : map) if (pn->Proof.is<SPV::proof::confirmation> ()) {
+                    // leaves have confirmations so they don't need to be broadcast and they
+                    // just go into the database.
+                    const auto &conf = pn->Proof.get<SPV::proof::confirmation> ();
+                    if (!txdb.Local.import_transaction (pn->Transaction, conf.Path, conf.Header)) {
+                        so_far.Sub = so_far.Sub.insert (txid, broadcast_error::invalid_transaction);
+                        return so_far;
+                    }
+                } else {
+                    // try to broadcast all sub transactions.
+                    auto m = pn->Proof.get<SPV::proof::map> ();
+                    auto successes = broadcast_map (txdb, m);
+                    so_far.Sub = so_far.Sub + successes.Sub;
+                    if (!bool (successes)) {
+                        so_far.Error = successes.Error;
+                        return so_far;
+                    } else {
+                        auto success = broadcast_tx (txdb, SPV::extended_transaction (pn->Transaction, m));
+                        so_far.Sub = so_far.Sub.insert (txid, success);
+                        if (bool (success)) txdb.insert (pn->Transaction);
+                        else {
+                            so_far.Error = success.Error;
+                            return so_far;
+                        }
+                    }
+                }
+
+            //
+            return so_far;
+        }
     }
 
-    broadcast_error cached_remote_txdb::broadcast (SPV::proof p) {
-
-        if (auto success = broadcast (p.Proof); !bool (success)) return success;
-        for (const auto &tx : p.Payment) if (auto success = broadcast (tx); !bool (success)) return success;
-
-        return broadcast_error::none;
+    broadcast_tree_result broadcast (cached_remote_txdb &txdb, SPV::proof p) {
+        if (!p.valid ()) return broadcast_error::invalid_transaction;
+        broadcast_tree_result success_map = broadcast_map (txdb, p.Proof);
+        for (const auto &[_, x] : success_map.Sub) if (!bool (x))
+            return {{x.Error, x.Details}, success_map.Sub};
+        return {broadcast_txs (txdb, SPV::extended_transactions (p.Payment, p.Proof)), success_map.Sub};
     }
 }

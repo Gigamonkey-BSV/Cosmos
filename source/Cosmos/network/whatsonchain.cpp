@@ -19,12 +19,15 @@ namespace Cosmos {
             JSON {{"tx_hex", encoding::hex::write (tx)}}.dump ());
 
         auto response = API (request);
+            std::cout << "response of broadcasting to whatsonchain: " << response << std::endl;
 
-        if (static_cast<unsigned int> (response.Status) >= 500)
+        if (response.Status >= 500)
             throw net::HTTP::exception {request, response, string {"problem reading txid."}};
 
-        if (static_cast<unsigned int> (response.Status) != 200 ||
-            response.Headers[net::HTTP::header::content_type] == "text/plain") return false;
+        if (response.Status != 200 ||
+            response.Headers[net::HTTP::header::content_type] == "text/plain") {
+            return false;
+        }
 
         if (response.Body == "") return false;
 
@@ -182,7 +185,7 @@ namespace Cosmos {
         auto request = API.REST.GET (call);
         auto response = API (request);
 
-        if (static_cast<unsigned int> (response.Status) == 404) return {};
+        if (response.Status == 404) return {};
 
         if (response.Status != net::HTTP::status::ok)
             throw net::HTTP::exception {request, response, "response status is not ok"};
@@ -200,7 +203,7 @@ namespace Cosmos {
         auto request = API.REST.GET (call);
         auto response = API (request);
 
-        if (static_cast<unsigned int> (response.Status) == 404) return {};
+        if (response.Status == 404) return {};
 
         if (response.Status != net::HTTP::status::ok)
             throw net::HTTP::exception {request, response, "response status is not ok"};
@@ -214,7 +217,7 @@ namespace Cosmos {
         auto request = API.REST.GET (call);
         auto response = API (request);
 
-        if (static_cast<unsigned int> (response.Status) == 404) return {};
+        if (response.Status == 404) return {};
 
         if (response.Status != net::HTTP::status::ok) {
             throw net::HTTP::exception {request, response, "response status is not ok"};
@@ -245,8 +248,36 @@ namespace Cosmos {
         auto request = API.REST.GET (call);
         auto response = API (request);
 
-        if (static_cast<unsigned int> (response.Status) == 404) return {};
-        if (static_cast<unsigned int> (response.Status) == 400) return {};
+        if (response.Status == 404) return {};
+        if (response.Status == 400) return {};
+
+        if (response.Status != net::HTTP::status::ok)
+            throw net::HTTP::exception {request, response, "response status is not ok"};
+
+        JSON h = JSON::parse (response.Body);
+
+        std::string bits = std::string (h["bits"]);
+
+        uint32_big j;
+        boost::algorithm::unhex (bits.begin (), bits.end (), j.begin ());
+        Bitcoin::target t {uint32_little {j}};
+
+        return header {N {uint32 (h["height"])}, Bitcoin::header {
+            int32 (h["version"]), read_txid (h["previousblockhash"]),
+            read_txid (h["merkleroot"]), Bitcoin::timestamp {uint32 (h["time"])},
+            t, uint32 (h["nonce"])}};
+
+    }
+
+    whatsonchain::header whatsonchain::blocks::get_header (const N &n) {
+
+        string call = string {"/v1/bsv/main/block/"} + encoding::decimal::write (n) + "/header";
+
+        auto request = API.REST.GET (call);
+        auto response = API (request);
+
+        if (response.Status == 404) return {};
+        if (response.Status == 400) return {};
 
         if (response.Status != net::HTTP::status::ok)
             throw net::HTTP::exception {request, response, "response status is not ok"};

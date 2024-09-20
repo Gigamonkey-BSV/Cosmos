@@ -86,7 +86,7 @@ namespace Cosmos {
             // to update in the wallet. Optionally, an SPV::proof::map
             // may be provided. In this case, all antedecent transactions
             // will be entered into the database and broadcast if appropriate.
-            broadcast_error broadcast (list<std::pair<Bitcoin::transaction, account_diff>>, SPV::proof::map = {});
+            broadcast_tree_result broadcast (list<std::pair<Bitcoin::transaction, account_diff>>);
 
             // make a transaction with a bunch of default options already set
             spend::spent make_tx (list<Bitcoin::output> o) {

@@ -96,7 +96,11 @@ namespace Cosmos {
         };
 
         struct blocks {
+            // by block hash, not by merkle root.
             header get_header (const digest256 &);
+
+            // by height
+            header get_header (const N &);
 
             whatsonchain &API;
         };

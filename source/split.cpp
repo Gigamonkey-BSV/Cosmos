@@ -23,8 +23,7 @@ namespace Cosmos {
             if (const auto *en = w->Account.contains (r.Point); bool (en))
                 redeemer = *en;
 
-        if (!bool (redeemer)) throw exception {} << "WARNING: redeem information for address " << addr <<
-            " was not found in our account even though we believe we own it.";
+        if (!bool (redeemer)) throw exception {} << "address " << addr << " not in wallet.";
 
         list<entry<Bitcoin::outpoint, redeemable>> outputs;
         for (const ray &r : outpoints) outputs <<= entry<Bitcoin::outpoint, redeemable> {r.Point, *redeemer};
@@ -50,8 +49,7 @@ namespace Cosmos {
             if (const auto *en = w->Account.contains (r.Point); bool (en))
                 redeemer = *en;
 
-        if (!bool (redeemer)) throw exception {} << "WARNING: redeem information for script " << script_hash <<
-            " was not found in our account even though we believe we own it.";
+        if (!bool (redeemer)) throw exception {} << "script " << script_hash << " not in wallet.";
 
         list<entry<Bitcoin::outpoint, redeemable>> outputs;
         for (const ray &r : outpoints) outputs <<= entry<Bitcoin::outpoint, redeemable> {r.Point, *redeemer};
@@ -92,6 +90,8 @@ void command_split (const arg_parser &p) {
     Interface e {};
     read_wallet_options (e, p);
     read_random_options (e, p);
+
+    std::cout << "Get TAAL policy: " << e.net ()->TAAL.policy () << std::endl;
 
     maybe<double> max_sats_per_output = double (options::DefaultMaxSatsPerOutput);
     maybe<double> mean_sats_per_output = double (options::DefaultMeanSatsPerOutput);
@@ -210,6 +210,24 @@ void command_split (const arg_parser &p) {
 
     e.update<void> ([&split, &top, fee_rate] (Cosmos::Interface::writable u) {
 
+        // TODO remove this.
+        // go through all txs that are in the account.
+        // check to see if their scripts are valid.
+        map<Bitcoin::TXID, extended_transaction> txs;
+        auto local = u.local_txdb ();
+        for (const auto &[op, re]: *u.get ().account ()) {
+            if (txs.contains (op.Digest)) continue;
+            auto c = local->tx (op.Digest);
+            if (!c.valid ()) throw exception {} << "error: tx " << op.Digest << " ought to be in the database";
+            auto ex = SPV::extend (*local, *c.Transaction);
+            if (!ex) throw exception {} << "could not extend " << op.Digest;
+            txs = txs.insert (op.Digest, *ex);
+        }
+        for (const auto &[txid, extx] : txs) if (!extx.valid ()) throw exception {} << "tx " << txid << " is not valid ";
+
+        std::cout << " checking all transaction in wallet valid " << std::endl;
+        for (const auto &[txid, tx]: txs) if (!tx.valid ()) throw exception {} << "tx " << txid << " was not valid";
+
         int count = 0;
         if (top.size () > 10) std::cout << "top 10 splittable scripts: " << std::endl;
         {
@@ -266,8 +284,22 @@ void command_split (const arg_parser &p) {
 
         if (!get_user_yes_or_no ("Do you want to continue?")) throw exception {} << "program aborted";
 
-        list<spend::spent> split_txs;
-        wallet new_wallet = *u.get ().wallet ();
+        struct split_result {
+            // the data to broadcast.
+            SPV::proof Proof {};
+
+            // the new wallet if the broadcast succeeds.
+            wallet Wallet {};
+        };
+
+        list<split_result> split_txs;
+
+        split_result next {};
+        next.Wallet = *u.get ().wallet ();
+
+        int number_of_transactions {0};
+        size_t total_size {0};
+        Bitcoin::satoshi total_fee {0};
 
         {
             while (!top.empty ()) {
@@ -275,35 +307,37 @@ void command_split (const arg_parser &p) {
 
                 std::cout << " Splitting script with hash " << t.ScriptHash << " containing value " << t.Value << " over " <<
                     t.Outputs.size () << " output" << (t.Outputs.size () == 1 ? "" : "s") << "." << std::endl;
-                spend::spent spent = split (Gigamonkey::redeem_p2pkh_and_p2pk, *u.random (), *u.get ().keys (), new_wallet, t.Outputs, *fee_rate);
 
-                account new_account = new_wallet.Account;
+                spend::spent spent = split (Gigamonkey::redeem_p2pkh_and_p2pk, *u.random (),
+                    *u.get ().keys (), next.Wallet, t.Outputs, *fee_rate);
+
+                account new_account = next.Wallet.Account;
 
                 std::cout << " Produced transactions " << std::endl;
+                list<Bitcoin::transaction> txs;
 
                 // each split may give us several new transactions to work with.
                 for (const auto &[extx, diff] : spent.Transactions) {
                     auto txid = extx.id ();
+                    Bitcoin::transaction tx = Bitcoin::transaction (extx);
                     new_account <<= diff;
-                    std::cout << "  " << txid << "\n  of size " << extx.serialized_size () <<
-                        " with " << extx.Outputs.size () << " outputs and " << extx.fee () << " in fees." << std::endl;
+                    txs <<= tx;
+                    number_of_transactions++;
+                    size_t size = tx.serialized_size ();
+                    total_size += size;
+                    Bitcoin::satoshi fee = extx.fee ();
+                    total_fee += fee;
+                    std::cout << "  " << txid << "\n  of size " << size <<
+                        " with " << tx.Outputs.size () << " outputs and " << fee << " in fees." << std::endl;
                 }
 
-                split_txs <<= spent;
-                new_wallet = wallet {new_wallet.Pubkeys, spent.Addresses, new_account};
+                next = split_result {*SPV::generate_proof (*u.txdb (), txs),
+                    wallet {next.Wallet.Pubkeys, spent.Addresses, new_account}};
+
+                split_txs <<= next;
 
                 top = top.rest ();
             }
-        }
-
-        int number_of_transactions {0};
-        size_t total_size {0};
-        Bitcoin::satoshi total_fee {0};
-
-        for (const auto &x : split_txs) for (const auto &[tx, _] : x.Transactions) {
-            number_of_transactions++;
-            total_size += tx.serialized_size ();
-            total_fee += tx.fee ();
         }
 
         std::cout << "Transactions have been generated!" << std::endl;
@@ -314,15 +348,14 @@ void command_split (const arg_parser &p) {
         if (!get_user_yes_or_no ("Do you want broadcast these transactions?")) throw exception {} << "program aborted";
 
         std::cout << "broadcasting split transactions" << std::endl;
-
-        // TODO if one of these broadcasts fails we don't really have anything we can do about it right now.
-        // ideally, we would update the wallet each time we try to broadcast.
-        // We only need to update addresses here.
-        for (const spend::spent &sp : split_txs) u.broadcast (
-            for_each ([] (const auto &z) -> std::pair<Bitcoin::transaction, account_diff> {
-                return {Bitcoin::transaction (z.first), z.second};
-            }, sp.Transactions));
-        u.set_wallet (new_wallet);
-
+        for (const auto &sp : split_txs) {
+            broadcast_tree_result success = broadcast (*u.txdb (), sp.Proof);
+            if (!success) {
+                // TODO we should analize the result more here but we will do that
+                // inside the broadcast method for now.
+                throw exception {} << "could not broadcast ";
+            } return;
+            u.set_wallet (sp.Wallet);
+        }
     });
 }

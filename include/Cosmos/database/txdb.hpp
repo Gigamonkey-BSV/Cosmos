@@ -10,7 +10,6 @@ namespace Cosmos {
     namespace Bitcoin = Gigamonkey::Bitcoin;
     namespace Merkle = Gigamonkey::Merkle;
     namespace SPV = Gigamonkey::SPV;
-    using extended_transaction = Gigamonkey::extended::transaction;
 
     // a transaction with a complete Merkle proof.
     struct vertex : SPV::database::confirmed {
@@ -151,28 +150,91 @@ namespace Cosmos {
 
     };
 
-    struct cached_remote_txdb final : txdb {
+    struct cached_remote_txdb final : local_txdb {
         network &Net;
         local_txdb &Local;
 
-        cached_remote_txdb (network &n, local_txdb &x): txdb {}, Net {n}, Local {x} {}
+        cached_remote_txdb (network &n, local_txdb &x): local_txdb {}, Net {n}, Local {x} {}
 
-        vertex operator [] (const Bitcoin::TXID &id) final override;
+        const Bitcoin::header *header (const N &) const final override;
+
+        const entry<N, Bitcoin::header> *latest () const final override;
+
+        // get by hash or merkle root (need both)
+        const entry<N, Bitcoin::header> *header (const digest256 &) const final override;
+
+        // do we have a tx or merkle proof for a given tx?
+        SPV::database::confirmed tx (const Bitcoin::TXID &) final override;
+
+        bool insert (const N &height, const Bitcoin::header &h) final override;
+
+        bool insert (const Merkle::proof &) final override;
+        void insert (const Bitcoin::transaction &) final override;
+
+        set<Bitcoin::TXID> pending () final override;
+        void remove (const Bitcoin::TXID &) final override;
+
         ordered_list<ray> by_address (const Bitcoin::address &) final override;
         ordered_list<ray> by_script_hash (const digest256 &) final override;
         ptr<ray> redeeming (const Bitcoin::outpoint &) final override;
 
+        void add_address (const Bitcoin::address &, const Bitcoin::outpoint &) final override;
+        void add_script (const digest256 &, const Bitcoin::outpoint &) final override;
+        void set_redeem (const Bitcoin::outpoint &, const inpoint &) final override;
+
         bool import_transaction (const Bitcoin::TXID &);
-
-        broadcast_error broadcast (const Bitcoin::transaction &tx) {
-            auto err = Net.broadcast (bytes (tx));
-            if (!bool (err)) Local.insert (tx);
-            return err;
-        }
-
-        broadcast_error broadcast (SPV::proof);
-        broadcast_error broadcast (SPV::proof::map);
     };
+
+    // Since we might end up trying to broadcast multiple txs at once
+    // all coming from a single proof, we have a way of collecting all
+    // results that come up for all broadcasts so that we can handle
+    // the tx appropriately in the database.
+    struct broadcast_tree_result : broadcast_multiple_result {
+        using broadcast_multiple_result::broadcast_multiple_result;
+        map<Bitcoin::TXID, broadcast_single_result> Sub;
+        broadcast_tree_result (const broadcast_multiple_result &r, map<Bitcoin::TXID, broadcast_single_result> nodes = {}):
+            broadcast_multiple_result {r}, Sub {nodes} {}
+    };
+
+    // go through a proof, check it, put all antecedents in the database and broadcast those
+    // without merkle proofs, then broadcast the root level txs.
+    broadcast_tree_result broadcast (cached_remote_txdb &, SPV::proof);
+
+    void inline cached_remote_txdb::add_address (const Bitcoin::address &a, const Bitcoin::outpoint &o) {
+        return Local.add_address (a, o);
+    }
+
+    void inline cached_remote_txdb::add_script (const digest256 &d, const Bitcoin::outpoint &o) {
+        return Local.add_script (d, o);
+    }
+
+    void inline cached_remote_txdb::set_redeem (const Bitcoin::outpoint &o, const inpoint &i) {
+        return Local.set_redeem (o, i);
+    }
+
+    bool inline cached_remote_txdb::insert (const N &height, const Bitcoin::header &h) {
+        return Local.insert (height, h);
+    }
+
+    bool inline cached_remote_txdb::insert (const Merkle::proof &p) {
+        return Local.insert (p);
+    }
+
+    void inline cached_remote_txdb::insert (const Bitcoin::transaction &tx) {
+        return Local.insert (tx);
+    }
+
+    set<Bitcoin::TXID> inline cached_remote_txdb::pending () {
+        return Local.pending ();
+    }
+
+    void inline cached_remote_txdb::remove (const Bitcoin::TXID &txid) {
+        return Local.remove (txid);
+    }
+
+    const inline entry<N, Bitcoin::header> *cached_remote_txdb::latest () const {
+        return Local.latest ();
+    }
 }
 
 #endif
