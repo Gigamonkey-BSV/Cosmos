@@ -83,6 +83,7 @@ namespace Cosmos {
         }
         return top;
     }
+
 }
 
 void command_split (const arg_parser &p) {
@@ -91,6 +92,7 @@ void command_split (const arg_parser &p) {
     read_wallet_options (e, p);
     read_random_options (e, p);
 
+    std::cout << "Get TAAL health: " << e.net ()->TAAL.health () << std::endl;
     std::cout << "Get TAAL policy: " << e.net ()->TAAL.policy () << std::endl;
 
     maybe<double> max_sats_per_output = double (options::DefaultMaxSatsPerOutput);
@@ -210,23 +212,7 @@ void command_split (const arg_parser &p) {
 
     e.update<void> ([&split, &top, fee_rate] (Cosmos::Interface::writable u) {
 
-        // TODO remove this.
-        // go through all txs that are in the account.
-        // check to see if their scripts are valid.
-        map<Bitcoin::TXID, extended_transaction> txs;
-        auto local = u.local_txdb ();
-        for (const auto &[op, re]: *u.get ().account ()) {
-            if (txs.contains (op.Digest)) continue;
-            auto c = local->tx (op.Digest);
-            if (!c.valid ()) throw exception {} << "error: tx " << op.Digest << " ought to be in the database";
-            auto ex = SPV::extend (*local, *c.Transaction);
-            if (!ex) throw exception {} << "could not extend " << op.Digest;
-            txs = txs.insert (op.Digest, *ex);
-        }
-        for (const auto &[txid, extx] : txs) if (!extx.valid ()) throw exception {} << "tx " << txid << " is not valid ";
-
-        std::cout << " checking all transaction in wallet valid " << std::endl;
-        for (const auto &[txid, tx]: txs) if (!tx.valid ()) throw exception {} << "tx " << txid << " was not valid";
+        auto &txdb = *u.txdb ();
 
         int count = 0;
         if (top.size () > 10) std::cout << "top 10 splittable scripts: " << std::endl;
@@ -237,7 +223,7 @@ void command_split (const arg_parser &p) {
 
                 if (count++ >= 10) break;
                 std::cout << "\t" << t.Value << " sats in script " << t.ScriptHash << " in " << std::endl;
-                for (const auto &o : t.Outputs) std::cout << "\t\t" << write (o.Key) << " from " << (*u.txdb ())[o.Key.Digest].when () << std::endl;
+                for (const auto &o : t.Outputs) std::cout << "\t\t" << write (o.Key) << " from " << (txdb)[o.Key.Digest].when () << std::endl;
 
                 view_top = view_top.rest ();
             }
@@ -247,7 +233,7 @@ void command_split (const arg_parser &p) {
         // which destroyed the ptr object. This is definitely kinda confusing,
         // since you can safely dereference other pointers returned by Interface.
         ptr<Cosmos::price_data> price_data = u.price_data ();
-        auto &txdb = *u.txdb ();
+
         /*
         // commented out since we don't have a reliable source of price data right now.
         Bitcoin::timestamp now = Bitcoin::timestamp::now ();
@@ -313,12 +299,13 @@ void command_split (const arg_parser &p) {
 
                 account new_account = next.Wallet.Account;
 
-                std::cout << " Produced transactions " << std::endl;
+                std::cout << " Produced " << spent.Transactions.size () << " transactions " << std::endl;
                 list<Bitcoin::transaction> txs;
 
                 // each split may give us several new transactions to work with.
                 for (const auto &[extx, diff] : spent.Transactions) {
                     auto txid = extx.id ();
+                    if (!extx.valid ()) throw exception {} << "WARNING: tx " << txid << " is not valid.";
                     Bitcoin::transaction tx = Bitcoin::transaction (extx);
                     new_account <<= diff;
                     txs <<= tx;

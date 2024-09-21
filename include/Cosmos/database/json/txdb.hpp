@@ -19,7 +19,7 @@ namespace Cosmos {
         // do we have a tx or merkle proof for a given tx?
         SPV::database::confirmed tx (const Bitcoin::TXID &) final override;
 
-        bool insert (const N &height, const Bitcoin::header &h) final override;
+        const entry<N, Bitcoin::header> *insert (const N &height, const Bitcoin::header &h) final override;
 
         bool insert (const Merkle::proof &) final override;
         void insert (const Bitcoin::transaction &) final override;
@@ -69,7 +69,7 @@ namespace Cosmos {
         return SPVDB.tx (id);
     }
 
-    bool inline JSON_local_txdb::insert (const N &height, const Bitcoin::header &h) {
+    const entry<N, Bitcoin::header> inline *JSON_local_txdb::insert (const N &height, const Bitcoin::header &h) {
         return SPVDB.insert (height, h);
     }
 

@@ -40,15 +40,13 @@ namespace Cosmos {
     }
 
     namespace {
-        bool import_header (local_txdb &local , network &net, const N &n) {
+        const entry<N, Bitcoin::header> *import_header (local_txdb &local , network &net, const N &n) {
             auto header = net.WhatsOnChain.block ().get_header (n);
-            if (!header.valid ()) return false;
             return local.insert (header.Height, header.Header);
         }
 
-        bool import_header (local_txdb &local, network &net, const digest256 &d) {
+        const entry<N, Bitcoin::header> *import_header (local_txdb &local, network &net, const digest256 &d) {
             auto header = net.WhatsOnChain.block ().get_header (d);
-            if (!header.valid ()) return false;
             return local.insert (header.Height, header.Header);
         }
     }
@@ -60,11 +58,11 @@ namespace Cosmos {
         auto proof = Net.WhatsOnChain.transaction ().get_merkle_proof (txid);
 
         if (!proof.Proof.valid ()) return false;
-
         Bitcoin::transaction decoded {tx};
-        auto h = Local.header (proof.BlockHash);
-        if (bool (h)) return Local.import_transaction (decoded, Merkle::path (proof.Proof.Branch), h->Value);
-        else return import_header (Local, Net, proof.BlockHash);
+        const entry<N, Bitcoin::header> *h = Local.header (proof.BlockHash);
+        if (!bool (h)) h = import_header (Local, Net, proof.BlockHash);
+        if (!bool (h)) return false;
+        return Local.import_transaction (decoded, Merkle::path (proof.Proof.Branch), h->Value);
     }
 
     ordered_list<ray> cached_remote_txdb::by_address (const Bitcoin::address &a) {

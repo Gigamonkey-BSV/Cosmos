@@ -70,7 +70,7 @@ namespace Cosmos {
             WhatsOnChain {SSL}, Gorilla {SSL, net::HTTP::REST {"https", "mapi.gorillapool.io"}},
             CoinGecko {SSL, net::HTTP::REST {"https", "api.coingecko.com"}, tools::rate_limiter {1, 10}},
             // TODO I don't know what to put for TAAL's rate limiter.
-            TAAL {SSL, net::HTTP::REST {"https", "tapi.taal.com/arc"}, tools::rate_limiter {1, 10}} {
+            TAAL {SSL, net::HTTP::REST {"https", "arc.taal.com"}, tools::rate_limiter {1, 10}} {
             SSL->set_default_verify_paths ();
             SSL->set_verify_mode (net::asio::ssl::verify_peer);
         }
