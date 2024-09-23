@@ -39,6 +39,7 @@ namespace Cosmos {
 
     // collect splittable scripts by script hash.
     splitable get_split_script_hash (Interface::writable u, const digest256 &script_hash) {
+
         const auto w = u.get ().wallet ();
         auto TXDB = u.txdb ();
         if (!bool (TXDB) | !bool (w)) throw exception {} << "could not load wallet";

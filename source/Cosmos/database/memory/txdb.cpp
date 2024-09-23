@@ -15,18 +15,19 @@ namespace Cosmos {
     }
 
     events memory_local_TXDB::by_address (const Bitcoin::address &a) {
+
         auto zz = AddressIndex.find (a);
         if (zz == AddressIndex.end ()) return {};
         events n;
 
         for (const Bitcoin::outpoint &o : zz->second) {
             ptr<vertex> confirmed = (*this) [o.Digest];
-            if (confirmed != nullptr) return {};
+            if (confirmed == nullptr) return {};
             n = n.insert (event {confirmed, o.Index, direction::out});
 
             if (auto v = RedeemIndex.find (o); v != RedeemIndex.end ()) {
                 ptr<vertex> redeemer = (*this) [v->second.Digest];
-                if (redeemer != nullptr) return {};
+                if (redeemer == nullptr) return {};
                 n = n.insert (event {redeemer, v->second.Index, direction::in});
             }
         }
@@ -35,18 +36,19 @@ namespace Cosmos {
     }
 
     events memory_local_TXDB::by_script_hash (const digest256 &x) {
+
         auto zz = ScriptIndex.find (x);
         if (zz == ScriptIndex.end ()) return {};
         events n;
 
         for (const Bitcoin::outpoint &o : zz->second) {
             ptr<vertex> confirmed = (*this) [o.Digest];
-            if (confirmed != nullptr) return {};
+            if (confirmed == nullptr) return {};
             n = n.insert (event {confirmed, o.Index, direction::out});
 
             if (auto v = RedeemIndex.find (o); v != RedeemIndex.end ()) {
                 ptr<vertex> redeemer = (*this) [v->second.Digest];
-                if (redeemer != nullptr) return {};
+                if (redeemer == nullptr) return {};
                 n = n.insert (event {redeemer, v->second.Index, direction::in});
             }
         }
