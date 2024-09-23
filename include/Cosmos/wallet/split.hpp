@@ -9,6 +9,8 @@
 
 namespace Cosmos {
 
+    // Given a general goal of splitting a wallet into many tiny outputs,
+    // this type provides several possible steps in such a process.
     struct split {
         Bitcoin::satoshi MinSatsPerOutput {options::DefaultMinSatsPerOutput};
         Bitcoin::satoshi MaxSatsPerOutput {options::DefaultMaxSatsPerOutput};
@@ -19,12 +21,14 @@ namespace Cosmos {
             Bitcoin::satoshi max_sats_per_output = options::DefaultMaxSatsPerOutput,
             double mean_sats_per_output = options::DefaultMeanSatsPerOutput);
 
+        // the user provides the outputs to split and this function does the rest.
         spend::spent operator () (
             redeem, data::crypto::random &,
             keychain, wallet,
             list<entry<Bitcoin::outpoint, redeemable>> selected,
             double fee_rate) const;
 
+        // produce an unsigned transaction that can be signed later.
         spend::spent_unsigned operator () (
             redeem, data::crypto::random &, wallet,
             list<entry<Bitcoin::outpoint, redeemable>> selected,
@@ -35,7 +39,8 @@ namespace Cosmos {
             uint32 Last;
         };
 
-        result operator () (redeem, data::crypto::random &, keychain, data::map<pubkey, derivation>,
+        // this function handles everything other than updating the addresses.
+        result operator () (redeem, data::crypto::random &, keychain, pubkeys,
             address_sequence, list<entry<Bitcoin::outpoint, redeemable>> selected, double fee_rate) const;
 
         struct result_outputs {
@@ -44,6 +49,7 @@ namespace Cosmos {
             uint32 Last;
         };
 
+        // construct only the outputs.
         result_outputs operator () (data::crypto::random &r, address_sequence key,
             Bitcoin::satoshi value, double fee_rate) const;
 

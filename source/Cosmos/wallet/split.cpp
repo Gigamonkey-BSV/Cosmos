@@ -126,7 +126,7 @@ namespace Cosmos {
     }
 
     split::result split::operator () (redeem ree, data::crypto::random &rand,
-        keychain k, data::map<pubkey, derivation> p, address_sequence x,
+        keychain k, pubkeys p, address_sequence x,
         list<entry<Bitcoin::outpoint, redeemable>> selected, double fee_rate) const {
         using namespace Gigamonkey;
 
@@ -183,7 +183,7 @@ namespace Cosmos {
         for (const auto &o : split_outputs.Outputs) diff.Insert = diff.Insert.insert (i++, o);
 
         // construct the final result.
-        return result {{{completed, diff}}, x.Last};
+        return result {{{completed, diff}}, split_outputs.Last};
 
     }
 
