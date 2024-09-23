@@ -346,7 +346,7 @@ void command_restore (const arg_parser &p) {
     Interface e {};
 
     auto restore_from_pubkey = [&max_look_ahead, &w] (Cosmos::Interface::writable u) {
-        ordered_list<ray> history {};
+        events history {};
         for (const auto &[name, sequence] : w.Addresses.Sequences) {
             std::cout << "checking address sequence " << name << std::endl;
             auto restored = restore {*max_look_ahead, false} (*u.txdb (), sequence);

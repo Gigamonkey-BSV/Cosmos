@@ -12,14 +12,14 @@ namespace Cosmos {
 
         // result of a restored wallet
         struct restored {
-            ordered_list<ray> History;
+            events History;
             list<account_diff> Account;
 
             // last key used (+1)
             uint32 Last;
         };
 
-        restored operator () (txdb &TXDB, address_sequence pubkey);
+        restored operator () (TXDB &, address_sequence pubkey);
 
     };
 

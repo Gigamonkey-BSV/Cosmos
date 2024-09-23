@@ -11,24 +11,20 @@
 namespace Cosmos {
 
     void update_pending_transactions (Interface::writable u) {
-        // TODO also update proposed payments to see if they have been accepted and are in the network.
-
         auto txdb = u.txdb ();
         auto w = u.get ().wallet ();
         auto *h = u.history ();
         if (!bool (txdb) || !bool (w) || !bool (h)) throw exception {"could not connect to network and database"};
 
         // all txs that have been updated with merkle proofs.
-        map<Bitcoin::TXID, vertex> mined;
-        for (const Bitcoin::TXID &txid : txdb->Local.pending ()) if (txdb->import_transaction (txid))
-            mined = mined.insert (txid, (*txdb)[txid]);
+        list<ptr<vertex>> mined;
+        for (const Bitcoin::TXID &txid : txdb->unconfirmed ()) if (txdb->import_transaction (txid))
+            mined <<= (*txdb)[txid];
 
-        // all new events to record in our history.
-        ordered_list<ray> new_events;
-        for (const auto &[op, _] : w->Account) if (const auto *v = mined.contains (op.Digest); bool (v)) new_events <<= ray {*v, op};
+        // history will be updated automatically next time the program loads.
+        // we could take care of it right now by writing history to JSON and reading it back, but we don't.
 
-        // update history.
-        *h <<= new_events;
+        // TODO look for completed payments and put them in history.
     }
 
     broadcast_tree_result Interface::writable::broadcast (list<std::pair<Bitcoin::transaction, account_diff>> payment) {
@@ -41,7 +37,7 @@ namespace Cosmos {
         for (const auto &[_, diff] : payment) next_wallet.Account <<= diff;
 
         // we assume that the proof exists and can be generated.
-        auto success = Cosmos::broadcast (*txdb (),
+        auto success = txdb ()->broadcast (
             *SPV::generate_proof (*txdb (),
                 for_each ([] (const auto p) -> Bitcoin::transaction {
                     return p.first;
@@ -157,10 +153,10 @@ namespace Cosmos {
         return PriceDataFilepath;
     }
 
-    maybe<std::string> &Interface::history_filepath () {
+    maybe<std::string> &Interface::events_filepath () {
         if (!bool (HistoryFilepath) && bool (Name)) {
             std::stringstream ss;
-            ss << *Name << ".history.json";
+            ss << *Name << ".events.json";
             HistoryFilepath = ss.str ();
         }
 
@@ -183,26 +179,31 @@ namespace Cosmos {
         return Net.get ();
     }
 
-    local_txdb *Interface::get_local_txdb () {
+    local_TXDB *Interface::get_local_txdb () {
 
         if (!bool (LocalTXDB)) {
             auto txf = txdb_filepath ();
             if (bool (txf))
-                LocalTXDB = std::static_pointer_cast<Cosmos::local_txdb>
-                    (std::make_shared<JSON_local_txdb> (read_JSON_local_txdb_from_file (*txf)));
+                LocalTXDB = std::static_pointer_cast<Cosmos::local_TXDB>
+                    (std::make_shared<JSON_local_TXDB> (read_JSON_local_TXDB_from_file (*txf)));
             else return nullptr;
         }
 
         return LocalTXDB.get ();
     }
 
-    maybe<cached_remote_txdb> Interface::get_txdb () {
+    cached_remote_TXDB *Interface::get_txdb () {
 
-        auto n = net ();
-        auto l = get_local_txdb ();
-        if (!bool (n) || !bool (l)) return {};
+        if (!bool (TXDB)) {
 
-        return {cached_remote_txdb {*n, *l}};
+            auto n = net ();
+            auto l = get_local_txdb ();
+            if (!bool (n) || !bool (l)) return nullptr;
+
+            TXDB = std::make_shared<cached_remote_TXDB> (*n, *l);
+        }
+
+        return TXDB.get ();
     }
 
     account *Interface::get_account () {
@@ -249,17 +250,22 @@ namespace Cosmos {
         return Keys.get ();
     }
 
-    ptr<price_data> Interface::get_price_data () {
-        if (LocalPriceData == nullptr) {
-            auto pdf = price_data_filepath ();
-            if (!bool (pdf)) return nullptr;
-            LocalPriceData = std::static_pointer_cast<Cosmos::local_price_data>
-                (std::make_shared<Cosmos::JSON_price_data> (read_from_file (*pdf)));
+    price_data *Interface::get_price_data () {
+        if (PriceData == nullptr) {
+            if (LocalPriceData == nullptr) {
+                auto pdf = price_data_filepath ();
+                if (!bool (pdf)) return nullptr;
+                LocalPriceData = std::static_pointer_cast<Cosmos::local_price_data>
+                    (std::make_shared<Cosmos::JSON_price_data> (read_from_file (*pdf)));
+            }
+
+            auto n = net ();
+            if (!bool (n)) return LocalPriceData.get ();
+
+            PriceData = std::make_shared<Cosmos::cached_remote_price_data> (*n, *LocalPriceData);
         }
 
-        auto n = net ();
-        if (!bool (n)) return std::static_pointer_cast<Cosmos::price_data> (LocalPriceData);
-        return std::static_pointer_cast<Cosmos::price_data> (std::make_shared<Cosmos::cached_remote_price_data> (*n, *LocalPriceData));
+        return PriceData.get ();
     }
 
     maybe<wallet> Interface::get_wallet () {
@@ -273,10 +279,10 @@ namespace Cosmos {
         return {Cosmos::wallet {*pkc, *add, *acc}};
     }
 
-    events *Interface::get_history () {
+    history *Interface::get_history () {
         if (!bool (Events)) {
-            auto hf = history_filepath ();
-            if (bool (hf)) Events = std::make_shared<events> (read_from_file (*hf));
+            auto hf = events_filepath ();
+            if (bool (hf)) Events = std::make_shared<Cosmos::history> (read_from_file (*hf), *get_txdb ());
         }
 
         return Events.get ();
@@ -330,14 +336,14 @@ namespace Cosmos {
         auto tf = txdb_filepath ();
         auto af = account_filepath ();
         auto df = addresses_filepath ();
-        auto hf = history_filepath ();
+        auto hf = events_filepath ();
         auto pf = pubkeys_filepath ();
         auto kf = keychain_filepath ();
         auto pdf = price_data_filepath ();
         auto yf = payments_filepath ();
 
         if (bool (tf) && bool (LocalTXDB))
-            write_to_file (JSON (dynamic_cast<JSON_local_txdb &> (*LocalTXDB)), *tf);
+            write_to_file (JSON (dynamic_cast<JSON_local_TXDB &> (*LocalTXDB)), *tf);
 
         if (bool (af) && bool (Account)) write_to_file (JSON (*Account), *af);
 

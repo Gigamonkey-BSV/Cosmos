@@ -7,52 +7,59 @@
 namespace Cosmos {
 
     // This is how we build an account out of individual events.
-    struct events {
+    struct history {
 
-        // an event corresponds to a single transaction and everything
-        // that happens in it which is relevant to our wallet.
-        struct event {
+        // All the events for a single transaction.
+        struct tx {
             Bitcoin::TXID TXID {};
-            Bitcoin::timestamp When {};
+            when When {};
 
             Bitcoin::satoshi Received {};
             Bitcoin::satoshi Spent {};
             Bitcoin::satoshi Moved {};
 
-            ordered_list<ray> Events {};
+            events Events {};
 
-            bool operator <=> (const event &) const;
-            event () {}
+            bool operator == (const tx &) const;
+            std::partial_ordering operator <=> (const tx &) const;
+            tx () {}
         };
 
-        // timestamp of the latest event incorporated into this account.
-        Bitcoin::timestamp Latest;
+        // account of the wallet after going through all the events.
         std::map<Bitcoin::outpoint, Bitcoin::output> Account;
-        list<event> Events;
+        // events from latest to earliest.
+        stack<tx> Events;
+
+        // the latest known timestamp before unconfirmed events.
+        when latest_known () const;
 
         Bitcoin::satoshi Value;
         Bitcoin::satoshi Spent;
         Bitcoin::satoshi Received;
 
-        events () : Latest {0}, Account {}, Events {}, Value {0}, Spent {0}, Received {0} {}
-        events (Bitcoin::timestamp l, std::map<Bitcoin::outpoint, Bitcoin::output> a, list<event> e, Bitcoin::satoshi v):
-            Latest {l}, Account {a}, Events {e}, Value {v} {}
+        history () : Account {}, Events {}, Value {0}, Spent {0}, Received {0} {}
+        history (std::map<Bitcoin::outpoint, Bitcoin::output> a, stack<tx> e,
+            Bitcoin::satoshi v, Bitcoin::satoshi spent, Bitcoin::satoshi received):
+            Account {a}, Events {e}, Value {v}, Spent {spent}, Received {received} {}
 
         // all events must be later than Latest.
-        events &operator <<= (ordered_list<ray> e);
+        history &operator <<= (events e);
 
         explicit operator JSON () const;
-        explicit events (const JSON &j);
+        explicit history (const JSON &j, TXDB &);
 
-        struct history {
+        // a starting point and events following it, enough information
+        // to generate a new account at the end of the range.
+        struct episode {
             std::map<Bitcoin::outpoint, Bitcoin::output> Account;
-            ordered_list<event> Events;
+            ordered_list<tx> History;
         };
 
         // get all events within a given range.
-        history get_history (
-            math::signed_limit<Bitcoin::timestamp> from = math::signed_limit<Bitcoin::timestamp>::negative_infinity (),
-            math::signed_limit<Bitcoin::timestamp> to = math::signed_limit<Bitcoin::timestamp>::infinity ()) const;
+        episode get (when from = when::negative_infinity (), when to = when::infinity ()) const;
+
+        // through the history and try to find confirmations for all unconfirmed txs.
+        history update (TXDB &) const;
     };
 }
 

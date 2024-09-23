@@ -12,9 +12,7 @@ Version 0.0.1 alpha.
 
 * recovery bug: the first time you recover a wallet, the account comes out incorrect. You can
   repair it by deleting all generated files except txdb.json and running the restore command again.
-* Random number generator: the program is slower than necessary because we use a cryptographic
-  pseudo random number generator for everything even if we don't need it.
-* segfault during coin splitting.
+* Problems with recovering wallets that have unmined transactions.
 
 ## Next features to be implemented for version 1
 

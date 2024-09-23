@@ -5,9 +5,9 @@ add_library (cosmos_lib STATIC
     source/Cosmos/database/write.cpp
     source/Cosmos/database/price_data.cpp
     source/Cosmos/database/txdb.cpp
+    source/Cosmos/database/memory/txdb.cpp
     source/Cosmos/database/json/txdb.cpp
     source/Cosmos/database/json/price_data.cpp
-    source/Cosmos/database/json/spv.cpp
     source/Cosmos/network/whatsonchain.cpp
     source/Cosmos/network.cpp
     source/Cosmos/wallet/keys/derivation.cpp

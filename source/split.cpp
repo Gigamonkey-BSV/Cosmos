@@ -14,19 +14,23 @@ namespace Cosmos {
         if (!bool (TXDB) | !bool (w)) throw exception {} << "could not load wallet";
 
         // is this address in our wallet?
-        ordered_list<ray> outpoints = TXDB->by_address (addr);
+        events outpoints = TXDB->by_address (addr);
 
-        if (outpoints.size () == 0) return {};
+        set<Bitcoin::outpoint> unredeemed;
+        for (const event &e : outpoints)
+            if (e.Direction == direction::out) unredeemed = unredeemed.insert (e.point ());
+            else unredeemed = unredeemed.remove (e.point ());
+        if (unredeemed.size () == 0) return {};
 
         maybe<redeemable> redeemer;
-        for (const ray &r : outpoints)
-            if (const auto *en = w->Account.contains (r.Point); bool (en))
+        for (const Bitcoin::outpoint &r : unredeemed)
+            if (const auto *en = w->Account.contains (r); bool (en))
                 redeemer = *en;
 
         if (!bool (redeemer)) throw exception {} << "address " << addr << " not in wallet.";
 
         list<entry<Bitcoin::outpoint, redeemable>> outputs;
-        for (const ray &r : outpoints) outputs <<= entry<Bitcoin::outpoint, redeemable> {r.Point, *redeemer};
+        for (const Bitcoin::outpoint &r : unredeemed) outputs <<= entry<Bitcoin::outpoint, redeemable> {r, *redeemer};
 
         splitable x;
         return x.insert (Gigamonkey::SHA2_256 (pay_to_address::script (addr.digest ())), outputs);
@@ -40,19 +44,23 @@ namespace Cosmos {
         if (!bool (TXDB) | !bool (w)) throw exception {} << "could not load wallet";
 
         // is this address in our wallet?
-        ordered_list<ray> outpoints = TXDB->by_script_hash (script_hash);
+        events outpoints = TXDB->by_script_hash (script_hash);
 
-        if (outpoints.size () == 0) return {};
+        set<Bitcoin::outpoint> unredeemed;
+        for (const event &e : outpoints)
+            if (e.Direction == direction::out) unredeemed = unredeemed.insert (e.point ());
+            else unredeemed = unredeemed.remove (e.point ());
+        if (unredeemed.size () == 0) return {};
 
         maybe<redeemable> redeemer;
-        for (const ray &r : outpoints)
-            if (const auto *en = w->Account.contains (r.Point); bool (en))
+        for (const Bitcoin::outpoint &r : unredeemed)
+            if (const auto *en = w->Account.contains (r); bool (en))
                 redeemer = *en;
 
         if (!bool (redeemer)) throw exception {} << "script " << script_hash << " not in wallet.";
 
         list<entry<Bitcoin::outpoint, redeemable>> outputs;
-        for (const ray &r : outpoints) outputs <<= entry<Bitcoin::outpoint, redeemable> {r.Point, *redeemer};
+        for (const Bitcoin::outpoint &r : unredeemed) outputs <<= entry<Bitcoin::outpoint, redeemable> {r, *redeemer};
 
         splitable x;
         return x.insert (script_hash, outputs);
@@ -92,9 +100,6 @@ void command_split (const arg_parser &p) {
     read_wallet_options (e, p);
     read_random_options (e, p);
 
-    std::cout << "Get TAAL health: " << e.net ()->TAAL.health () << std::endl;
-    std::cout << "Get TAAL policy: " << e.net ()->TAAL.policy () << std::endl;
-
     maybe<double> max_sats_per_output = double (options::DefaultMaxSatsPerOutput);
     maybe<double> mean_sats_per_output = double (options::DefaultMeanSatsPerOutput);
     maybe<double> min_sats_per_output = double (options::DefaultMinSatsPerOutput);
@@ -104,6 +109,19 @@ void command_split (const arg_parser &p) {
     p.get ("max_sats", max_sats_per_output);
     p.get ("mean_sats", mean_sats_per_output);
     p.get ("fee_rate", fee_rate);
+
+    auto health_response = e.net ()->TAAL.health ();
+    std::cout << "Get TAAL health: " << health_response << std::endl;
+    if (bool (health_response)) {
+        auto health = health_response.health ();
+        if (!health.healthy ())
+            throw exception {} << "According to TALL, network is not healthy because " << health.reason ();
+    }
+
+    auto policy_response = e.net ()->TAAL.policy ();
+    std::cout << "Get TAAL policy: " << policy_response << std::endl;
+    if (bool (policy_response)) fee_rate = double (policy_response.policy ().mining_fee ()) * 2;
+    std::cout << " new fee rate " << fee_rate << std::endl;
 
     Cosmos::split split {int64 (*min_sats_per_output), int64 (*max_sats_per_output), *mean_sats_per_output};
 
@@ -223,7 +241,7 @@ void command_split (const arg_parser &p) {
 
                 if (count++ >= 10) break;
                 std::cout << "\t" << t.Value << " sats in script " << t.ScriptHash << " in " << std::endl;
-                for (const auto &o : t.Outputs) std::cout << "\t\t" << write (o.Key) << " from " << (txdb)[o.Key.Digest].when () << std::endl;
+                for (const auto &o : t.Outputs) std::cout << "\t\t" << write (o.Key) << " from " << (txdb)[o.Key.Digest]->when () << std::endl;
 
                 view_top = view_top.rest ();
             }
@@ -232,7 +250,7 @@ void command_split (const arg_parser &p) {
         // we had a problem earlier where I tried to dereference this pointer
         // which destroyed the ptr object. This is definitely kinda confusing,
         // since you can safely dereference other pointers returned by Interface.
-        ptr<Cosmos::price_data> price_data = u.price_data ();
+        Cosmos::price_data *price_data = u.price_data ();
 
         /*
         // commented out since we don't have a reliable source of price data right now.
@@ -336,12 +354,13 @@ void command_split (const arg_parser &p) {
 
         std::cout << "broadcasting split transactions" << std::endl;
         for (const auto &sp : split_txs) {
-            broadcast_tree_result success = broadcast (*u.txdb (), sp.Proof);
+            broadcast_tree_result success = u.txdb ()->broadcast (sp.Proof);
             if (!success) {
                 // TODO we should analize the result more here but we will do that
                 // inside the broadcast method for now.
                 throw exception {} << "could not broadcast ";
-            } return;
+            }
+            std::cout << "broadcast successful!" << std::endl;
             u.set_wallet (sp.Wallet);
         }
     });

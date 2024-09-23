@@ -41,7 +41,7 @@ namespace Cosmos {
 
     broadcast_single_result network::broadcast (const extended_transaction &tx) {
 
-        std::cout << "attempting to broadcast tx " << tx.id () << "\n\t" << bytes (tx) << std::endl;
+        std::cout << "attempting to broadcast tx " << tx.id () << std::endl;
         wait_for_enter ();
 
         ARC::submit_response response;

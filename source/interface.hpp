@@ -28,7 +28,7 @@ namespace Cosmos {
         maybe<std::string> &pubkeys_filepath ();
         maybe<std::string> &addresses_filepath ();
         maybe<std::string> &account_filepath ();
-        maybe<std::string> &history_filepath ();
+        maybe<std::string> &events_filepath ();
         maybe<std::string> &payments_filepath ();
 
         network *net ();
@@ -36,12 +36,12 @@ namespace Cosmos {
         crypto::random *secure_random ();
         crypto::random *casual_random ();
 
-        const Cosmos::local_txdb *local_txdb () const;
-        const maybe<Cosmos::cached_remote_txdb> txdb () const;
+        const Cosmos::local_TXDB *local_txdb () const;
+        const Cosmos::cached_remote_TXDB *txdb () const;
         const SPV::database *spvdb () const;
-        const ptr<Cosmos::price_data> price_data () const;
+        const Cosmos::price_data *price_data () const;
 
-        const Cosmos::events *history () const;
+        const Cosmos::history *history () const;
         const Cosmos::addresses *addresses () const;
         const Cosmos::payments *payments () const;
 
@@ -66,12 +66,12 @@ namespace Cosmos {
         // We use this to change the database.
         struct writable {
 
-            Cosmos::local_txdb *local_txdb ();
-            maybe<Cosmos::cached_remote_txdb> txdb ();
+            Cosmos::local_TXDB *local_txdb ();
+            Cosmos::cached_remote_TXDB *txdb ();
             SPV::database *spvdb ();
-            ptr<Cosmos::price_data> price_data ();
+            Cosmos::price_data *price_data ();
 
-            Cosmos::events *history ();
+            Cosmos::history *history ();
             crypto::random *random ();
 
             void set_keys (const Cosmos::keychain &);
@@ -124,9 +124,11 @@ namespace Cosmos {
         ptr<network> Net {nullptr};
         ptr<Cosmos::keychain> Keys {nullptr};
         ptr<Cosmos::pubkeys> Pubkeys {nullptr};
-        ptr<Cosmos::local_txdb> LocalTXDB {nullptr};
+        ptr<Cosmos::local_TXDB> LocalTXDB {nullptr};
+        ptr<Cosmos::cached_remote_TXDB> TXDB {nullptr};
         ptr<Cosmos::local_price_data> LocalPriceData {nullptr};
-        ptr<Cosmos::events> Events {nullptr};
+        ptr<Cosmos::cached_remote_price_data> PriceData {nullptr};
+        ptr<Cosmos::history> Events {nullptr};
         ptr<Cosmos::account> Account {nullptr};
         ptr<Cosmos::addresses> Addresses {nullptr};
         ptr<Cosmos::payments> Payments {nullptr};
@@ -141,11 +143,11 @@ namespace Cosmos {
 
         Cosmos::keychain *get_keys ();
         Cosmos::pubkeys *get_pubkeys ();
-        maybe<Cosmos::cached_remote_txdb> get_txdb ();
-        Cosmos::local_txdb *get_local_txdb ();
+        Cosmos::cached_remote_TXDB *get_txdb ();
+        Cosmos::local_TXDB *get_local_txdb ();
         Cosmos::account *get_account ();
-        ptr<Cosmos::price_data> get_price_data ();
-        events *get_history ();
+        Cosmos::price_data *get_price_data ();
+        Cosmos::history *get_history ();
         Cosmos::addresses *get_addresses ();
         Cosmos::payments *get_payments ();
 
@@ -194,15 +196,15 @@ namespace Cosmos {
         read_account_and_txdb_options (e, p);
     }
 
-    maybe<Cosmos::cached_remote_txdb> inline Interface::writable::txdb () {
+    cached_remote_TXDB inline *Interface::writable::txdb () {
         return I.get_txdb ();
     }
 
-    local_txdb inline *Interface::writable::local_txdb () {
+    local_TXDB inline *Interface::writable::local_txdb () {
         return I.get_local_txdb ();
     }
 
-    events inline *Interface::writable::history () {
+    history inline *Interface::writable::history () {
         return I.get_history ();
     }
 
@@ -210,47 +212,47 @@ namespace Cosmos {
         return I.random ();
     }
 
-    ptr<Cosmos::price_data> inline Interface::writable::price_data () {
+    price_data inline *Interface::writable::price_data () {
         return I.get_price_data ();
     }
 
-    const Cosmos::local_txdb inline *Interface::local_txdb () const {
+    const local_TXDB inline *Interface::local_txdb () const {
         return const_cast<Interface *> (this)->get_local_txdb ();
     }
 
-    const Cosmos::keychain inline *Interface::keys () const {
+    const keychain inline *Interface::keys () const {
         return const_cast<Interface *> (this)->get_keys ();
     }
 
-    const Cosmos::pubkeys inline *Interface::pubkeys () const {
+    const pubkeys inline *Interface::pubkeys () const {
         return const_cast<Interface *> (this)->get_pubkeys ();
     }
 
-    const maybe<Cosmos::cached_remote_txdb> inline Interface::txdb () const {
+    const cached_remote_TXDB inline *Interface::txdb () const {
         return const_cast<Interface *> (this)->get_txdb ();
     }
 
-    const Cosmos::account inline *Interface::account () const {
+    const account inline *Interface::account () const {
         return const_cast<Interface *> (this)->get_account ();
     }
 
-    const Cosmos::addresses inline *Interface::addresses () const {
+    const addresses inline *Interface::addresses () const {
         return const_cast<Interface *> (this)->get_addresses ();
     }
 
-    const ptr<Cosmos::price_data> inline Interface::price_data () const {
+    const price_data inline *Interface::price_data () const {
         return const_cast<Interface *> (this)->get_price_data ();
     }
 
-    const maybe<Cosmos::wallet> inline Interface::wallet () const {
+    const maybe<wallet> inline Interface::wallet () const {
         return const_cast<Interface *> (this)->get_wallet ();
     }
 
-    const events inline *Interface::history () const {
+    const history inline *Interface::history () const {
         return const_cast<Interface *> (this)->get_history ();
     }
 
-    const Cosmos::payments inline *Interface::payments () const {
+    const payments inline *Interface::payments () const {
         return const_cast<Interface *> (this)->get_payments ();
     }
 

@@ -37,7 +37,7 @@ namespace Cosmos {
             // it is possible for the total value
             // of all these events to be greater than the
             // value of the total income.
-            ordered_list<ray> Incoming;
+            events Incoming;
 
             potential_income (): TXID {}, Income {0}, Price {0}, Incoming {} {}
 
@@ -54,7 +54,7 @@ namespace Cosmos {
         // the account at the end of the tax period.
         account Account;
 
-        static tax calculate (txdb &, ptr<price_data>, const events::history &);
+        static tax calculate (TXDB &, price_data *, const history::episode &);
 
         tax () : CapitalGain {}, Income {}, Account {} {}
 

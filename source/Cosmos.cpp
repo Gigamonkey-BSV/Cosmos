@@ -494,8 +494,8 @@ void command_boost (const arg_parser &p) {
 void command_taxes (const arg_parser &p) {
     using namespace Cosmos;
 
-    math::signed_limit<Bitcoin::timestamp> begin = math::signed_limit<Bitcoin::timestamp>::negative_infinity ();
-    math::signed_limit<Bitcoin::timestamp> end = math::signed_limit<Bitcoin::timestamp>::infinity ();
+    Cosmos::when begin = Cosmos::when::negative_infinity ();
+    Cosmos::when end = Cosmos::when::infinity ();
 
     // first need to get a time range.
     // TODO maybe it should be possible to make a narrower time range.
@@ -521,7 +521,7 @@ void command_taxes (const arg_parser &p) {
         if (h == nullptr) throw exception {} << "could not read wallet history";
 
         std::cout << "Tax implications: " << std::endl;
-        std::cout << tax::calculate (*u.txdb (), u.price_data (), h->get_history (begin, end)) << std::endl;
+        std::cout << tax::calculate (*u.txdb (), u.price_data (), h->get (begin, end)) << std::endl;
     });
 }
 

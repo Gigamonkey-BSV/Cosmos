@@ -4,7 +4,7 @@
 namespace Cosmos {
 
     restore::restored restore::operator () (
-        txdb &TXDB,
+        TXDB &txdb,
         address_sequence m) {
 
         if (CheckSubKeys) throw exception {} << "TODO: option CheckSubKeys enabled but not implemented.";
@@ -12,14 +12,14 @@ namespace Cosmos {
         address_sequence last = m;
         uint32 last_used = 0;
 
-        ordered_list<ray> events {};
+        events v {};
         std::map<Bitcoin::TXID, map<Bitcoin::index, redeemable>> a {};
 
         auto expected_p2pkh_size = pay_to_address::redeem_expected_size (true);
 
-        Bitcoin::satoshi in_wallet = 0;
-        Bitcoin::satoshi received = 0;
-        Bitcoin::satoshi spent = 0;
+        Bitcoin::satoshi total_in_wallet = 0;
+        Bitcoin::satoshi total_received = 0;
+        Bitcoin::satoshi total_spent = 0;
 
         while (true) {
             // generate next address
@@ -31,7 +31,10 @@ namespace Cosmos {
             m = m.next ();
 
             // get all txs relating to this address.
-            ordered_list<ray> ev = TXDB.by_address (new_addr);
+            // TODO there is a potential problem here because we assume
+            // that if the address is known locally at all, then we know
+            // about all usages of it, which is not neccessarily true.
+            events ev = txdb.by_address (new_addr);
             std::cout << "  found " << ev.size () << " events for address " << new_addr << std::endl;
 
             if (ev.size () == 0) {
@@ -44,38 +47,46 @@ namespace Cosmos {
             last_used = 0;
             last = m;
 
+            v = v + ev;
+
+            Bitcoin::satoshi in_wallet = 0;
+            Bitcoin::satoshi received = 0;
+            Bitcoin::satoshi spent = 0;
+
             for (const auto &e : ev) {
-                events = events.insert (e);
-                std::cout << "    " << new_addr << " received " << e.Value << " on " << e.When;
-                received += e.value ();
-
-                // has this output been redeemed?
-                auto r = TXDB.redeeming (e.Point);
-
-                if (r != nullptr) {
-                    std::cout << "; spent on " << r->When;
-                    events = events.insert (*r);
-                    spent += e.value ();
+                Bitcoin::satoshi value = e.value ();
+                std::cout << "    ";
+                if (e.Direction == direction::out) {
+                    std::cout << "received";
+                    received += value;
+                    in_wallet += value;
                 } else {
-                    auto &ins = a[e.Point.Digest];
-                    ins = ins.insert (e.Point.Index, redeemable {Bitcoin::output {e.Put}, next.Value});
-                    in_wallet += e.value ();
+                    std::cout << "spent";
+                    spent += value;
+                    in_wallet -= value;
                 }
+                std::cout << " " << e.value ();
+                when w = e->when ();
+                if (w == when::unconfirmed ()) std::cout << " recently";
+                else std::cout << " on " << w;
+                std::cout << std::endl;
 
             }
 
-            std::cout << "    total received  " << received << std::endl;
-            std::cout << "    total spent     " << spent << std::endl;
-            std::cout << "    total in wallet " << in_wallet << std::endl;
+            total_received += received;
+            total_spent += spent;
+            total_in_wallet += in_wallet;
 
-            std::cout << "    " << data::size (events) << " total events discovered for " << new_addr << std::endl;
+            std::cout << "    total received  " << total_received << std::endl;
+            std::cout << "    total spent     " << total_spent << std::endl;
+            std::cout << "    total in wallet " << total_in_wallet << std::endl;
 
         }
 
         list<account_diff> diffs;
         for (const auto &[txid, ins] : a) diffs <<= account_diff {txid, ins, {}};
 
-        return restored {events, diffs, last.Last};
+        return restored {v, diffs, last.Last};
     }
 
 }

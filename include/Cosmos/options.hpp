@@ -7,7 +7,7 @@ namespace Cosmos {
 
     // TODO we want to load these options from a file at some point.
     struct options {
-        constexpr static int64 DefaultMaxSatsPerOutput {50000000};
+        constexpr static int64 DefaultMaxSatsPerOutput {54321000};
         constexpr static int64 DefaultMinSatsPerOutput {1234567};
         constexpr static double DefaultMeanSatsPerOutput {12345678};
         constexpr static uint64 DefaultFeeRate[2] {10, 1000};

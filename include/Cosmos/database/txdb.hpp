@@ -11,34 +11,51 @@ namespace Cosmos {
     namespace Merkle = Gigamonkey::Merkle;
     namespace SPV = Gigamonkey::SPV;
 
-    // a transaction with a complete Merkle proof.
-    struct vertex : SPV::database::confirmed {
-        using SPV::database::confirmed::confirmed;
-        vertex (SPV::database::confirmed &&c) : SPV::database::confirmed {std::move (c)} {}
+    using extended_transaction = Gigamonkey::extended::transaction;
 
-        std::strong_ordering operator <=> (const vertex &tx) const {
-            if (!valid ()) throw exception {} << "unconfirmed or invalid tx.";
-            return this->Confirmation <=> tx.Confirmation;
-        }
+    // a representation of time that includes unconfirmed and infinite
+    // times. We use timestamp {0} for unconfirmed and bool for
+    // positive and negative infinity. Unconfirmed is after every
+    // Bitcoin::timestamp and incomparable with other unconfirmed.
+    struct when : either<bool, Bitcoin::timestamp> {
+        when (Bitcoin::timestamp t);
+        explicit when (const JSON &j);
+        explicit operator JSON () const;
 
-        bool operator == (const vertex &tx) const {
-            if (!valid ()) throw exception {} << "unconfirmed or invalid tx.";
-            return *this->Transaction == *tx.Transaction && this->Confirmation == tx.Confirmation;
-        }
+        std::partial_ordering operator <=> (const when &w) const;
 
-        bool valid () const {
-            return this->has_proof ();
-        }
+        bool operator == (const when &w) const;
 
-        explicit operator bool () {
-            return valid ();
-        }
+        static when unconfirmed ();
+        static when negative_infinity ();
+        static when infinity ();
 
-        Bitcoin::timestamp when () const {
-            if (this->Confirmation.Header.Timestamp == Bitcoin::timestamp {0}) throw exception {} << " Warning: " <<
-                " tx " << this->Transaction->id () << " has header " << this->Confirmation.Header;
-            return this->Confirmation.Header.Timestamp;
-        }
+    private:
+        using either<bool, Bitcoin::timestamp>::either;
+    };
+
+    std::ostream &operator << (std::ostream &o, const when &r);
+
+    struct vertex {
+        extended_transaction Transaction;
+        entry<Bitcoin::TXID, SPV::proof::tree> Proof;
+
+        vertex ();
+        vertex (const extended_transaction &tx, const entry<Bitcoin::TXID, SPV::proof::tree> &pr);
+
+        bool operator == (const vertex &tx) const;
+        std::partial_ordering operator <=> (const vertex &tx) const;
+
+        bool valid () const;
+        operator bool () const;
+
+        // whether a Merkle proof is included.
+        bool confirmed () const;
+
+        // check the proof if it exists and run all the scripts.
+        bool validate (SPV::database &) const;
+
+        Cosmos::when when () const;
     };
 
     enum class direction {
@@ -47,81 +64,57 @@ namespace Cosmos {
     };
 
     // a tx with a complete merkle proof and an indication of a specific input or output.
-    struct ray {
+    struct event : ptr<vertex> {
+
+        Bitcoin::index Index;
+
+        direction Direction;
+
         // output or input.
-        bytes Put;
-
-        Bitcoin::timestamp When;
-
-        // the index of the transaction in the block.
-        uint64 Index;
+        bytes put () const;
 
         // outpoint or inpoint.
-        Bitcoin::outpoint Point;
-
-        // value received.
-        maybe<Bitcoin::satoshi> Value;
-
-        Bitcoin::satoshi value () const {
-            return bool (Value) ? *Value : Bitcoin::output::value (Put);
+        Bitcoin::outpoint point () const {
+            return {id (), Index};
         }
 
-        Cosmos::direction direction () const {
-            return bool (Value) ? Cosmos::direction::in : Cosmos::direction::out;
+        // value moved.
+        Bitcoin::satoshi value () const;
+
+        event ();
+        event (const ptr<vertex> &p, Bitcoin::index i, direction d);
+
+        std::partial_ordering operator <=> (const event &e) const;
+        bool operator == (const event &e) const;
+
+        bool valid () const {
+            return static_cast<const ptr<vertex> &> (*this) != nullptr;
         }
 
-        ray (Bitcoin::timestamp w, uint64 i, const Bitcoin::outpoint &op, const Bitcoin::output &o) :
-            Put {bytes (o)}, When {w}, Index {i}, Point {op}, Value {} {}
-
-        ray (Bitcoin::timestamp w, uint64 i, const inpoint &ip, const Bitcoin::input &in, const Bitcoin::satoshi &v) :
-            Put {bytes (in)}, When {w}, Index {i}, Point {ip}, Value {v} {}
-
-        ray (const vertex &t, const Bitcoin::outpoint &op):
-            Put {bytes (t.Transaction->Outputs[op.Index])},
-            When {t.when ()},
-            Index {t.Confirmation.Path.Index},
-            Point {op}, Value {} {}
-
-        ray (const vertex &t, const inpoint &ip, const Bitcoin::satoshi &v):
-            Put {bytes (t.Transaction->Inputs[ip.Index])},
-            When {t.when ()},
-            Index {t.Confirmation.Path.Index},
-            Point {ip}, Value {v} {
-            if (!Bitcoin::input {Put}.Reference.Digest.valid ()) throw exception {} << "WARNING: invalid input! Y";
-        }
-
-        std::strong_ordering operator <=> (const ray &e) const {
-            auto compare_time = When <=> e.When;
-            if (compare_time != std::strong_ordering::equal) return compare_time;
-            auto compare_index = Index <=> e.Index;
-            if (compare_index != std::strong_ordering::equal) return compare_index;
-            if (direction () != e.direction ()) return direction () == direction::in ? std::strong_ordering::less : std::strong_ordering::greater;
-            return Point.Index <=> e.Point.Index;
-        }
-
-        bool operator == (const ray &e) const {
-            return Put == e.Put && When == e.When &&
-                direction () == e.direction () && Point.Index == e.Point.Index;
+        const Bitcoin::TXID &id () const {
+            return (*this)->Proof.Key;
         }
 
     };
 
-    std::ostream inline &operator << (std::ostream &o, const ray &r) {
-        return o << "\n\t" << r.Value << " " << (r.direction () == direction::in ? "received in " : "spent from ") << r.Point << std::endl;
-    }
+    using events = ordered_list<event>;
 
     // a database of transactions.
-    struct txdb {
+    // we add to the SVP database by enabling
+    // the retrievable of transactions as needed
+    // from the network. Thus we can work entirely
+    // with complete SPV proofs.
+    struct TXDB : public virtual SPV::database {
 
-        virtual vertex operator [] (const Bitcoin::TXID &id) = 0;
+        ptr<vertex> operator [] (const Bitcoin::TXID &id);
 
-        // all outputs for a given address.
-        virtual ordered_list<ray> by_address (const Bitcoin::address &) = 0;
-        virtual ordered_list<ray> by_script_hash (const digest256 &) = 0;
-        virtual ptr<ray> redeeming (const Bitcoin::outpoint &) = 0;
+        // all events for a given address.
+        virtual events by_address (const Bitcoin::address &) = 0;
+        virtual events by_script_hash (const digest256 &) = 0;
+        virtual event redeeming (const Bitcoin::outpoint &) = 0;
 
         Bitcoin::output output (const Bitcoin::outpoint &p) {
-            vertex tx = (*this)[p.Digest];
+            auto tx = this->transaction (p.Digest);
             if (!tx.valid ()) return {};
             return tx.Transaction->Outputs[p.Index];
         }
@@ -130,59 +123,21 @@ namespace Cosmos {
             return output (p).Value;
         }
 
-        virtual ~txdb () {}
+        virtual ~TXDB () {}
 
     };
 
-    struct local_txdb : txdb, SPV::database {
+    struct local_TXDB : public virtual SPV::writable, public TXDB {
 
-        vertex operator [] (const Bitcoin::TXID &id) final override {
-            return vertex {this->tx (id)};
-        }
-
+        // Check proof before entering it into the database.
         bool import_transaction (const Bitcoin::transaction &, const Merkle::path &, const Bitcoin::header &h);
 
         virtual void add_address (const Bitcoin::address &, const Bitcoin::outpoint &) = 0;
         virtual void add_script (const digest256 &, const Bitcoin::outpoint &) = 0;
         virtual void set_redeem (const Bitcoin::outpoint &, const inpoint &) = 0;
 
-        virtual ~local_txdb () {}
+        virtual ~local_TXDB () {}
 
-    };
-
-    struct cached_remote_txdb final : local_txdb {
-        network &Net;
-        local_txdb &Local;
-
-        cached_remote_txdb (network &n, local_txdb &x): local_txdb {}, Net {n}, Local {x} {}
-
-        const Bitcoin::header *header (const N &) const final override;
-
-        const entry<N, Bitcoin::header> *latest () const final override;
-
-        // get by hash or merkle root (need both)
-        const entry<N, Bitcoin::header> *header (const digest256 &) const final override;
-
-        // do we have a tx or merkle proof for a given tx?
-        SPV::database::confirmed tx (const Bitcoin::TXID &) final override;
-
-        const entry<N, Bitcoin::header> *insert (const N &height, const Bitcoin::header &h) final override;
-
-        bool insert (const Merkle::proof &) final override;
-        void insert (const Bitcoin::transaction &) final override;
-
-        set<Bitcoin::TXID> pending () final override;
-        void remove (const Bitcoin::TXID &) final override;
-
-        ordered_list<ray> by_address (const Bitcoin::address &) final override;
-        ordered_list<ray> by_script_hash (const digest256 &) final override;
-        ptr<ray> redeeming (const Bitcoin::outpoint &) final override;
-
-        void add_address (const Bitcoin::address &, const Bitcoin::outpoint &) final override;
-        void add_script (const digest256 &, const Bitcoin::outpoint &) final override;
-        void set_redeem (const Bitcoin::outpoint &, const inpoint &) final override;
-
-        bool import_transaction (const Bitcoin::TXID &);
     };
 
     // Since we might end up trying to broadcast multiple txs at once
@@ -196,44 +151,106 @@ namespace Cosmos {
             broadcast_multiple_result {r}, Sub {nodes} {}
     };
 
-    // go through a proof, check it, put all antecedents in the database and broadcast those
-    // without merkle proofs, then broadcast the root level txs.
-    broadcast_tree_result broadcast (cached_remote_txdb &, SPV::proof);
 
-    void inline cached_remote_txdb::add_address (const Bitcoin::address &a, const Bitcoin::outpoint &o) {
-        return Local.add_address (a, o);
+    // an implementation of TXDB that relies on
+    // a local database and a network connection.
+    struct cached_remote_TXDB final : public TXDB {
+        network &Net;
+        local_TXDB &Local;
+
+        cached_remote_TXDB (network &n, local_TXDB &x): TXDB {}, Net {n}, Local {x} {}
+
+        const Bitcoin::header *header (const N &) final override;
+
+        const entry<N, Bitcoin::header> *latest () final override;
+
+        // get by hash or merkle root (need both)
+        const entry<N, Bitcoin::header> *header (const digest256 &) final override;
+
+        // do we have a tx or merkle proof for a given tx?
+        SPV::database::tx transaction (const Bitcoin::TXID &) final override;
+
+        set<Bitcoin::TXID> unconfirmed () final override;
+
+        events by_address (const Bitcoin::address &) final override;
+        events by_script_hash (const digest256 &) final override;
+        event redeeming (const Bitcoin::outpoint &) final override;
+
+        bool import_transaction (const Bitcoin::TXID &);
+
+        broadcast_tree_result broadcast (SPV::proof);
+    };
+
+    set<Bitcoin::TXID> inline cached_remote_TXDB::unconfirmed () {
+        return Local.unconfirmed ();
     }
 
-    void inline cached_remote_txdb::add_script (const digest256 &d, const Bitcoin::outpoint &o) {
-        return Local.add_script (d, o);
-    }
-
-    void inline cached_remote_txdb::set_redeem (const Bitcoin::outpoint &o, const inpoint &i) {
-        return Local.set_redeem (o, i);
-    }
-
-    const entry<N, Bitcoin::header> inline *cached_remote_txdb::insert (const N &height, const Bitcoin::header &h) {
-        return Local.insert (height, h);
-    }
-
-    bool inline cached_remote_txdb::insert (const Merkle::proof &p) {
-        return Local.insert (p);
-    }
-
-    void inline cached_remote_txdb::insert (const Bitcoin::transaction &tx) {
-        return Local.insert (tx);
-    }
-
-    set<Bitcoin::TXID> inline cached_remote_txdb::pending () {
-        return Local.pending ();
-    }
-
-    void inline cached_remote_txdb::remove (const Bitcoin::TXID &txid) {
-        return Local.remove (txid);
-    }
-
-    const inline entry<N, Bitcoin::header> *cached_remote_txdb::latest () const {
+    const inline entry<N, Bitcoin::header> *cached_remote_TXDB::latest () {
         return Local.latest ();
+    }
+
+    inline vertex::vertex (): Transaction {}, Proof {Bitcoin::TXID {}, {}} {}
+
+    inline vertex::vertex (const extended_transaction &tx, const entry<Bitcoin::TXID, SPV::proof::tree> &pr):
+        Transaction {tx}, Proof {pr} {}
+
+    bool inline vertex::valid () const {
+        return Proof.valid ();
+    }
+
+    inline vertex::operator bool () const {
+        return valid ();
+    }
+
+    std::partial_ordering inline vertex::operator <=> (const vertex &tx) const {
+        if (!valid () || !tx.valid ()) throw exception {} << "invalid tx.";
+        auto compare_tx = SPV::proof::ordering (Proof, tx.Proof);
+    }
+
+    // whether a Merkle proof is included.
+    bool inline vertex::confirmed () const {
+        return valid () && Proof.Value.is<SPV::confirmation> ();
+    }
+
+    Cosmos::when inline vertex::when () const {
+        return Proof.Value.is<SPV::proof::map> () ? when::unconfirmed (): Proof.Value.get<SPV::confirmation> ().Header.Timestamp;
+    }
+
+    inline when::when (Bitcoin::timestamp t) : either<bool, Bitcoin::timestamp> {t} {}
+
+    bool inline when::operator == (const when &w) const {
+        return static_cast<either<bool, Bitcoin::timestamp>> (*this) == static_cast<either<bool, Bitcoin::timestamp>> (w);
+    }
+
+    when inline when::unconfirmed () {
+        return when {Bitcoin::timestamp {0}};
+    }
+
+    when inline when::negative_infinity () {
+        return when {false};
+    }
+
+    when inline when::infinity () {
+        return when {true};
+    }
+
+    bytes inline event::put () const {
+        return Direction == direction::in ? bytes ((*this)->Transaction.Inputs[Index]) :
+            bytes ((*this)->Transaction.Outputs[Index]);
+    }
+
+    // value moved.
+    Bitcoin::satoshi inline event::value () const {
+        return Direction == direction::out ?
+            (*this)->Transaction.Outputs[Index].Value:
+            (*this)->Transaction.Inputs[Index].Prevout.Value;
+    }
+
+    inline event::event (): ptr<vertex> {} {}
+    inline event::event (const ptr<vertex> &p, Bitcoin::index i, direction d): ptr<vertex> {p}, Index {i}, Direction {d} {}
+
+    bool inline event::operator == (const event &e) const {
+        return ((*this) <=> e) == std::partial_ordering::equivalent;
     }
 }
 
