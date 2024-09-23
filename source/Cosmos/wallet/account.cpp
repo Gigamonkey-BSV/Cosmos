@@ -50,9 +50,9 @@ namespace Cosmos {
             bd++;
         }
 
-        if (j.contains ("script_code")) {
-            auto x = encoding::hex::read (std::string (p["script_code"]));
-            if (!bool (x)) throw exception {} << "could not read hex value from \"" + p["script"].dump () + "\"";
+        if (auto xx = j.find ("script_code"); xx != j.end ()) {
+            auto x = encoding::hex::read (std::string (*xx));
+            if (!bool (x)) throw exception {} << "could not read hex value from \"" + xx->dump () + "\"";
             UnlockScriptSoFar = *x;
         }
 

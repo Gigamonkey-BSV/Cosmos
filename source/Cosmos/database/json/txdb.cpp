@@ -43,6 +43,11 @@ namespace Cosmos {
         for (const auto &[txid, tx] : this->Transactions)
             txs[write (txid)] = encoding::base64::write (bytes (*tx));
 
+        JSON::array_t unconfirmed;
+        unconfirmed.resize (this->Pending.size ());
+        ind = 0;
+        for (const auto &txid : this->Pending) unconfirmed[ind++] = write (txid);
+
         JSON::object_t addresses;
         for (const auto &[key, value] : this->AddressIndex) {
             JSON::array_t outpoints;
@@ -68,6 +73,7 @@ namespace Cosmos {
         o["addresses"] = addresses;
         o["scripts"] = scripts;
         o["redeems"] = redeems;
+        o["unconfirmed"] = unconfirmed;
         return o;
     }
 
@@ -76,16 +82,19 @@ namespace Cosmos {
         if (!j.is_object () || !j.contains ("by_height") || !j.contains ("by_hash") || !j.contains ("by_root") || !j.contains ("txs"))
             throw exception {} << "invalid JSON SPV database format: " << j;
 
-        const JSON &by_height = j["by_height"];
-        const JSON &by_hash = j["by_hash"];
-        const JSON &by_root = j["by_root"];
-        const JSON &txs = j["txs"];
+        const auto by_height = j.find ("by_height");
+        const auto by_hash = j.find ("by_hash");
+        const auto by_root = j.find ("by_root");
+        const auto txs = j.find ("txs");
 
-        if (!by_height.is_array () || !by_hash.is_object () || !by_root.is_object () || !txs.is_object ())
-            throw exception {} << "invalid JSON SPV database format: " << j;
+        if (by_height == j.end () || by_hash == j.end () || by_root == j.end () || txs == j.end ())
+            throw exception {} << "invalid JSON SPV database format: missing field";
+
+        if (!by_height->is_array () || !by_hash->is_object () || !by_root->is_object () || !txs->is_object ())
+            throw exception {} << "invalid JSON SPV database format: invalid field type";
 
         ptr<SPV::database::memory::entry> last {nullptr};
-        for (const auto &jj : by_height) {
+        for (const auto &jj : *by_height) {
             ptr<SPV::database::memory::entry> e = read_db_entry (jj);
             if (last != nullptr && last->Header.Key + 1 == e->Header.Key) e->Last = last;
             last = e;
@@ -95,15 +104,24 @@ namespace Cosmos {
 
         txdb.Latest = last;
 
-        for (const auto &[hash, height] : j["by_hash"].items ())
+        for (const auto &[hash, height] : by_hash->items ())
             txdb.ByHash[read_txid (hash)] = txdb.ByHeight [read_N (height)];
 
-        for (const auto &[root, height] : j["by_root"].items ())
+        for (const auto &[root, height] : by_root->items ())
             txdb.ByHash[read_txid (root)] = txdb.ByHeight [read_N (height)];
 
-        for (const auto &[txid, tx] : j["txs"].items ())
+        for (const auto &[txid, tx] : txs->items ())
             txdb.Transactions[read_txid (txid)] = ptr<Bitcoin::transaction>
                 {new Bitcoin::transaction {*encoding::base64::read (std::string (tx))}};
+
+        // optional field because I forgot to put it in at one point.
+        // In the future it should be mandatory.
+        const auto unconfirmed = j.find ("unconfirmed");
+        if (unconfirmed != j.end ()) {
+            if (!unconfirmed->is_array ()) throw exception {} << "invalid JSON SPV database format: unconfirmed";
+            for (const auto &jj : *unconfirmed) txdb.Pending = txdb.Pending.insert (read_txid (std::string (jj)));
+        }
+
     }
 
     JSON_local_TXDB::JSON_local_TXDB (const JSON &j) {
