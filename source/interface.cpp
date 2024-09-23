@@ -18,11 +18,14 @@ namespace Cosmos {
 
         // all txs that have been updated with merkle proofs.
         list<ptr<vertex>> mined;
-        for (const Bitcoin::TXID &txid : txdb->unconfirmed ()) if (txdb->import_transaction (txid))
+        auto unconfirmed = txdb->unconfirmed ();
+        std::cout << " found " << unconfirmed.size () << " unconfirmed txs" << std::endl;
+        for (const Bitcoin::TXID &txid : unconfirmed) if (txdb->import_transaction (txid))
             mined <<= (*txdb)[txid];
+        std::cout << " of these " << mined.size () << " were mined since the last time the program was run." << std::endl;
 
-        // history will be updated automatically next time the program loads.
-        // we could take care of it right now by writing history to JSON and reading it back, but we don't.
+        // this will update the history.
+        u.get ().history ();
 
         // TODO look for completed payments and put them in history.
     }
@@ -156,7 +159,7 @@ namespace Cosmos {
     maybe<std::string> &Interface::events_filepath () {
         if (!bool (HistoryFilepath) && bool (Name)) {
             std::stringstream ss;
-            ss << *Name << ".events.json";
+            ss << *Name << ".history.json";
             HistoryFilepath = ss.str ();
         }
 

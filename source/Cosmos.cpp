@@ -168,6 +168,7 @@ method read_method (const arg_parser &p, uint32 index) {
     if (*m == "generate") return method::GENERATE;
     if (*m == "restore") return method::RESTORE;
     if (*m == "value") return method::VALUE;
+    if (*m == "update") return method::UPDATE;
     if (*m == "request") return method::REQUEST;
     if (*m == "accept") return method::ACCEPT;
     if (*m == "pay") return method::PAY;
