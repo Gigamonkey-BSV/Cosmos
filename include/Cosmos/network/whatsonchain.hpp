@@ -36,7 +36,7 @@ namespace Cosmos {
         whatsonchain (): net::HTTP::client_blocking {net::HTTP::REST {"https", "api.whatsonchain.com"}, tools::rate_limiter {3, 1}} {}
 
         static std::string write (const Bitcoin::TXID &);
-        static Bitcoin::TXID read_txid (const JSON &);
+        static Bitcoin::TXID read_TXID (const JSON &);
 
         struct addresses {
             struct balance {
@@ -69,7 +69,7 @@ namespace Cosmos {
 
             JSON tx_data (const Bitcoin::TXID &);
 
-            merkle_proof get_merkle_proof (const Bitcoin::TXID &);
+            maybe<merkle_proof> get_merkle_proof (const Bitcoin::TXID &);
 
             whatsonchain &API;
         };

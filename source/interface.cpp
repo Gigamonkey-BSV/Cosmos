@@ -9,12 +9,30 @@
 #include "interface.hpp"
 
 namespace Cosmos {
+    spend::spent Interface::writable::make_tx (list<Bitcoin::output> o) {
+        auto *k = I.keys ();
+        maybe<Cosmos::wallet> w = I.wallet ();
+
+        if (!bool (k) || !bool (w)) throw exception {} << "could not load wallet";
+
+        // remove all pending payments from the account so that we don't
+        // accidentally invalidate them with this payment.
+        auto *p = I.payments ();
+        if (!bool (p)) throw exception {} << "could not load payments";
+        Cosmos::account pruned_account = w->Account;
+        for (const auto &[_, offer] : p->Proposals) for (const auto diff : offer.Diff) pruned_account <<= diff;
+
+        return spend {
+            select_output_parameters {4, 5000, .23},
+            split_change_parameters {}, *I.random ()}
+            (Gigamonkey::redeem_p2pkh_and_p2pk, *k, Cosmos::wallet {w->Pubkeys, w->Addresses, pruned_account}, o);
+    }
 
     void update_pending_transactions (Interface::writable u) {
         auto txdb = u.txdb ();
         auto w = u.get ().wallet ();
-        auto *h = u.history ();
-        if (!bool (txdb) || !bool (w) || !bool (h)) throw exception {"could not connect to network and database"};
+        auto *p = u.get ().payments ();
+        if (!bool (txdb) || !bool (w) || !bool (p)) throw exception {"could not connect to network and database"};
 
         // all txs that have been updated with merkle proofs.
         list<ptr<vertex>> mined;
@@ -24,10 +42,41 @@ namespace Cosmos {
             mined <<= (*txdb)[txid];
         std::cout << " of these " << mined.size () << " were mined since the last time the program was run." << std::endl;
 
-        // this will update the history.
-        u.get ().history ();
+        // update the unconfirmed txs in history.
+        auto *h = u.history ();
 
-        // TODO look for completed payments and put them in history.
+        // look for payments that have been made which have been accepted by the network.
+        Cosmos::account pruned_account = w->Account;
+        map<string, payments::offer> new_proposals {};
+        for (const auto &proposal : p->Proposals) {
+            bool broadcast = true;
+            list<Bitcoin::TXID> ids;
+            for (const auto diff : proposal.Value.Diff)
+                if (txdb->import_transaction (diff.TXID)) {
+                    // catching an error means that we have already accounted for this tx in our account.
+                    try {
+                        pruned_account <<= diff;
+                    } catch (account::cannot_apply_diff) {
+                        continue;
+                    }
+
+                    ids <<= diff.TXID;
+
+                    auto v = (*txdb)[diff.TXID];
+
+                    events e;
+                    for (const auto &[i, _]: diff.Remove) e <<= event {v, i, direction::in};
+                    for (const auto &[i, _]: diff.Insert) e <<= event {v, i, direction::out};
+                    *h <<= e;
+
+                } else broadcast = false;
+            h->Payments = h->Payments << history::payment {proposal.Key, proposal.Value.Request.Value, ids};
+            // if the payment was not entirely broadcast we keep it to try again later.
+            if (!broadcast) new_proposals = new_proposals.insert (proposal);
+        }
+
+        u.set_payments (Cosmos::payments {p->Requests, new_proposals});
+
     }
 
     broadcast_tree_result Interface::writable::broadcast (list<std::pair<Bitcoin::transaction, account_diff>> payment) {

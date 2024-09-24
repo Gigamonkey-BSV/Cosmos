@@ -251,9 +251,9 @@ void help (method meth) {
                 "\n\t(--name=)<wallet name>"
                 "\n\t(--address=)<address | xpub | script hash>"
                 "\n\t(--max_look_ahead=)<integer> (= 10) ; (only used if parameter 'address' is provided as an xpub"
-                "\n\t(--min_sats=<float>) (= 123456)"
-                "\n\t(--max_sats=<float>) (= 5000000)"
-                "\n\t(--mean_sats=<float>) (= 1234567) " << std::endl;
+                "\n\t(--min_sats_per_output=<float>) (= 123456)"
+                "\n\t(--max_sats_per_output=<float>) (= 5000000)"
+                "\n\t(--mean_sats_per_output=<float>) (= 1234567) " << std::endl;
         } break;
         case method::RESTORE : {
             std::cout << "arguments for method restore:"

@@ -30,6 +30,15 @@ namespace Cosmos {
         // events from latest to earliest.
         stack<tx> Events;
 
+        struct payment : payments::payment_request {
+            list<Bitcoin::TXID> Transactions;
+            payment (const string &id, const payments::request &r, list<Bitcoin::TXID> txs):
+                payments::payment_request {id, r}, Transactions {txs} {}
+        };
+
+        // list of completed payments and txids associated with them.
+        stack<payment> Payments;
+
         // the latest known timestamp before unconfirmed events.
         when latest_known () const;
 

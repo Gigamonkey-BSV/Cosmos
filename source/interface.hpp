@@ -89,12 +89,7 @@ namespace Cosmos {
             broadcast_tree_result broadcast (list<std::pair<Bitcoin::transaction, account_diff>>);
 
             // make a transaction with a bunch of default options already set
-            spend::spent make_tx (list<Bitcoin::output> o) {
-                return spend {
-                    select_output_parameters {4, 5000, .23},
-                    split_change_parameters {}, *I.random ()}
-                    (Gigamonkey::redeem_p2pkh_and_p2pk, *I.keys (), *I.wallet (), o);
-            }
+            spend::spent make_tx (list<Bitcoin::output> o);
 
             const Cosmos::Interface &get () {
                 return I;

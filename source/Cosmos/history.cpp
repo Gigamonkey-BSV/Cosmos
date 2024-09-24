@@ -97,7 +97,7 @@ namespace Cosmos {
             if (events == j.end () || !events->is_array ()) throw exception {} << "invalid event JSON format: 'events'";
 
             history::tx e {};
-            e.TXID = read_txid (std::string (*txid));
+            e.TXID = read_TXID (std::string (*txid));
             e.When = when (*time);
             e.Received = read_satoshi (*received);
             e.Spent = read_satoshi (*spent);
@@ -107,6 +107,23 @@ namespace Cosmos {
             e.Events = ordered_list<event> (data::reverse (evv));
             return e;
 
+        }
+
+        history::payment read_payment (const JSON &j) {
+            payments::payment_request pr = payments::read_payment_request (j);
+            list<Bitcoin::TXID> txs;
+            for (const auto &tt : j["txs"]) txs <<= read_TXID (std::string (tt));
+            return history::payment {pr.Key, pr.Value, txs};
+        }
+
+        JSON write_payment (const history::payment &p) {
+            JSON pj = payments::write_payment_request (p);
+            JSON::array_t txs;
+            txs.resize (p.Transactions.size ());
+            uint32 index = 0;
+            for (const auto &txid : p.Transactions) txs[index++] = write (txid);
+            pj["txs"] = txs;
+            return pj;
         }
 
     }
@@ -127,6 +144,11 @@ namespace Cosmos {
         JSON::object_t account;
         for (const auto &[key, value] : Account) account[write (key)] = write (value);
         ev["account"] = account;
+
+        JSON::array_t payments;
+        i = Events.size () - 1;
+        for (const payment &p : Payments) payments[i--] = write_payment (p);
+        ev["payments"] = payments;
 
         return ev;
     }
@@ -161,6 +183,10 @@ namespace Cosmos {
         for (const auto &[key, value] : j["account"].items ()) Account[read_outpoint (key)] = read_output (value);
 
         for (const auto &jj : j["events"]) Events <<= read_tx (jj, txdb);
+
+        // this is a new feature.
+        auto payments = j.find ("payment");
+        if (payments != j.end ()) for (const auto &jj : *payments) Payments <<= read_payment (jj);
 
     }
 

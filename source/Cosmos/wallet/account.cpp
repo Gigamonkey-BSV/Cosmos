@@ -5,9 +5,9 @@ namespace Cosmos {
 
     account account::operator << (const account_diff &d) const {
         account a = *this;
-        for (const auto &o : d.Remove) {
+        for (const auto &[_, o] : d.Remove) {
             const auto *x = a.contains (o);
-            if (!bool (x)) throw exception {} << "invalid account for diff";
+            if (!bool (x)) throw cannot_apply_diff {};
             a = a.remove (o);
         }
 

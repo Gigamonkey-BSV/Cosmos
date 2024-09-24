@@ -105,13 +105,13 @@ namespace Cosmos {
         txdb.Latest = last;
 
         for (const auto &[hash, height] : by_hash->items ())
-            txdb.ByHash[read_txid (hash)] = txdb.ByHeight [read_N (height)];
+            txdb.ByHash[read_TXID (hash)] = txdb.ByHeight [read_N (height)];
 
         for (const auto &[root, height] : by_root->items ())
-            txdb.ByHash[read_txid (root)] = txdb.ByHeight [read_N (height)];
+            txdb.ByHash[read_TXID (root)] = txdb.ByHeight [read_N (height)];
 
         for (const auto &[txid, tx] : txs->items ())
-            txdb.Transactions[read_txid (txid)] = ptr<Bitcoin::transaction>
+            txdb.Transactions[read_TXID (txid)] = ptr<Bitcoin::transaction>
                 {new Bitcoin::transaction {*encoding::base64::read (std::string (tx))}};
 
         // optional field because I forgot to put it in at one point.
@@ -119,7 +119,7 @@ namespace Cosmos {
         const auto unconfirmed = j.find ("unconfirmed");
         if (unconfirmed != j.end ()) {
             if (!unconfirmed->is_array ()) throw exception {} << "invalid JSON SPV database format: unconfirmed";
-            for (const auto &jj : *unconfirmed) txdb.Pending = txdb.Pending.insert (read_txid (std::string (jj)));
+            for (const auto &jj : *unconfirmed) txdb.Pending = txdb.Pending.insert (read_TXID (std::string (jj)));
         }
 
     }
@@ -155,7 +155,7 @@ namespace Cosmos {
         for (const auto &[key, value] : scripts.items ()) {
             list<Bitcoin::outpoint> outpoints;
             for (const auto &k : value) outpoints <<= read_outpoint (std::string (k));
-            this->ScriptIndex[read_txid (key)] = outpoints;
+            this->ScriptIndex[read_TXID (key)] = outpoints;
         }
 
         for (const auto &[key, value] : redeems.items ())

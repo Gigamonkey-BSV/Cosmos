@@ -16,6 +16,7 @@ namespace Cosmos {
         auto db_entry = this->transaction (txid);
 
         if (!db_entry.Confirmation.valid ()) this->insert (Merkle::proof {Merkle::branch {txid, p}, h.MerkleRoot});
+
         if (this->transaction (txid).Transaction == nullptr) {
             this->insert (tx);
 
@@ -53,16 +54,21 @@ namespace Cosmos {
 
     bool cached_remote_TXDB::import_transaction (const Bitcoin::TXID &txid) {
 
-        auto tx = Net.get_transaction (txid);
+        bytes tx = Net.get_transaction (txid);
         if (tx.size () == 0) return false;
+
         auto proof = Net.WhatsOnChain.transaction ().get_merkle_proof (txid);
 
-        if (!proof.Proof.valid ()) return false;
-        Bitcoin::transaction decoded {tx};
-        const entry<N, Bitcoin::header> *h = Local.header (proof.BlockHash);
-        if (!bool (h)) h = import_header (Local, Net, proof.BlockHash);
+        if (!bool (proof)) {
+            Local.insert (Bitcoin::transaction {tx});
+            return true;
+        }
+
+        if (!proof->Proof.valid ()) return false;
+        const entry<N, Bitcoin::header> *h = Local.header (proof->BlockHash);
+        if (!bool (h)) h = import_header (Local, Net, proof->BlockHash);
         if (!bool (h)) return false;
-        return Local.import_transaction (decoded, Merkle::path (proof.Proof.Branch), h->Value);
+        return Local.import_transaction (Bitcoin::transaction {tx}, Merkle::path (proof->Proof.Branch), h->Value);
     }
 
     events cached_remote_TXDB::by_address (const Bitcoin::address &a) {

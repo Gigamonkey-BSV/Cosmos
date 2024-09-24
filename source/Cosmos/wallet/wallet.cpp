@@ -38,6 +38,7 @@ namespace Cosmos {
 
         // select funds to be spent and organize them into redeemers and keep
         // track of outputs that will be removed from the wallet.
+        Bitcoin::index input_index = 0;
         for (const auto &[op, re] : Select (w.Account, value_to_spend, fees, Random)) {
             inputs <<= redeemer {
                 for_each ([&k, w] (const derivation &x) -> sigop {
@@ -49,7 +50,7 @@ namespace Cosmos {
                 re.ExpectedScriptSize,
                 Bitcoin::input::Finalized,
                 re.UnlockScriptSoFar};
-            diff.Remove = diff.Remove.insert (op);
+            diff.Remove = diff.Remove.insert (input_index++, op);
         }
 
         // transform selected into inputs

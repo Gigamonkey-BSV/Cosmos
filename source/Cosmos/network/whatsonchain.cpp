@@ -8,7 +8,7 @@ namespace Cosmos {
         return ss.str ().substr (2);
     }
 
-    Bitcoin::TXID inline whatsonchain::read_txid (const JSON &j) {
+    Bitcoin::TXID inline whatsonchain::read_TXID (const JSON &j) {
         return Bitcoin::TXID {std::string {"0x"} + std::string (j)};
     }
 
@@ -59,9 +59,8 @@ namespace Cosmos {
 
     list<whatsonchain::UTXO> whatsonchain::addresses::get_unspent (const Bitcoin::address &addr) {
 
-        std::stringstream ss;
-        ss << "/v1/bsv/main/address/" << static_cast<const std::string &> (addr) << "/unspent";
-        auto request = API.REST.GET (ss.str ());
+        auto request = API.REST.GET
+            ((std::stringstream {} << "/v1/bsv/main/address/" << static_cast<const std::string &> (addr) << "/unspent").str ());
         auto response = API (request);
 
         if (response.Status != net::HTTP::status::ok) {
@@ -91,9 +90,7 @@ namespace Cosmos {
 
     list<whatsonchain::UTXO> whatsonchain::scripts::get_unspent (const digest256 &script_hash) {
 
-        string path = string {"/v1/bsv/main/script/"} + write (script_hash) + "/unspent";
-
-        auto request = API.REST.GET (path);
+        auto request = API.REST.GET ((std::stringstream {} << "/v1/bsv/main/script/" << write (script_hash) << "/unspent").str ());
         auto response = API (request);
 
         if (response.Status != net::HTTP::status::ok)
@@ -125,10 +122,7 @@ namespace Cosmos {
 
     list<Bitcoin::TXID> whatsonchain::addresses::get_history (const Bitcoin::address& addr) {
 
-        std::stringstream call;
-        call << "/v1/bsv/main/address/" + addr + "/history";
-
-        auto request = API.REST.GET (call.str ());
+        auto request = API.REST.GET ((std::stringstream {} << "/v1/bsv/main/address/" + addr + "/history").str ());
         auto response = API (request);
 
         if (response.Status != net::HTTP::status::ok)
@@ -143,7 +137,7 @@ namespace Cosmos {
 
             JSON txids_JSON = JSON::parse (response.Body);
 
-            for (const JSON &item : txids_JSON) txids = txids << read_txid (item ["tx_hash"]);
+            for (const JSON &item : txids_JSON) txids = txids << read_TXID (item ["tx_hash"]);
         } catch (const JSON::exception &exception) {
             throw net::HTTP::exception {request, response, string {"problem reading JSON: "} + string {exception.what ()}};
         }
@@ -151,11 +145,9 @@ namespace Cosmos {
         return txids;
     }
 
-    list<Bitcoin::TXID> whatsonchain::scripts::get_history (const digest256& script_hash) {
-        std::stringstream call;
-        call << "/v1/bsv/main/script/" << write (script_hash) << "/history";
+    list<Bitcoin::TXID> whatsonchain::scripts::get_history (const digest256 &script_hash) {
 
-        auto request = API.REST.GET (call.str ());
+        auto request = API.REST.GET ((std::stringstream {} << "/v1/bsv/main/script/" << write (script_hash) << "/history").str ());
         auto response = API (request);
 
         if (response.Status != net::HTTP::status::ok)
@@ -170,7 +162,7 @@ namespace Cosmos {
 
             JSON txids_JSON = JSON::parse (response.Body);
 
-            for (const JSON &item : txids_JSON) txids = txids << read_txid (item ["tx_hash"]);
+            for (const JSON &item : txids_JSON) txids = txids << read_TXID (item ["tx_hash"]);
         } catch (const JSON::exception &exception) {
             throw net::HTTP::exception {request, response, string {"problem reading JSON: "} + string {exception.what ()}};
         }
@@ -180,9 +172,7 @@ namespace Cosmos {
 
     bytes whatsonchain::transactions::get_raw (const Bitcoin::TXID &txid) {
 
-        string call = string {"/v1/bsv/main/tx/"} + write (txid) + string {"/hex"};
-
-        auto request = API.REST.GET (call);
+        auto request = API.REST.GET ((std::stringstream {} << "/v1/bsv/main/tx/" << write (txid) << "/hex").str ());
         auto response = API (request);
 
         if (response.Status == 404) return {};
@@ -198,9 +188,7 @@ namespace Cosmos {
 
     JSON whatsonchain::transactions::tx_data (const Bitcoin::TXID &txid) {
 
-        string call = string {"/v1/bsv/main/tx/hash/"} + write (txid);
-
-        auto request = API.REST.GET (call);
+        auto request = API.REST.GET ((std::stringstream {} << "/v1/bsv/main/tx/hash/" << write (txid)).str ());
         auto response = API (request);
 
         if (response.Status == 404) return {};
@@ -211,10 +199,9 @@ namespace Cosmos {
         return JSON::parse (response.Body);
     }
 
-    whatsonchain::merkle_proof whatsonchain::transactions::get_merkle_proof (const Bitcoin::TXID &txid) {
-        string call = string {"/v1/bsv/main/tx/"} + write (txid) + "/proof";
+    maybe<whatsonchain::merkle_proof> whatsonchain::transactions::get_merkle_proof (const Bitcoin::TXID &txid) {
 
-        auto request = API.REST.GET (call);
+        auto request = API.REST.GET ((std::stringstream {} << "/v1/bsv/main/tx/" << write (txid) << "/proof").str ());
         auto response = API (request);
 
         if (response.Status == 404) return {};
@@ -225,27 +212,27 @@ namespace Cosmos {
 
         JSON proof = JSON::parse (response.Body)[0];
 
+        if (proof == JSON (nullptr)) return {};
+
         whatsonchain::merkle_proof p;
-        p.BlockHash = read_txid (proof["blockHash"]);
-        p.Proof.Branch.Leaf.Digest = read_txid (proof["hash"]);
-        p.Proof.Root = read_txid (proof["merkleRoot"]);
+        p.BlockHash = read_TXID (proof["blockHash"]);
+        p.Proof.Branch.Leaf.Digest = read_TXID (proof["hash"]);
+        p.Proof.Root = read_TXID (proof["merkleRoot"]);
 
         for (auto i = proof["branches"].rbegin (); i < proof["branches"].rend (); i++) {
             const auto &b = *i;
-            p.Proof.Branch.Digests <<= read_txid (b["hash"]);
+            p.Proof.Branch.Digests <<= read_TXID (b["hash"]);
             p.Proof.Branch.Leaf.Index <<= 1;
             if (std::string (b["pos"]) == "L") p.Proof.Branch.Leaf.Index++;
         }
 
-        return p;
+        return {p};
 
     }
 
     whatsonchain::header whatsonchain::blocks::get_header (const digest256 &hash) {
 
-        string call = string {"/v1/bsv/main/block/"} + write (hash) + "/header";
-
-        auto request = API.REST.GET (call);
+        auto request = API.REST.GET ((std::stringstream {} << "/v1/bsv/main/block/" << write (hash) << "/header").str ());
         auto response = API (request);
 
         if (response.Status == 404) return {};
@@ -263,17 +250,15 @@ namespace Cosmos {
         Bitcoin::target t {uint32_little {j}};
 
         return header {N {uint32 (h["height"])}, Bitcoin::header {
-            int32 (h["version"]), read_txid (h["previousblockhash"]),
-            read_txid (h["merkleroot"]), Bitcoin::timestamp {uint32 (h["time"])},
+            int32 (h["version"]), read_TXID (h["previousblockhash"]),
+            read_TXID (h["merkleroot"]), Bitcoin::timestamp {uint32 (h["time"])},
             t, uint32 (h["nonce"])}};
 
     }
 
     whatsonchain::header whatsonchain::blocks::get_header (const N &n) {
 
-        string call = string {"/v1/bsv/main/block/"} + encoding::decimal::write (n) + "/header";
-
-        auto request = API.REST.GET (call);
+        auto request = API.REST.GET ((std::stringstream {} << "/v1/bsv/main/block/" << encoding::decimal::write (n) << "/header").str ());
         auto response = API (request);
 
         if (response.Status == 404) return {};
@@ -291,8 +276,8 @@ namespace Cosmos {
         Bitcoin::target t {uint32_little {j}};
 
         return header {N {uint32 (h["height"])}, Bitcoin::header {
-            int32 (h["version"]), read_txid (h["previousblockhash"]),
-            read_txid (h["merkleroot"]), Bitcoin::timestamp {uint32 (h["time"])},
+            int32 (h["version"]), read_TXID (h["previousblockhash"]),
+            read_TXID (h["merkleroot"]), Bitcoin::timestamp {uint32 (h["time"])},
             t, uint32 (h["nonce"])}};
 
     }

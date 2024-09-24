@@ -66,13 +66,13 @@ namespace Cosmos {
         if (!j.is_object ()) throw "invalid payments offer format";
 
         account_diff d;
-        d.TXID = read_txid (std::string (j["txid"]));
+        d.TXID = read_TXID (std::string (j["txid"]));
 
         for (const auto &jj : j["insert"])
             d.Insert = d.Insert.insert (uint32 (jj[0]), redeemable {jj[1]});
 
         for (const auto &jj : j["remove"])
-            d.Remove = d.Remove.insert (read_outpoint (jj));
+            d.Remove = d.Remove.insert (uint32 (jj[0]), read_outpoint (jj[1]));
 
         return d;
     }
@@ -86,7 +86,7 @@ namespace Cosmos {
         JSON::array_t remove;
         remove.resize (d.Remove.size ());
         index = 0;
-        for (const Bitcoin::outpoint &op: d.Remove) remove[index++] = write (op);
+        for (const auto &e: d.Remove) remove[index++] = JSON::array_t {uint32 (e.Key), write (e.Value)};
 
         JSON::object_t o;
         o["txid"] = write (d.TXID);

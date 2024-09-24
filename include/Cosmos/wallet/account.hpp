@@ -11,11 +11,13 @@ namespace Cosmos {
     struct account_diff {
         Bitcoin::TXID TXID {};
         map<Bitcoin::index, redeemable> Insert {};
-        set<Bitcoin::outpoint> Remove {};
+        // outpoints that need to be removed and the index of the inpoint that removes them.
+        map<Bitcoin::index, Bitcoin::outpoint> Remove {};
 
         account_diff () {}
-        account_diff (const Bitcoin::TXID &txid, map<Bitcoin::index, redeemable> ins, set<Bitcoin::outpoint> ree) :
+        account_diff (const Bitcoin::TXID &txid, map<Bitcoin::index, redeemable> ins, map<Bitcoin::index, Bitcoin::outpoint> ree) :
             TXID {txid}, Insert {ins}, Remove {ree} {}
+
     };
 
     struct account : tool::base_rb_map<Bitcoin::outpoint, redeemable, account> {
@@ -38,6 +40,10 @@ namespace Cosmos {
             for (const auto &[key, value] : b) a = a.insert (key, value);
             return a;
         }
+
+        struct cannot_apply_diff : std::logic_error {
+            cannot_apply_diff () : std::logic_error {"Attempt to remove nonexistent outpoints from account"} {}
+        };
 
         account operator << (const account_diff &d) const;
 

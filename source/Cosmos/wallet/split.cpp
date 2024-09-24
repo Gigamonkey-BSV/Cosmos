@@ -177,10 +177,13 @@ namespace Cosmos {
         diff.TXID = completed.id ();
 
         // update account information.
-        for (const auto &e : selected) diff.Remove = diff.Remove.insert (e.Key);
-
-        uint32 i = 0;
-        for (const auto &o : split_outputs.Outputs) diff.Insert = diff.Insert.insert (i++, o);
+        {
+            Bitcoin::index input_index = 0;
+            for (const auto &e : selected) diff.Remove = diff.Remove.insert (input_index++, e.Key);
+        } {
+            Bitcoin::index output_index = 0;
+            for (const auto &o : split_outputs.Outputs) diff.Insert = diff.Insert.insert (output_index++, o);
+        }
 
         // construct the final result.
         return result {{{completed, diff}}, split_outputs.Last};
