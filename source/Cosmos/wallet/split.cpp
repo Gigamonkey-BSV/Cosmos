@@ -129,7 +129,7 @@ namespace Cosmos {
         keychain k, pubkeys p, address_sequence x,
         list<entry<Bitcoin::outpoint, redeemable>> selected, double fee_rate) const {
         using namespace Gigamonkey;
-
+        std::cout << "splitting tx with mean size " << MeanSatsPerOutput << std::endl;
         uint32 expected_tx_size_other_than_outputs;
         {
             uint32 num_inputs = data::size (selected);

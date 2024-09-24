@@ -12,51 +12,51 @@ namespace Cosmos {
     using extended_transaction = Gigamonkey::extended::transaction;
     using satoshis_per_byte = Gigamonkey::satoshis_per_byte;
 
-    struct broadcast_error {
-        enum error {
-            none,
-            unknown,
-            network_connection_fail,
-            inauthenticated,
-            insufficient_fee,
-            invalid_transaction
+    struct broadcast_result {
+        enum result {
+            SUCCESS,
+            ERROR_UNKNOWN,
+            ERROR_NETWORK_CONNECTION_FAIL,
+            ERROR_INAUTHENTICATED,
+            ERROR_INSUFFICIENT_FEE,
+            ERROR_INVALID
         };
 
-        error Error;
-        // an HTTP JSON error object if provided.
+        result Error;
+        // an HTTP JSON error object if provided, as used in the ARC protocol.
         net::error Details;
 
-        broadcast_error (error e, net::error deets = JSON (nullptr)): Error {e}, Details {deets} {}
-        broadcast_error (): Error {none}, Details (JSON (nullptr)) {}
+        broadcast_result (result e, net::error deets = JSON (nullptr)): Error {e}, Details {deets} {}
+        broadcast_result (): Error {SUCCESS}, Details (JSON (nullptr)) {}
 
-        // broadcast_error is equivalent to true when the
+        // broadcast_result is equivalent to true when the
         // operation succeeds.
         operator bool () const {
-            return Error == none;
+            return Error == SUCCESS;
         }
 
         bool error () const {
-            return Error != none;
+            return Error != SUCCESS;
         }
 
         bool success () const {
-            return Error == none;
+            return Error == SUCCESS;
         }
     };
 
-    struct broadcast_single_result : broadcast_error {
+    struct broadcast_single_result : broadcast_result {
         ARC::status Status {JSON (nullptr)};
-        using broadcast_error::broadcast_error;
-        broadcast_single_result (const ARC::status &stat): broadcast_error {}, Status (stat) {}
+        using broadcast_result::broadcast_result;
+        broadcast_single_result (const ARC::status &stat): broadcast_result {}, Status (stat) {}
     };
 
-    struct broadcast_multiple_result : broadcast_error {
+    struct broadcast_multiple_result : broadcast_result {
         list<ARC::status> Status;
-        using broadcast_error::broadcast_error;
-        broadcast_multiple_result (list<ARC::status> stats): broadcast_error {}, Status (stats) {}
+        using broadcast_result::broadcast_result;
+        broadcast_multiple_result (list<ARC::status> stats): broadcast_result {}, Status (stats) {}
     };
 
-    std::ostream &operator << (std::ostream &, broadcast_error);
+    std::ostream &operator << (std::ostream &, broadcast_result);
 
     struct network {
         net::asio::io_context IO;

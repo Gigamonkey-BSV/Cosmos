@@ -49,20 +49,20 @@ namespace Cosmos {
             response = TAAL.submit (tx);
         } catch (net::HTTP::exception ex) {
             std::cout << "Could not connect: " << ex.what () << std::endl;
-            return broadcast_error::network_connection_fail;
+            return broadcast_result::ERROR_NETWORK_CONNECTION_FAIL;
         }
 
         std::cout << "response status: " << response.Status << std::endl;
 
-        if (response.Status == 401) broadcast_error::inauthenticated;
+        if (response.Status == 401) broadcast_result::ERROR_INAUTHENTICATED;
 
         std::cout << "response body: " << response.Body << std::endl;
 
         if (response.Status == 200) return response.status ();
 
-        if (response.Status == 465 || response.Status == 473) return {broadcast_error::insufficient_fee, *response.body ()};
-        if (response.Status >= 460) return {broadcast_error::invalid_transaction, *response.body ()};
-        return {broadcast_error::unknown, *response.body ()};
+        if (response.Status == 465 || response.Status == 473) return {broadcast_result::ERROR_INSUFFICIENT_FEE, *response.body ()};
+        if (response.Status >= 460) return {broadcast_result::ERROR_INVALID, *response.body ()};
+        return {broadcast_result::ERROR_UNKNOWN, *response.body ()};
     }
 
     broadcast_multiple_result network::broadcast (list<extended_transaction> txs) {
@@ -76,20 +76,20 @@ namespace Cosmos {
             response = TAAL.submit_txs (txs);
         } catch (net::HTTP::exception ex) {
             std::cout << "Could not connect: " << ex.what () << std::endl;
-            return broadcast_error::network_connection_fail;
+            return broadcast_result::ERROR_NETWORK_CONNECTION_FAIL;
         }
 
         std::cout << "response status: " << response.Status << std::endl;
 
-        if (response.Status == 401) return broadcast_error::inauthenticated;
+        if (response.Status == 401) return broadcast_result::ERROR_INAUTHENTICATED;
 
         std::cout << "response body: " << response.Body << std::endl;
 
         if (response.Status == 200) return response.status ();
 
-        if (response.Status == 465 || response.Status == 473) return {broadcast_error::insufficient_fee, *response.body ()};
-        if (response.Status >= 460) return {broadcast_error::invalid_transaction, *response.body ()};
-        return {broadcast_error::unknown, *response.body ()};
+        if (response.Status == 465 || response.Status == 473) return {broadcast_result::ERROR_INSUFFICIENT_FEE, *response.body ()};
+        if (response.Status >= 460) return {broadcast_result::ERROR_INVALID, *response.body ()};
+        return {broadcast_result::ERROR_UNKNOWN, *response.body ()};
 
     }
 
@@ -151,15 +151,17 @@ namespace Cosmos {
         }
     }
 
-    std::ostream &operator << (std::ostream &o, broadcast_error e) {
+    std::ostream &operator << (std::ostream &o, broadcast_result e) {
+
         switch (e.Error) {
-            case (broadcast_error::none) : return o << "none";
-            case (broadcast_error::unknown) : return o << "unknown";
-            case (broadcast_error::network_connection_fail) : return o << "could not connect to the network";
-            case (broadcast_error::insufficient_fee) : return o << "insufficient fee";
-            case (broadcast_error::invalid_transaction) : return o << "invalid transaction";
+            case (broadcast_result::SUCCESS) : return o << "none";
+            case (broadcast_result::ERROR_UNKNOWN) : return o << "unknown";
+            case (broadcast_result::ERROR_NETWORK_CONNECTION_FAIL) : return o << "could not connect to the network";
+            case (broadcast_result::ERROR_INSUFFICIENT_FEE) : return o << "insufficient fee";
+            case (broadcast_result::ERROR_INVALID) : return o << "invalid transaction";
             default: return o << "invalid error";
         }
+
         return o;
     }
 }

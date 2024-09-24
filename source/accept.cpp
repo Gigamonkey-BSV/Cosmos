@@ -196,7 +196,9 @@ void command_accept (const arg_parser &p) {
         // broadcast the transactions.
         list<std::pair<Bitcoin::transaction, account_diff>> ready;
         for (const auto &[txid, tx] : tg.Payment) ready <<= {tx, account_diff {txid, tg.Out[txid], {}}};
-        u.broadcast (ready);
+
+        if (auto success = u.broadcast (ready); !bool (success))
+            throw exception {} << "Broadcast failed with error " << success;
 
         for (const auto &[id, a, b] : tg.RequestsSatisfied) requests = requests.remove (id);
 

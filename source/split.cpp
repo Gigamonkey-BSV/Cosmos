@@ -106,10 +106,10 @@ void command_split (const arg_parser &p) {
     maybe<double> min_sats_per_output = double (options::DefaultMinSatsPerOutput);
     maybe<double> fee_rate = double (options::default_fee_rate ());
 
-    p.get ("min_sats", min_sats_per_output);
-    p.get ("max_sats", max_sats_per_output);
-    p.get ("mean_sats", mean_sats_per_output);
-    p.get ("fee_rate", fee_rate);
+    p.get ("min_sats_per_output", min_sats_per_output);
+    p.get ("max_sats_per_output", max_sats_per_output);
+    p.get ("mean_sats_per_output", mean_sats_per_output);
+    p.get ("fee_rate_per_output", fee_rate);
 
     auto health_response = e.net ()->TAAL.health ();
     std::cout << "Get TAAL health: " << health_response << std::endl;
@@ -359,7 +359,7 @@ void command_split (const arg_parser &p) {
             if (!success) {
                 // TODO we should analize the result more here but we will do that
                 // inside the broadcast method for now.
-                throw exception {} << "could not broadcast ";
+                throw exception {} << "could not broadcast because " << success;
             }
             std::cout << "broadcast successful!" << std::endl;
             u.set_wallet (sp.Wallet);

@@ -458,15 +458,19 @@ void command_send (const arg_parser &p) {
     e.update<void> (update_pending_transactions);
     if (address.valid ()) e.update<void> ([rand, net, &address, &spend_amount] (Cosmos::Interface::writable u) {
             spend::spent spent = u.make_tx ({Bitcoin::output {spend_amount, pay_to_address::script (address.decode ().Digest)}});
-            for (const auto &[extx, diff] : spent.Transactions) u.broadcast ({{Bitcoin::transaction (extx), diff}});
             u.set_addresses (spent.Addresses);
+            for (const auto &[extx, diff] : spent.Transactions)
+                if (auto success = u.broadcast ({{Bitcoin::transaction (extx), diff}}); !bool (success))
+                    throw exception {} << "broadcast failed with error " << success;
         });
     else if (xpub.valid ()) e.update<void> ([rand, net, &xpub, &spend_amount] (Cosmos::Interface::writable u) {
             spend::spent spent = u.make_tx (for_each ([] (const redeemable &m) -> Bitcoin::output {
                     return m.Prevout;
                 }, Cosmos::split {} (*rand, address_sequence {xpub, {}, 0}, spend_amount, .001).Outputs));
-            for (const auto &[extx, diff] : spent.Transactions) u.broadcast ({{Bitcoin::transaction (extx), diff}});
             u.set_addresses (spent.Addresses);
+            for (const auto &[extx, diff] : spent.Transactions)
+                if (auto success = u.broadcast ({{Bitcoin::transaction (extx), diff}}); !bool (success))
+                    throw exception {} << "broadcast failed with error " << success;
         });
     else throw exception {2} << "Could not read address/xpub";
 }
@@ -487,8 +491,10 @@ void command_boost (const arg_parser &p) {
     e.update<void> (Cosmos::update_pending_transactions);
     e.update<void> ([net = e.net (), rand = e.random (), &op] (Cosmos::Interface::writable u) {
         Cosmos::spend::spent x = u.make_tx ({op});
-        for (const auto &[extx, diff] : x.Transactions) u.broadcast ({{Bitcoin::transaction (extx), diff}});
         u.set_addresses (x.Addresses);
+        for (const auto &[extx, diff] : x.Transactions)
+            if (auto success = u.broadcast ({{Bitcoin::transaction (extx), diff}}); !bool (success))
+                throw exception {} << "broadcast failed with error " << success;
     });
 }
 

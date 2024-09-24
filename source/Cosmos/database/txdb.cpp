@@ -119,15 +119,15 @@ namespace Cosmos {
 
     namespace {
         broadcast_single_result broadcast_tx (cached_remote_TXDB &txdb, const extended_transaction &tx) {
-            auto err = txdb.Net.broadcast (tx);
-            if (!bool (err)) txdb.Local.insert (Bitcoin::transaction (tx));
-            return err;
+            auto success = txdb.Net.broadcast (tx);
+            if (bool (success)) txdb.Local.insert (Bitcoin::transaction (tx));
+            return success;
         }
 
         broadcast_multiple_result broadcast_txs (cached_remote_TXDB &txdb, const list<extended_transaction> &txs) {
-            auto err = txdb.Net.broadcast (txs);
-            if (!bool (err)) for (const auto &tx : txs) txdb.Local.insert (Bitcoin::transaction (tx));
-            return err;
+            auto success = txdb.Net.broadcast (txs);
+            if (bool (success)) for (const auto &tx : txs) txdb.Local.insert (Bitcoin::transaction (tx));
+            return success;
         }
 
         broadcast_tree_result broadcast_map (cached_remote_TXDB &txdb, SPV::proof::map map) {
@@ -138,7 +138,7 @@ namespace Cosmos {
                     // just go into the database.
                     const auto &conf = pn->Proof.get<SPV::confirmation> ();
                     if (!txdb.Local.import_transaction (pn->Transaction, conf.Path, conf.Header)) {
-                        so_far.Sub = so_far.Sub.insert (txid, broadcast_error::invalid_transaction);
+                        so_far.Sub = so_far.Sub.insert (txid, broadcast_result::ERROR_INVALID);
                         return so_far;
                     }
                 } else {
@@ -146,7 +146,7 @@ namespace Cosmos {
                     auto m = pn->Proof.get<SPV::proof::map> ();
                     auto successes = broadcast_map (txdb, m);
                     so_far.Sub = so_far.Sub + successes.Sub;
-                    if (!bool (successes)) {
+                    if (bool (successes)) {
                         so_far.Error = successes.Error;
                         return so_far;
                     } else {
@@ -166,8 +166,9 @@ namespace Cosmos {
     }
 
     broadcast_tree_result cached_remote_TXDB::broadcast (SPV::proof p) {
-        if (!p.valid ()) return broadcast_error::invalid_transaction;
+        if (!p.valid ()) return broadcast_result::ERROR_INVALID;
         broadcast_tree_result success_map = broadcast_map (*this, p.Proof);
+        // if there are any errors, return those.
         for (const auto &[_, x] : success_map.Sub) if (!bool (x))
             return {{x.Error, x.Details}, success_map.Sub};
         return {broadcast_txs (*this, SPV::extended_transactions (p.Payment, p.Proof)), success_map.Sub};
