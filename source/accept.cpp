@@ -200,7 +200,12 @@ void command_accept (const arg_parser &p) {
         if (auto success = u.broadcast (ready); !bool (success))
             throw exception {} << "Broadcast failed with error " << success;
 
-        for (const auto &[id, a, b] : tg.RequestsSatisfied) requests = requests.remove (id);
+        // TODO put these in history.
+        auto txids = tg.Out.keys ();
+        for (const auto &[id, a, b] : tg.RequestsSatisfied) {
+            u.history ()->Payments <<= history::payment {id, a, txids};
+            requests = requests.remove (id);
+        }
 
         u.set_payments (payments {requests, pay->Proposals});
 
