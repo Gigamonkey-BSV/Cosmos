@@ -29,17 +29,17 @@ namespace Cosmos {
     }
 
     void update_pending_transactions (Interface::writable u) {
+        std::cout << "Updating wallet with network" << std::endl;
         auto txdb = u.txdb ();
         auto w = u.get ().wallet ();
         auto *p = u.get ().payments ();
         if (!bool (txdb) || !bool (w) || !bool (p)) throw exception {"could not connect to network and database"};
 
         // all txs that have been updated with merkle proofs.
-        list<ptr<vertex>> mined;
+        list<Bitcoin::TXID> mined;
         auto unconfirmed = txdb->unconfirmed ();
-        std::cout << " found " << unconfirmed.size () << " unconfirmed txs" << std::endl;
-        for (const Bitcoin::TXID &txid : unconfirmed) if (txdb->import_transaction (txid))
-            mined <<= (*txdb)[txid];
+        std::cout << " found " << unconfirmed.size () << " unconfirmed txs." << std::endl;
+        for (const Bitcoin::TXID &txid : unconfirmed) if ((*txdb)[txid]->confirmed ()) mined <<= txid;
         std::cout << " of these " << mined.size () << " were mined since the last time the program was run." << std::endl;
 
         // update the unconfirmed txs in history.

@@ -102,8 +102,8 @@ void command_split (const arg_parser &p) {
     read_random_options (e, p);
 
     maybe<double> max_sats_per_output = double (options::DefaultMaxSatsPerOutput);
-    maybe<double> mean_sats_per_output = double (options::DefaultMeanSatsPerOutput);
     maybe<double> min_sats_per_output = double (options::DefaultMinSatsPerOutput);
+    maybe<double> mean_sats_per_output = double (options::DefaultMeanSatsPerOutput);
     maybe<double> fee_rate = double (options::default_fee_rate ());
 
     p.get ("min_sats_per_output", min_sats_per_output);
@@ -111,18 +111,9 @@ void command_split (const arg_parser &p) {
     p.get ("mean_sats_per_output", mean_sats_per_output);
     p.get ("fee_rate_per_output", fee_rate);
 
-    auto health_response = e.net ()->TAAL.health ();
-    std::cout << "Get TAAL health: " << health_response << std::endl;
-    if (bool (health_response)) {
-        auto health = health_response.health ();
-        if (!health.healthy ())
-            throw exception {} << "According to TALL, network is not healthy because " << health.reason ();
-    }
-
-    auto policy_response = e.net ()->TAAL.policy ();
-    std::cout << "Get TAAL policy: " << policy_response << std::endl;
-    if (bool (policy_response)) fee_rate = double (policy_response.policy ().mining_fee ()) * 2;
-    std::cout << " new fee rate " << fee_rate << std::endl;
+    std::cout << "min sats per output: " << *min_sats_per_output << std::endl;
+    std::cout << "max sats per output: " << *max_sats_per_output << std::endl;
+    std::cout << "mean sats per output: " << *mean_sats_per_output << std::endl;
 
     Cosmos::split split {int64 (*min_sats_per_output), int64 (*max_sats_per_output), *mean_sats_per_output};
 
@@ -225,11 +216,9 @@ void command_split (const arg_parser &p) {
     std::cout << "found " << x.size () << " scripts in " << num_outputs <<
         " outputs to split with a total value of " << total_split_value << std::endl;
 
-    // TODO estimate fees here.
-
     auto top = get_top_splitable (x);
 
-    e.update<void> ([&split, &top, fee_rate] (Cosmos::Interface::writable u) {
+    e.update<void> ([&split, &top] (Cosmos::Interface::writable u) {
 
         auto &txdb = *u.txdb ();
 
@@ -251,7 +240,7 @@ void command_split (const arg_parser &p) {
         // we had a problem earlier where I tried to dereference this pointer
         // which destroyed the ptr object. This is definitely kinda confusing,
         // since you can safely dereference other pointers returned by Interface.
-        Cosmos::price_data *price_data = u.price_data ();
+        //Cosmos::price_data *price_data = u.price_data ();
 
         /*
         // commented out since we don't have a reliable source of price data right now.
@@ -286,8 +275,26 @@ void command_split (const arg_parser &p) {
 
         std::cout << "tax implications should these splits be created now are \n" << std::endl;
         std::cout << Gain << std::endl;*/
+    });
 
-        if (!get_user_yes_or_no ("Do you want to continue?")) throw exception {} << "program aborted";
+    if (!get_user_yes_or_no ("Do you want to continue?")) throw exception {} << "program aborted";
+
+    auto health_response = e.net ()->TAAL.health ();
+    std::cout << "Get TAAL health: " << health_response << std::endl;
+    if (bool (health_response)) {
+        auto health = health_response.health ();
+        if (!health.healthy ())
+            throw exception {} << "According to TALL, network is not healthy because " << health.reason ();
+    }
+
+    auto policy_response = e.net ()->TAAL.policy ();
+    std::cout << "Get TAAL policy: " << policy_response << std::endl;
+    if (bool (policy_response)) fee_rate = double (policy_response.policy ().mining_fee ()) * 2;
+    std::cout << " new fee rate " << fee_rate << std::endl;
+
+    e.update<void> ([&split, &top, &fee_rate] (Cosmos::Interface::writable u) {
+
+        auto &txdb = *u.txdb ();
 
         struct split_result {
             // the data to broadcast.

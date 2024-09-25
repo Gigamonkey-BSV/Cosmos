@@ -104,7 +104,7 @@ namespace Cosmos {
 
     SPV::database::tx cached_remote_TXDB::transaction (const Bitcoin::TXID &xd) {
         auto p = Local.transaction (xd);
-        if (p.valid ()) return p;
+        if (p.valid () && p.confirmed ()) return p;
         import_transaction (xd);
         return Local.transaction (xd);
     }

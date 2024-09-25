@@ -277,7 +277,7 @@ void version () {
 void command_value (const arg_parser &p) {
     Cosmos::Interface e {};
     Cosmos::read_account_and_txdb_options (e, p);
-    e.update<void> (Cosmos::update_pending_transactions);
+    //e.update<void> (Cosmos::update_pending_transactions);
     auto w = e.wallet ();
     if (!bool (w)) throw exception {} << "could not read wallet";
     return Cosmos::display_value (*w);
