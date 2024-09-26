@@ -19,7 +19,6 @@
 	// "forwardPorts": [],
 
 	// Uncomment the next line to run commands after the container is created.
-	"postCreateCommand": "conan install . --build=missing",
 	"customizations": {
 		"vscode": {
 			"extensions": [
