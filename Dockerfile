@@ -1,4 +1,4 @@
-FROM gigamonkey/gigamonkey-lib:v1.0.0 AS build
+FROM gigamonkey/gigamonkey-lib:v1.1.1 AS build
 
 COPY . /home/cosmos
 WORKDIR /home/cosmos
