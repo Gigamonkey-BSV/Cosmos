@@ -18,4 +18,6 @@ RUN apt-get -y update &&  \
     rm -rf /var/lib/apt/lists/*
 COPY --from=build /usr/local/lib/libsecp256k1.so.2 /usr/local/lib/libsecp256k1.so.2
 COPY --from=build /home/cosmos/build/CosmosWallet /bin/CosmosWallet
-CMD ["/bin/CosmosWallet"]
+WORKDIR /cosmos
+ENTRYPOINT [ "/bin/CosmosWallet" ]
+CMD ["help"]

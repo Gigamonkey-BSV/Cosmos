@@ -30,11 +30,20 @@ Version 0.0.1 alpha.
 ## Run with Docker
 
 The easiest way to use Cosmos Wallet is with Docker.
+To run the application in a Docker container, use the following command:
 
-1. Download this repo.
-2. `docker build .` to construct a docker file that can be run in any environment. This will take a long time
-   but it does not need to be repeated unless you want to upgrade the program.
-   If there is a problem, try `docker build . --no-cache` to build the docker container from scratch.
+```bash
+docker run -it -v .:/cosmos gigamonkey/cosmos <command>
+```
+
+### Explanation:
+
+- `-it`: This runs the container in interactive mode with a terminal session.
+- `-v .:/cosmos`: This mounts the current directory (.) to the `/cosmos` directory inside the container. If you want to store the wallet files elsewhere, replace the . with the path to that location.
+- `gigamonkey/cosmos`: This is the Docker image name. 
+- `<command>`: Replace this placeholder with the specific command you want to run.
+
+Before running the command, make sure Docker is installed and running on your system.
 
 ## Run in Linux
 
