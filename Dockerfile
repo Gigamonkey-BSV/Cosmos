@@ -1,10 +1,10 @@
-FROM gigamonkey/gigamonkey-lib:v1.1.1 AS build
+FROM gigamonkey/gigamonkey-lib:v1.1.3 AS build
 
 COPY . /home/cosmos
 WORKDIR /home/cosmos
 RUN chmod -R 777 .
-RUN cmake  -B build -S . -DCMAKE_BUILD_TYPE=Release
-RUN cmake --build build
+RUN cmake  -G Ninja -B build -S . -DCMAKE_BUILD_TYPE=Release
+RUN cmake --build build -j 4
 
 FROM ubuntu:22.04
 RUN apt-get -y update &&  \
