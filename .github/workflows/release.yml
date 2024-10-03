@@ -5,6 +5,9 @@ on:
             - 'v*'
 env:
   REGISTRY_IMAGE: gigamonkey/Cosmos
+permissions:
+  contents: write
+  discussions: write
 jobs:
     build:
         runs-on: ubuntu-latest
@@ -108,3 +111,7 @@ jobs:
                 name: Inspect image
                 run: |
                     docker buildx imagetools inspect ${{ env.REGISTRY_IMAGE }}:${{ steps.meta.outputs.version }}
+            -
+                name: Release
+                uses: softprops/action-gh-release@v2
+                    
