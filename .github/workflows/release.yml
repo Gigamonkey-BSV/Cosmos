@@ -4,7 +4,7 @@ on:
         tags:
             - 'v*'
 env:
-  REGISTRY_IMAGE: gigamonkey/Cosmos
+  REGISTRY_IMAGE: gigamonkey/cosmos
 permissions:
   contents: write
   discussions: write
