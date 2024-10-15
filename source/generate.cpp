@@ -29,12 +29,10 @@ namespace Cosmos {
             "Press enter when you think you have enough."
             "Around 200 characters ought to be enough as long as they are random enough." << std::endl;
 
-        std::string user_input {};
-
-        while (true) {
-            char x = std::cin.get ();
-            if (x == '\n') break;
-            user_input.push_back (x);
+        std::string user_input;
+        if(!std::getline(std::cin,user_input))
+        {
+            throw exception {} << "Blank entropy";
         }
 
         HD::BIP_32::secret master {};
