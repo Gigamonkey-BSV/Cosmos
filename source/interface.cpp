@@ -9,7 +9,55 @@
 #include "interface.hpp"
 
 namespace Cosmos {
-    spend::spent Interface::writable::make_tx (list<Bitcoin::output> o) {
+
+    options read_tx_options (Interface &e, const arg_parser &p, bool online) {
+
+        options o {};
+
+        maybe<double> max_sats_per_output;
+        maybe<double> min_sats_per_output;
+        maybe<double> mean_sats_per_output;
+        maybe<double> fee_rate;
+
+        p.get ("min_sats_per_output", min_sats_per_output);
+        p.get ("max_sats_per_output", max_sats_per_output);
+        p.get ("mean_sats_per_output", mean_sats_per_output);
+        p.get ("fee_rate", fee_rate);
+
+        if (bool (max_sats_per_output)) o.MaxSatsPerOutput = std::ceil (*max_sats_per_output);
+        if (bool (min_sats_per_output)) o.MinSatsPerOutput = std::ceil (*min_sats_per_output);
+        if (bool (mean_sats_per_output)) o.MeanSatsPerOutput = *mean_sats_per_output;
+
+        maybe<satoshis_per_byte> sats_per_byte;
+        if (bool (fee_rate)) *sats_per_byte = {Bitcoin::satoshi {int64 (ceil (*fee_rate * 1000))}, 1000};
+
+        if (online) {
+            auto health_response = e.net ()->TAAL.health ();
+            std::cout << "Get TAAL health: " << health_response << std::endl;
+            if (bool (health_response)) {
+                auto health = health_response.health ();
+                if (!health.healthy ())
+                    throw exception {} << "According to TALL, network is not healthy because " << health.reason ();
+            }
+
+            satoshis_per_byte network_fee_rate;
+            auto policy_response = e.net ()->TAAL.policy ();
+            std::cout << "Get TAAL policy: " << policy_response << std::endl;
+            if (bool (policy_response) && !bool (sats_per_byte)) {
+                *sats_per_byte = policy_response.policy ().mining_fee ();
+                // double it just to be safe.
+                sats_per_byte->Satoshis *= 2;
+            }
+            std::cout << " new fee rate " << *sats_per_byte << std::endl;
+        }
+
+        if (bool (sats_per_byte)) o.FeeRate = *sats_per_byte;
+
+        return o;
+
+    }
+
+    spend::spent Interface::writable::make_tx (list<Bitcoin::output> o, const options &opts) {
         auto *k = I.keys ();
         maybe<Cosmos::wallet> w = I.wallet ();
 
@@ -24,7 +72,7 @@ namespace Cosmos {
 
         return spend {
             select_output_parameters {4, 5000, .23},
-            split_change_parameters {}, *I.random ()}
+            split_change_parameters {opts}, *I.random ()}
             (Gigamonkey::redeem_p2pkh_and_p2pk, *k, Cosmos::wallet {w->Pubkeys, w->Addresses, pruned_account}, o);
     }
 

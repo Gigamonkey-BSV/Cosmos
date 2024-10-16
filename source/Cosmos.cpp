@@ -309,11 +309,13 @@ maybe<std::string> de_escape (string_view input) {
     return {decoded.str ()};
 }
 
+// TODO get fee rate from network.
 // TODO make sure we don't invalidate existing payments.
 void command_pay (const arg_parser &p) {
     using namespace Cosmos;
-    Cosmos::Interface e {};
-    Cosmos::read_wallet_options (e, p);
+    Interface e {};
+    read_wallet_options (e, p);
+    read_random_options (e, p);
 
     // first look for a payment request.
     maybe<std::string> payment_request_string;
@@ -332,6 +334,9 @@ void command_pay (const arg_parser &p) {
 
     maybe<string> output;
     p.get ("output", output);
+
+    e.update<void> (update_pending_transactions);
+    options o = read_tx_options (e, p);
 
     payments::payment_request *pr;
     if (bool (payment_request_string)) {
@@ -401,6 +406,8 @@ void command_pay (const arg_parser &p) {
         BEEF beef {*ppp};
         std::cout << "Beef produced containing " << beef.Transactions.size () <<
             " transactions and " << beef.BUMPs.size () << " proofs" << std::endl;
+
+        wait_for_enter ("Press enter to continue.");
 
         // save to proposed payments.
         auto payments = *u.get ().payments ();

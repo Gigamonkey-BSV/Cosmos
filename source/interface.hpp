@@ -89,7 +89,7 @@ namespace Cosmos {
             broadcast_tree_result broadcast (list<std::pair<Bitcoin::transaction, account_diff>>);
 
             // make a transaction with a bunch of default options already set
-            spend::spent make_tx (list<Bitcoin::output> o);
+            spend::spent make_tx (list<Bitcoin::output> o, const options & = {});
 
             const Cosmos::Interface &get () {
                 return I;
@@ -163,6 +163,8 @@ namespace Cosmos {
     void read_pubkeys_options (Interface &, const arg_parser &p);
     void read_account_and_txdb_options (Interface &, const arg_parser &p);
     void read_random_options (Interface &, const arg_parser &p);
+
+    options read_tx_options (Interface &, const arg_parser &p, bool online = true);
 
     void read_wallet_options (Interface &e, const arg_parser &p);
     void read_watch_wallet_options (Interface &e, const arg_parser &p);

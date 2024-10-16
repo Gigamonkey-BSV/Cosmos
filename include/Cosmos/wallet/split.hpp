@@ -90,6 +90,9 @@ namespace Cosmos {
             double mean_sats_per_output = options::DefaultMeanSatsPerOutput) :
             split {min_sats_per_output, max_sats_per_output, mean_sats_per_output},
             MinimumCreateValue {min_change_value} {}
+
+        split_change_parameters (const options &o) :
+            split_change_parameters {o.MinChangeValue, o.MinSatsPerOutput, o.MaxSatsPerOutput, o.MeanSatsPerOutput} {}
     };
 
     spend::spent inline split::operator () (redeem ree, data::crypto::random &rand, keychain k, wallet w,

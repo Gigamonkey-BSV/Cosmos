@@ -100,22 +100,9 @@ void command_split (const arg_parser &p) {
     Interface e {};
     read_wallet_options (e, p);
     read_random_options (e, p);
+    options opts = read_tx_options (e, p);
 
-    maybe<double> max_sats_per_output = double (options::DefaultMaxSatsPerOutput);
-    maybe<double> min_sats_per_output = double (options::DefaultMinSatsPerOutput);
-    maybe<double> mean_sats_per_output = double (options::DefaultMeanSatsPerOutput);
-    maybe<double> fee_rate = double (options::default_fee_rate ());
-
-    p.get ("min_sats_per_output", min_sats_per_output);
-    p.get ("max_sats_per_output", max_sats_per_output);
-    p.get ("mean_sats_per_output", mean_sats_per_output);
-    p.get ("fee_rate_per_output", fee_rate);
-
-    std::cout << "min sats per output: " << *min_sats_per_output << std::endl;
-    std::cout << "max sats per output: " << *max_sats_per_output << std::endl;
-    std::cout << "mean sats per output: " << *mean_sats_per_output << std::endl;
-
-    Cosmos::split split {int64 (*min_sats_per_output), int64 (*max_sats_per_output), *mean_sats_per_output};
+    Cosmos::split split {opts.MinSatsPerOutput, opts.MaxSatsPerOutput, opts.MeanSatsPerOutput};
 
     splitable x;
 
@@ -166,7 +153,7 @@ void command_split (const arg_parser &p) {
         } else throw exception {6} << "could not read address string";
     } else {
         // in this case, we just look for all outputs in our account that we are able to split.
-        x = e.update<splitable> ([&max_sats_per_output] (Interface::writable u) {
+        x = e.update<splitable> ([&opts] (Interface::writable u) {
 
             const auto w = u.get ().wallet ();
             if (!bool (w)) throw exception {} << "could not load wallet";
@@ -175,7 +162,7 @@ void command_split (const arg_parser &p) {
 
             for (const auto &[key, value]: w->Account)
                 // find all outputs that are worth splitting
-                if (value.Prevout.Value > *max_sats_per_output) {
+                if (value.Prevout.Value > opts.MaxSatsPerOutput) {
                     z = z.insert (
                         Gigamonkey::SHA2_256 (value.Prevout.Script),
                         {entry<Bitcoin::outpoint, redeemable> {key, value}},
@@ -189,7 +176,7 @@ void command_split (const arg_parser &p) {
             // of big outputs since we don't want to leave any script partially redeemed and partially not.
             for (const auto &[key, value]: w->Account)
                 // find all outputs that are worth splitting
-                if (value.Prevout.Value <= *max_sats_per_output) {
+                if (value.Prevout.Value <= opts.MaxSatsPerOutput) {
                     digest256 script_hash = Gigamonkey::SHA2_256 (value.Prevout.Script);
                     if (z.contains (script_hash))
                         z = z.insert (script_hash,
@@ -279,20 +266,7 @@ void command_split (const arg_parser &p) {
 
     if (!get_user_yes_or_no ("Do you want to continue?")) throw exception {} << "program aborted";
 
-    auto health_response = e.net ()->TAAL.health ();
-    std::cout << "Get TAAL health: " << health_response << std::endl;
-    if (bool (health_response)) {
-        auto health = health_response.health ();
-        if (!health.healthy ())
-            throw exception {} << "According to TALL, network is not healthy because " << health.reason ();
-    }
-
-    auto policy_response = e.net ()->TAAL.policy ();
-    std::cout << "Get TAAL policy: " << policy_response << std::endl;
-    if (bool (policy_response)) fee_rate = double (policy_response.policy ().mining_fee ()) * 2;
-    std::cout << " new fee rate " << fee_rate << std::endl;
-
-    e.update<void> ([&split, &top, &fee_rate] (Cosmos::Interface::writable u) {
+    e.update<void> ([&split, &top, &opts] (Cosmos::Interface::writable u) {
 
         auto &txdb = *u.txdb ();
 
@@ -321,7 +295,7 @@ void command_split (const arg_parser &p) {
                     t.Outputs.size () << " output" << (t.Outputs.size () == 1 ? "" : "s") << "." << std::endl;
 
                 spend::spent spent = split (Gigamonkey::redeem_p2pkh_and_p2pk, *u.random (),
-                    *u.get ().keys (), next.Wallet, t.Outputs, *fee_rate);
+                    *u.get ().keys (), next.Wallet, t.Outputs, double (opts.FeeRate));
 
                 account new_account = next.Wallet.Account;
 

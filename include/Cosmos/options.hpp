@@ -2,6 +2,7 @@
 #define COSMOS_OPTIONS
 
 #include <gigamonkey/satoshi.hpp>
+#include <data/io/arg_parser.hpp>
 
 namespace Cosmos {
 
@@ -18,6 +19,8 @@ namespace Cosmos {
             static satoshis_per_byte dfr {Bitcoin::satoshi {static_cast<int64> (DefaultFeeRate[0])}, DefaultFeeRate[1]};
             return dfr;
         }
+
+        Bitcoin::satoshi MinChangeValue {DefaultMinChangeValue};
 
         Bitcoin::satoshi MaxSatsPerOutput {DefaultMaxSatsPerOutput};
 

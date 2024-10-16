@@ -6,6 +6,10 @@
 #include "interface.hpp"
 #include "Cosmos.hpp"
 
+
+#include <filesystem>
+#include <fstream>
+
 namespace Cosmos {
     struct request_integrator {
         map<Bitcoin::TXID, Bitcoin::transaction> Payment;
@@ -114,8 +118,22 @@ void command_accept (const arg_parser &p) {
 
     maybe<std::string> payment_string;
     p.get (3, "payment", payment_string);
-    if (!bool (payment_string))
-        throw exception {2} << "No payment provided";
+    if (!bool (payment_string)) {
+        maybe<std::string> payment_file_string;
+        p.get ("payment_file", payment_file_string);
+        if (!bool (payment_file_string)) throw exception {2} << "No payment provided";
+
+        std::filesystem::path p {*payment_file_string};
+        if (!std::filesystem::exists (p)) throw exception {2} << "file " << *payment_file_string << " not found.";
+        std::ifstream file;
+        file.open (*payment_file_string, std::ios::in);
+        if (!file) throw exception {"could not open file"};
+
+        std::stringstream ss;
+        ss << file.rdbuf ();
+
+        *payment_string = ss.str ();
+    }
 
     // payment can be an SPV proof in BEEF format (preferred), a txid, a transaction, or an SPV envelope (depricated).
 
