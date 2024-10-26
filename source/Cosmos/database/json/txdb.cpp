@@ -111,8 +111,8 @@ namespace Cosmos {
             txdb.ByHash[read_TXID (root)] = txdb.ByHeight [read_N (height)];
 
         for (const auto &[txid, tx] : txs->items ())
-            txdb.Transactions[read_TXID (txid)] = ptr<Bitcoin::transaction>
-                {new Bitcoin::transaction {*encoding::base64::read (std::string (tx))}};
+            txdb.Transactions[read_TXID (txid)] = ptr<Bitcoin::transaction> {
+                new Bitcoin::transaction {*encoding::base64::read (std::string (tx))}};
 
         // optional field because I forgot to put it in at one point.
         // In the future it should be mandatory.

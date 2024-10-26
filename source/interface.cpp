@@ -31,6 +31,7 @@ namespace Cosmos {
         maybe<satoshis_per_byte> sats_per_byte;
         if (bool (fee_rate)) *sats_per_byte = {Bitcoin::satoshi {int64 (ceil (*fee_rate * 1000))}, 1000};
 
+        std::cout << "Checking network health" << std::endl;
         if (online) {
             auto health_response = e.net ()->TAAL.health ();
             std::cout << "Get TAAL health: " << health_response << std::endl;
@@ -86,6 +87,7 @@ namespace Cosmos {
         // all txs that have been updated with merkle proofs.
         list<Bitcoin::TXID> mined;
         auto unconfirmed = txdb->unconfirmed ();
+
         std::cout << " found " << unconfirmed.size () << " unconfirmed txs." << std::endl;
         for (const Bitcoin::TXID &txid : unconfirmed) if ((*txdb)[txid]->confirmed ()) mined <<= txid;
         std::cout << " of these " << mined.size () << " were mined since the last time the program was run." << std::endl;
@@ -124,6 +126,7 @@ namespace Cosmos {
         }
 
         u.set_payments (Cosmos::payments {p->Requests, new_proposals});
+        std::cout << " done updating." << std::endl;
 
     }
 
@@ -280,12 +283,10 @@ namespace Cosmos {
     }
 
     local_TXDB *Interface::get_local_txdb () {
-
         if (!bool (LocalTXDB)) {
             auto txf = txdb_filepath ();
-            if (bool (txf))
-                LocalTXDB = std::static_pointer_cast<Cosmos::local_TXDB>
-                    (std::make_shared<JSON_local_TXDB> (read_JSON_local_TXDB_from_file (*txf)));
+            if (bool (txf)) LocalTXDB = std::static_pointer_cast<Cosmos::local_TXDB>
+                (std::make_shared<JSON_local_TXDB> (read_JSON_local_TXDB_from_file (*txf)));
             else return nullptr;
         }
 
@@ -293,7 +294,6 @@ namespace Cosmos {
     }
 
     cached_remote_TXDB *Interface::get_txdb () {
-
         if (!bool (TXDB)) {
 
             auto n = net ();

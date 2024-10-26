@@ -2,7 +2,6 @@
 #define COSMOS_OPTIONS
 
 #include <gigamonkey/satoshi.hpp>
-#include <data/io/arg_parser.hpp>
 
 namespace Cosmos {
 

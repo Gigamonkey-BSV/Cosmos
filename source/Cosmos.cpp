@@ -226,7 +226,17 @@ void help (method meth) {
                 "\n\t(--amount=<expected amount of payment>)" << std::endl;
         } break;
         case method::PAY : {
-            std::cout << "arguments for method pay not yet available." << std::endl;
+            std::cout << "Respond to a payment request by creating a payment."
+                "\narguments for method pay:"
+                "\n\t(--name=)<wallet name>"
+                "\n\t(--request=)<payment request>"
+                "\n\t(--address=<address to pay to>)"
+                "\n\t(--amount=<amount to pay>)"
+                "\n\t(--memo=<what is the payment about>)"
+                "\n\t(--output=<output in hex>)"
+                "\n\t(--min_sats_per_output=<float>) (= " << Cosmos::options::DefaultMinSatsPerOutput << ")"
+                "\n\t(--max_sats_per_output=<float>) (= " << Cosmos::options::DefaultMaxSatsPerOutput << ")"
+                "\n\t(--mean_sats_per_output=<float>) (= " << Cosmos::options::DefaultMeanSatsPerOutput << ") "  << std::endl;
         } break;
         case method::ACCEPT : {
             std::cout << "Accept a payment."
@@ -251,9 +261,9 @@ void help (method meth) {
                 "\n\t(--name=)<wallet name>"
                 "\n\t(--address=)<address | xpub | script hash>"
                 "\n\t(--max_look_ahead=)<integer> (= 10) ; (only used if parameter 'address' is provided as an xpub"
-                "\n\t(--min_sats_per_output=<float>) (= 123456)"
-                "\n\t(--max_sats_per_output=<float>) (= 5000000)"
-                "\n\t(--mean_sats_per_output=<float>) (= 1234567) " << std::endl;
+                "\n\t(--min_sats_per_output=<float>) (= " << Cosmos::options::DefaultMinSatsPerOutput << ")"
+                "\n\t(--max_sats_per_output=<float>) (= " << Cosmos::options::DefaultMaxSatsPerOutput << ")"
+                "\n\t(--mean_sats_per_output=<float>) (= " << Cosmos::options::DefaultMeanSatsPerOutput << ") " << std::endl;
         } break;
         case method::RESTORE : {
             std::cout << "arguments for method restore:"
@@ -335,9 +345,6 @@ void command_pay (const arg_parser &p) {
     maybe<string> output;
     p.get ("output", output);
 
-    e.update<void> (update_pending_transactions);
-    options o = read_tx_options (e, p);
-
     payments::payment_request *pr;
     if (bool (payment_request_string)) {
 
@@ -370,15 +377,18 @@ void command_pay (const arg_parser &p) {
 
     // TODO if other incomplete payments exist, be sure to subtract
     // them from the account so as not to create a double spend.
-    Bitcoin::satoshi value = e.wallet ()->value ();
+    Bitcoin::satoshi wallet_value = e.wallet ()->value ();
 
-    std::cout << "This is a payment for " << *pr->Value.Amount << " sats; wallet value: " << value << std::endl;
+    std::cout << "This is a payment for " << *pr->Value.Amount << " sats; wallet value: " << wallet_value << std::endl;
 
     // TODO estimate fee to send this tx.
-    if (value < pr->Value.Amount) throw exception {} << "Wallet does not have sufficient funds to make this payment";
+    if (wallet_value < pr->Value.Amount) throw exception {} << "Wallet does not have sufficient funds to make this payment";
+
+    options opts = read_tx_options (e, p);
+    e.update<void> (update_pending_transactions);
 
     // TODO encrypt payment request in OP_RETURN.
-    BEEF beef = e.update<BEEF> ([pr] (Interface::writable u) -> BEEF {
+    BEEF beef = e.update<BEEF> ([pr, opts] (Interface::writable u) -> BEEF {
 
         Bitcoin::address addr {pr->Key};
         Bitcoin::pubkey pubkey {pr->Key};
@@ -386,9 +396,9 @@ void command_pay (const arg_parser &p) {
 
         spend::spent spent;
         if (addr.valid ()) {
-            spent = u.make_tx ({Bitcoin::output {*pr->Value.Amount, pay_to_address::script (addr.digest ())}});
+            spent = u.make_tx ({Bitcoin::output {*pr->Value.Amount, pay_to_address::script (addr.digest ())}}, opts);
         } else if (pubkey.valid ()) {
-            spent = u.make_tx ({Bitcoin::output {*pr->Value.Amount, pay_to_pubkey::script (pubkey)}});
+            spent = u.make_tx ({Bitcoin::output {*pr->Value.Amount, pay_to_pubkey::script (pubkey)}}, opts);
         } else if (xpub.valid ()) {
             throw exception {} << "pay to xpub not yet implemented";
         } else throw exception {} << "could not read payment address " << pr->Key;

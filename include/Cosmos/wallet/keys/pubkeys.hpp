@@ -3,12 +3,13 @@
 
 #include <Cosmos/database/write.hpp>
 #include <Cosmos/wallet/keys/sequence.hpp>
+#include <data/tools/base_map.hpp>
 
 namespace Cosmos {
 
     // master pubkeys and their derivations from secret keys.
-    struct pubkeys : tool::base_rb_map<pubkey, derivation, pubkeys> {
-        using tool::base_rb_map<pubkey, derivation, pubkeys>::base_rb_map;
+    struct pubkeys : base_map<pubkey, derivation, pubkeys> {
+        using base_map<pubkey, derivation, pubkeys>::base_map;
         explicit pubkeys (const JSON &);
         operator JSON () const;
 
