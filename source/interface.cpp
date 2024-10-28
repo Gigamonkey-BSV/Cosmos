@@ -72,8 +72,8 @@ namespace Cosmos {
         for (const auto &[_, offer] : p->Proposals) for (const auto diff : offer.Diff) pruned_account <<= diff;
 
         return spend {
-            select_output_parameters {4, 5000, .23},
-            split_change_parameters {opts}, *I.random ()}
+            select_down {4, 5000, .5, 5},
+            split_change_parameters {opts}, *I.casual_random ()}
             (Gigamonkey::redeem_p2pkh_and_p2pk, *k, Cosmos::wallet {w->Pubkeys, w->Addresses, pruned_account}, o);
     }
 

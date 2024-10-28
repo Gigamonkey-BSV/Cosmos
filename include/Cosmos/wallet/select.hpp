@@ -13,7 +13,7 @@ namespace Cosmos {
     using select = data::function<selected (const account &, Bitcoin::satoshi, satoshis_per_byte fees, data::crypto::random &)>;
 
     // default select function
-    struct select_output_parameters {
+    struct select_down {
         // how many outputs should be selected ideally per spend operation.
         uint32 OptimalOutputsPerSpend;
 
@@ -22,19 +22,51 @@ namespace Cosmos {
 
         // How much of the amount spent should be change?
         double MinChangeFraction;
+        double MaxChangeFraction;
 
         // select outputs from a wallet sufficient for the given value.
         selected operator () (const account &, Bitcoin::satoshi, satoshis_per_byte fees, data::crypto::random &) const;
     };
 
     // select the biggest outputs until we have enough.
-    struct select_biggest {
+    struct select_up_biggest {
 
         // The minimum amount that can go in a change output.
         Bitcoin::satoshi MinChangeValue;
 
         // How much of the amount spent should be change?
         double MinChangeFraction;
+        double MaxChangeFraction;
+
+        // select outputs from a wallet sufficient for the given value.
+        selected operator () (const account &, Bitcoin::satoshi, satoshis_per_byte fees, data::crypto::random &) const;
+    };
+
+    // select random outputs until we have enough.
+    struct select_up_random {
+
+        // The minimum amount that can go in a change output.
+        Bitcoin::satoshi MinChangeValue;
+
+        // How much of the amount spent should be change?
+        double MinChangeFraction;
+        double MaxChangeFraction;
+
+        // select outputs from a wallet sufficient for the given value.
+        selected operator () (const account &, Bitcoin::satoshi, satoshis_per_byte fees, data::crypto::random &) const;
+    };
+
+    // combine select_up_random with select_down.
+    struct select_up_and_down {
+        // how many outputs should be selected ideally per spend operation.
+        uint32 OptimalOutputsPerSpend;
+
+        // The minimum amount that can go in a change output.
+        Bitcoin::satoshi MinChangeValue;
+
+        // How much of the amount spent should be change?
+        double MinChangeFraction;
+        double MaxChangeFraction;
 
         // select outputs from a wallet sufficient for the given value.
         selected operator () (const account &, Bitcoin::satoshi, satoshis_per_byte fees, data::crypto::random &) const;
