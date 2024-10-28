@@ -7,7 +7,7 @@ namespace Cosmos {
 
         struct drop_down {
             // can go faster by using std::map
-            account Result;
+            std::map<Bitcoin::outpoint, redeemable> Result;
 
             Bitcoin::satoshi SpentValue;
 
@@ -68,12 +68,12 @@ namespace Cosmos {
                     uint32 selected_removable_index = crypto::select_index_by_weight (weights, r);
                     auto remove_key = rmv[selected_removable_index].Point;
 
-                    auto removed = Result[remove_key];
+                    auto removed = Result.find (remove_key);
 
-                    InputsExpectedSize -= removed.expected_input_size ();
-                    SpentValue -= removed.Prevout.Value;
+                    InputsExpectedSize -= removed->second.expected_input_size ();
+                    SpentValue -= removed->second.Prevout.Value;
 
-                    Result = Result.remove (remove_key);
+                    Result.erase (removed);
 
                 }
             }
@@ -85,13 +85,16 @@ namespace Cosmos {
                 uint32 optimal_outputs_per_spend,
                 Bitcoin::satoshi min_change_value,
                 double min_change_fraction,
-                data::crypto::random &r): Result {acc}, SpentValue {acc.value ()}, InputsExpectedSize {0} {
+                data::crypto::random &r): Result {}, SpentValue {acc.value ()}, InputsExpectedSize {0} {
 
                 // are enough funds available to make the payment?
                 if (SpentValue <= value_to_spend) throw exception {3} << "not enough funds to make payment.";
 
                 // generate expected size of the inputs to the tx.
-                for (const auto &[key, value] : acc) InputsExpectedSize += value.expected_input_size ();
+                for (const auto &[key, value] : acc) {
+                    Result[key] = value;
+                    InputsExpectedSize += value.expected_input_size ();
+                }
 
                 // in these cases, we cannot satisfy MinChangeFraction or MinChangeValue with the funds
                 // available in the wallet, so we continue with everything selected.
