@@ -1,5 +1,5 @@
 #include <Cosmos/boost/miner_options.hpp>
-#include <Cosmos/boost/random.hpp>
+#include <Cosmos/random.hpp>
 #include <argh.h>
 #include <gigamonkey/script/typed_data_bip_276.hpp>
 #include <gigamonkey/schema/hd.hpp>
@@ -72,7 +72,13 @@ namespace BoostPOW {
 
         // User nonce is for ensuring that no two scripts are identical.
         // You can increase the bounty for a boost by making an identical script.
-        uint32_little user_nonce {UserNonce ? *UserNonce : Cosmos::casual_random {}.uint32 ()};
+        uint32_little user_nonce {0};
+        if (bool (UserNonce)) user_nonce = *UserNonce;
+        else {
+            uint32 un;
+            *Cosmos::get_casual_random () >> un;
+            user_nonce = un;
+        }
 
         // we are using version 1 for now.
         // we will use version 2 when we know we have Stratum extensions right.

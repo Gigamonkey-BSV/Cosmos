@@ -149,6 +149,6 @@ namespace Cosmos {
     selected select_up_and_down::operator ()
         (const account &acc, Bitcoin::satoshi value_to_spend, satoshis_per_byte fees, data::crypto::random &r) const {
 
-        throw exception {} << "unimplemented method select_up_biggest::operator ()";
+        throw exception {} << "unimplemented method select_up_and_down::operator ()";
     }
 }

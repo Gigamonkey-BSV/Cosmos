@@ -6,7 +6,12 @@
 #include <mutex>
 
 namespace Cosmos {
-    using namespace Gigamonkey;
+    using namespace data;
+
+    // these functions are not provided by the library.
+    crypto::random *get_random ();// depricated
+    crypto::random *get_secure_random ();
+    crypto::random *get_casual_random ();
 
     // Some stuff having to do with random number generators. We do not need 
     // strong cryptographic random numbers for boost. It is fine to use 
@@ -33,8 +38,8 @@ namespace Cosmos {
         virtual ~random () {}
         
     };
-    
-    template <typename engine>
+
+    template <std::uniform_random_bit_generator engine>
     struct std_random : random, crypto::std_random<engine> {
         using crypto::std_random<engine>::std_random;
 
@@ -55,7 +60,7 @@ namespace Cosmos {
         static bool boolean (engine &gen) {
             return static_cast<bool> (std::uniform_int_distribution<data::uint32> {0, 1} (gen));
         }
-        
+
         double range01 () override {
             return range01 (crypto::std_random<engine>::Engine);
         }
@@ -77,7 +82,7 @@ namespace Cosmos {
     using casual_random = std_random<std::default_random_engine>;
     using NIST_DRBG_random = std_random<data::crypto::NIST::DRBG>;
     
-    template <typename engine>
+    template <std::uniform_random_bit_generator engine>
     class random_threadsafe : random {
         std_random<engine> Random;
         std::mutex Mutex;

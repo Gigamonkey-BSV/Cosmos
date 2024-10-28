@@ -53,6 +53,7 @@ target_compile_features (cosmos_lib PUBLIC cxx_std_20)
 set_target_properties (cosmos_lib PROPERTIES CXX_EXTENSIONS OFF)
 
 add_executable (CosmosWallet
+    source/random.cpp
     source/interface.cpp
     source/generate.cpp
     source/restore.cpp

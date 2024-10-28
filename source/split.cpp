@@ -99,7 +99,7 @@ void command_split (const arg_parser &p) {
     using namespace Cosmos;
     Interface e {};
     read_wallet_options (e, p);
-    read_random_options (e, p);
+    read_random_options (p);
     options opts = read_tx_options (e, p);
 
     Cosmos::split split {opts.MinSatsPerOutput, opts.MaxSatsPerOutput, opts.MeanSatsPerOutput};
@@ -294,7 +294,7 @@ void command_split (const arg_parser &p) {
                 std::cout << " Splitting script with hash " << t.ScriptHash << " containing value " << t.Value << " over " <<
                     t.Outputs.size () << " output" << (t.Outputs.size () == 1 ? "" : "s") << "." << std::endl;
 
-                spend::spent spent = split (Gigamonkey::redeem_p2pkh_and_p2pk, *u.random (),
+                spend::spent spent = split (Gigamonkey::redeem_p2pkh_and_p2pk, *get_random (),
                     *u.get ().keys (), next.Wallet, t.Outputs, double (opts.FeeRate));
 
                 account new_account = next.Wallet.Account;

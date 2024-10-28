@@ -10,7 +10,7 @@
 #include <Cosmos/database/json/price_data.hpp>
 #include <Cosmos/database/json/txdb.hpp>
 #include <Cosmos/history.hpp>
-#include <Cosmos/boost/random.hpp>
+#include <Cosmos/random.hpp>
 
 using arg_parser = data::io::arg_parser;
 
@@ -32,9 +32,6 @@ namespace Cosmos {
         maybe<std::string> &payments_filepath ();
 
         network *net ();
-        crypto::random *random ();// depricated
-        crypto::random *secure_random ();
-        crypto::random *casual_random ();
 
         const Cosmos::local_TXDB *local_txdb () const;
         const Cosmos::cached_remote_TXDB *txdb () const;
@@ -72,7 +69,6 @@ namespace Cosmos {
             Cosmos::price_data *price_data ();
 
             Cosmos::history *history ();
-            crypto::random *random ();
 
             void set_keys (const Cosmos::keychain &);
             void set_pubkeys (const Cosmos::pubkeys &);
@@ -128,10 +124,6 @@ namespace Cosmos {
         ptr<Cosmos::addresses> Addresses {nullptr};
         ptr<Cosmos::payments> Payments {nullptr};
 
-        ptr<crypto::user_entropy> Entropy;
-        ptr<crypto::NIST::DRBG> SecureRandom {nullptr};
-        ptr<crypto::linear_combination_random> CasualRandom {nullptr};
-
         // if this is set to true, then everything will be
         // saved to disk on destruction of the Interface.
         bool Written {false};
@@ -162,7 +154,7 @@ namespace Cosmos {
     void read_both_chains_options (Interface &, const arg_parser &p);
     void read_pubkeys_options (Interface &, const arg_parser &p);
     void read_account_and_txdb_options (Interface &, const arg_parser &p);
-    void read_random_options (Interface &, const arg_parser &p);
+    void read_random_options (const arg_parser &p);
 
     options read_tx_options (Interface &, const arg_parser &p, bool online = true);
 
@@ -203,10 +195,6 @@ namespace Cosmos {
 
     history inline *Interface::writable::history () {
         return I.get_history ();
-    }
-
-    crypto::random inline *Interface::writable::random () {
-        return I.random ();
     }
 
     price_data inline *Interface::writable::price_data () {
@@ -282,10 +270,6 @@ namespace Cosmos {
     void inline Interface::writable::set_payments (const Cosmos::payments &pk) {
         if (I.Payments) *I.Payments = pk;
         else I.Payments = std::make_shared<Cosmos::payments> (pk);
-    }
-
-    crypto::random inline *Interface::random () {
-        return secure_random ();
     }
 
 }

@@ -325,7 +325,7 @@ void command_pay (const arg_parser &p) {
     using namespace Cosmos;
     Interface e {};
     read_wallet_options (e, p);
-    read_random_options (e, p);
+    read_random_options (p);
 
     // first look for a payment request.
     maybe<std::string> payment_request_string;
@@ -449,7 +449,7 @@ void command_send (const arg_parser &p) {
     using namespace Cosmos;
     Cosmos::Interface e {};
     Cosmos::read_wallet_options (e, p);
-    Cosmos::read_random_options (e, p);
+    Cosmos::read_random_options (p);
 
     maybe<std::string> address_string;
     p.get (3, "address", address_string);
@@ -466,7 +466,7 @@ void command_send (const arg_parser &p) {
 
     Bitcoin::satoshi spend_amount {*value};
 
-    auto *rand = e.random ();
+    auto *rand = get_random ();
     auto *net = e.net ();
 
     if (rand == nullptr) throw exception {4} << "could not initialize random number generator.";
@@ -497,7 +497,7 @@ void command_boost (const arg_parser &p) {
 
     Cosmos::Interface e {};
     Cosmos::read_wallet_options (e, p);
-    Cosmos::read_random_options (e, p);
+    Cosmos::read_random_options (p);
 
     maybe<int64> value;
     p.get (3, "value", value);
@@ -506,7 +506,7 @@ void command_boost (const arg_parser &p) {
 
     Bitcoin::output op {Bitcoin::satoshi {*value}, Boost::output_script (script_options::read (p.Parser, 3)).write ()};
     e.update<void> (Cosmos::update_pending_transactions);
-    e.update<void> ([net = e.net (), rand = e.random (), &op] (Cosmos::Interface::writable u) {
+    e.update<void> ([net = e.net (), &op] (Cosmos::Interface::writable u) {
         Cosmos::spend::spent x = u.make_tx ({op});
         u.set_addresses (x.Addresses);
         for (const auto &[extx, diff] : x.Transactions)

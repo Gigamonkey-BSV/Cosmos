@@ -5,7 +5,6 @@
 #include <gigamonkey/schema/bip_39.hpp>
 #include <Cosmos/network.hpp>
 #include <Cosmos/wallet/split.hpp>
-#include <sv/random.h>
 #include "interface.hpp"
 
 namespace Cosmos {
@@ -73,7 +72,7 @@ namespace Cosmos {
 
         return spend {
             select_down {4, 5000, .5, 5},
-            split_change_parameters {opts}, *I.casual_random ()}
+            split_change_parameters {opts}, *get_casual_random ()}
             (Gigamonkey::redeem_p2pkh_and_p2pk, *k, Cosmos::wallet {w->Pubkeys, w->Addresses, pruned_account}, o);
     }
 
@@ -192,7 +191,7 @@ namespace Cosmos {
         if (!bool (account_filepath)) throw data::exception {1} << "could not read filepath of account";
     }
 
-    void read_random_options (Interface &e, const arg_parser &p) {
+    void read_random_options (const arg_parser &p) {
         // no options set up for random yet.
     }
 
@@ -395,39 +394,6 @@ namespace Cosmos {
         }
 
         return Payments.get ();
-    }
-
-    crypto::random *Interface::secure_random () {
-
-        if (!SecureRandom) {
-
-            Entropy = std::make_shared<crypto::user_entropy> (
-                "We need some entropy for this operation. Please type random characters.",
-                "Thank you for your entropy so far. That was not enough. Please give us more random characters.",
-                "Sufficient entropy provided.", std::cout, std::cin);
-
-            SecureRandom = std::make_shared<crypto::NIST::DRBG> (crypto::NIST::DRBG::Hash, *Entropy, std::numeric_limits<uint32>::max ());
-        }
-
-        return SecureRandom.get ();
-
-    }
-
-    crypto::random *Interface::casual_random () {
-
-        if (!CasualRandom) {
-            if (!SecureRandom) secure_random ();
-
-            uint64 seed;
-            Satoshi::GetStrongRandBytes ((byte *) &seed, 8);
-
-            CasualRandom = std::make_shared<crypto::linear_combination_random> (256,
-                std::static_pointer_cast<crypto::random> (std::make_shared<crypto::std_random<std::default_random_engine>> (seed)),
-                std::static_pointer_cast<crypto::random> (SecureRandom));
-        }
-
-        return CasualRandom.get ();
-
     }
 
     Interface::~Interface () {
