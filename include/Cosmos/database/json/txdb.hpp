@@ -12,7 +12,7 @@ namespace Cosmos {
     };
 
     JSON_local_TXDB inline read_JSON_local_TXDB_from_file (const std::string &filename) {
-        return JSON_local_TXDB {read_from_file (filename)};
+        return JSON_local_TXDB {read_from_file (filename).Payload};
     }
 }
 

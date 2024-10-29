@@ -355,7 +355,7 @@ namespace Cosmos {
                 auto pdf = price_data_filepath ();
                 if (!bool (pdf)) return nullptr;
                 LocalPriceData = std::static_pointer_cast<Cosmos::local_price_data>
-                    (std::make_shared<Cosmos::JSON_price_data> (read_from_file (*pdf)));
+                    (std::make_shared<Cosmos::JSON_price_data> (read_from_file (*pdf).Payload));
             }
 
             auto n = net ();
@@ -381,7 +381,7 @@ namespace Cosmos {
     history *Interface::get_history () {
         if (!bool (Events)) {
             auto hf = events_filepath ();
-            if (bool (hf)) Events = std::make_shared<Cosmos::history> (read_from_file (*hf), *get_txdb ());
+            if (bool (hf)) Events = std::make_shared<Cosmos::history> (read_from_file (*hf).Payload, *get_txdb ());
         }
 
         return Events.get ();
@@ -390,7 +390,7 @@ namespace Cosmos {
     payments *Interface::get_payments () {
         if (!bool (Payments)) {
             auto pf = payments_filepath ();
-            if (bool (pf)) Payments = std::make_shared<Cosmos::payments> (read_from_file (*pf));
+            if (bool (pf)) Payments = std::make_shared<Cosmos::payments> (read_from_file (*pf).Payload);
         }
 
         return Payments.get ();
