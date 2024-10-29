@@ -49,8 +49,8 @@ namespace Cosmos {
         JSON Payload;
         // If included, then the file is encrypted.
         maybe<crypto::symmetric_key<32>> Key;
-        file (JSON &&j): Payload {j}, Key {} {}
-        file (JSON &&j, const crypto::symmetric_key<32> &k): Payload {j}, Key {k} {}
+        file (JSON &&j): Payload (j), Key {} {}
+        file (JSON &&j, const crypto::symmetric_key<32> &k): Payload (j), Key {k} {}
     };
 
     void write_to_file (const file &, const std::string &filename);

@@ -123,11 +123,10 @@ namespace Cosmos {
 
         if (fi.eof ()) throw exception {"invalid file format"};
 
-        char prefix = fi.peek ();
+        char prefix = fi.get ();
 
         // encrypted file.
         if (prefix == 'X') {
-            fi >> prefix;
 
             // get key
             crypto::symmetric_key<32> key = crypto::PKCS5_PBKDF2_HMAC<32, CryptoPP::SHA256>
@@ -156,6 +155,7 @@ namespace Cosmos {
 
         }
 
+        fi.unget ();
         return JSON::parse (fi);
     }
 
