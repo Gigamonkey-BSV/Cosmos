@@ -35,7 +35,9 @@ enum class method {
     SEND,     // (depricated) send bitcoin to an address.
     BOOST,    // boost some content
     SPLIT,    // split your wallet into tiny pieces for privacy.
-    TAXES     // calculate income and capital gain for a given year.
+    TAXES,    // calculate income and capital gain for a given year.
+    ENCRYPT_PRIVATE_KEYS,
+    DECRYPT_PRIVATE_KEYS
 };
 
 void version ();
@@ -55,6 +57,8 @@ void command_import (const arg_parser &);
 void command_boost (const arg_parser &);    // offline
 void command_split (const arg_parser &);
 void command_taxes (const arg_parser &);    // offline
+void command_encrypt_private_keys (const arg_parser &);    // offline
+void command_decrypt_private_keys (const arg_parser &);    // offline
 
 // TODO offline methods function without an internet connection.
 

@@ -120,6 +120,16 @@ error run (const io::arg_parser &p) {
                     break;
                 }
 
+                case method::ENCRYPT_PRIVATE_KEYS: {
+                    command_encrypt_private_keys (p);
+                    break;
+                }
+
+                case method::DECRYPT_PRIVATE_KEYS: {
+                    command_decrypt_private_keys (p);
+                    break;
+                }
+
                 default: {
                     std::cout << "Error: could not read user's command." << std::endl;
                     help ();
@@ -178,6 +188,8 @@ method read_method (const arg_parser &p, uint32 index) {
     if (*m == "boost") return method::BOOST;
     if (*m == "split") return method::SPLIT;
     if (*m == "taxes") return method::TAXES;
+    if (*m == "encrypt_private_keys") return method::ENCRYPT_PRIVATE_KEYS;
+    if (*m == "decrypt_private_keys") return method::DECRYPT_PRIVATE_KEYS;
 
     return method::UNSET;
 }
@@ -275,6 +287,12 @@ void help (method meth) {
                 "\n\t(--coin_type=\"Bitcoin\"|\"BitcoinCash\"|\"BitcoinSV\"|<integer>)"
                 "\n\t(--wallet_type=\"RelayX\"|\"ElectrumSV\"|\"SimplyCash\"|\"CentBee\"|<string>)"
                 "\n\t(--entropy=<string>)" << std::endl;
+        } break;
+        case method::ENCRYPT_PRIVATE_KEYS: {
+            std::cout << "Encrypt the private key file so that it can only be accessed with a password. No parameters." << std::endl;
+        } break;
+        case method::DECRYPT_PRIVATE_KEYS : {
+            std::cout << "Decrypt the private key file again. No parameters." << std::endl;
         }
     }
 
@@ -547,5 +565,58 @@ void command_taxes (const arg_parser &p) {
         std::cout << "Tax implications: " << std::endl;
         std::cout << tax::calculate (*u.txdb (), u.price_data (), h->get (begin, end)) << std::endl;
     });
+}
+
+crypto::symmetric_key<32> throw_on_call () {
+    throw exception {} << "keys are already encrypted";
+}
+
+void command_encrypt_private_keys (const arg_parser &p) {
+    using namespace Cosmos;
+
+    Cosmos::Interface e {};
+    Cosmos::read_wallet_options (e, p);
+    Cosmos::read_random_options (p);
+
+    // check if file is already encrypted.
+    maybe<std::string> keychain_filepath = e.keychain_filepath ();
+    if (!bool (keychain_filepath)) throw exception {} << "Could not read keys filepath";
+
+    file fi = read_from_file (*keychain_filepath, &throw_on_call);
+
+    crypto::symmetric_key<32> new_key = get_user_key_from_password ();
+
+    // load key file the normal way.
+    auto kkk = e.keys ();
+
+    e.Files.replace_part (*keychain_filepath, new_key);
+}
+
+void command_decrypt_private_keys (const arg_parser &p) {
+    using namespace Cosmos;
+
+    Cosmos::Interface e {};
+    Cosmos::read_wallet_options (e, p);
+    Cosmos::read_random_options (p);
+
+    // check if file is already decrypted.
+    maybe<std::string> keychain_filepath = e.keychain_filepath ();
+    if (!bool (keychain_filepath)) throw exception {} << "Could not read keys filepath";
+
+    bool already_decrypted = true;
+
+    try {
+        file fi = read_from_file (*keychain_filepath, &throw_on_call);
+    } catch (...) {
+        already_decrypted = false;
+    }
+
+    if (already_decrypted) throw exception {} << "Keys are already decrypted.";
+
+    // load key file the normal way.
+    auto kkk = e.keys ();
+
+    e.Files.replace_part (*keychain_filepath, maybe<crypto::symmetric_key<32>> {});
+
 }
 

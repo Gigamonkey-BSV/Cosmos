@@ -10,6 +10,7 @@ namespace Cosmos {
         bool UseBIP_39 {true};
         uint32 Accounts {10};
         uint32 CoinType {0};
+        bool Encrypted {false};
         generate_wallet () {}
         generate_wallet (bool b39, uint32 accounts = 10, uint32 coin_type = 0) :
             UseBIP_39 {b39}, Accounts {accounts}, CoinType {coin_type} {}
@@ -30,10 +31,7 @@ namespace Cosmos {
             "Around 200 characters ought to be enough as long as they are random enough." << std::endl;
 
         std::string user_input;
-        if(!std::getline(std::cin,user_input))
-        {
-            throw exception {} << "Blank entropy";
-        }
+        if (!std::getline (std::cin, user_input)) throw exception {} << "Blank entropy";
 
         HD::BIP_32::secret master {};
 
@@ -96,6 +94,7 @@ void command_generate (const arg_parser &p) {
 
     if (p.has ("words")) gen.UseBIP_39 = true;
     if (p.has ("no_words")) gen.UseBIP_39 = false;
+    if (p.has ("encrypted")) gen.Encrypted = true;
 
     maybe<uint32> accounts;
     p.get ("accounts", accounts);

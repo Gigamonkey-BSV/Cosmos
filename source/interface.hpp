@@ -101,6 +101,8 @@ namespace Cosmos {
 
         ~Interface ();
 
+        files Files;
+
     private:
 
         maybe<std::string> Name {};
@@ -113,7 +115,6 @@ namespace Cosmos {
         maybe<std::string> HistoryFilepath {};
         maybe<std::string> PaymentsFilepath {};
 
-        files Files;
 
         ptr<network> Net {nullptr};
         ptr<Cosmos::keychain> Keys {nullptr};

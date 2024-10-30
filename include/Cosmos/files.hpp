@@ -24,8 +24,10 @@ namespace Cosmos {
         file (const JSON &j, const crypto::symmetric_key<32> &k): Payload (j), Key {k} {}
     };
 
+    crypto::symmetric_key<32> get_user_key_from_password ();
+
     void write_to_file (const file &, const std::string &filename);
-    file read_from_file (const std::string &filename);
+    file read_from_file (const std::string &filename, crypto::symmetric_key<32> (*) () = &get_user_key_from_password);
 
     struct files : base_map<std::string, maybe<crypto::symmetric_key<32>>, files> {
         files write (const std::string &, const JSON &) const;

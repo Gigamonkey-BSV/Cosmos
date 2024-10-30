@@ -53,7 +53,11 @@ namespace Cosmos {
         file.complete ();
     }
 
-    file read_from_file (const std::string &filename) {
+    crypto::symmetric_key<32> get_user_key_from_password () {
+        return crypto::PKCS5_PBKDF2_HMAC<32, CryptoPP::SHA256> (get_user_password ("Please provide the password to decript your keys"), 2048);
+    }
+
+    file read_from_file (const std::string &filename, crypto::symmetric_key<32> (*get_key) ()) {
 
         std::filesystem::path p {filename};
         if (!std::filesystem::exists (p)) return JSON (nullptr);
@@ -69,9 +73,7 @@ namespace Cosmos {
         // encrypted file.
         if (prefix == 'X') {
 
-            // get key
-            crypto::symmetric_key<32> key = crypto::PKCS5_PBKDF2_HMAC<32, CryptoPP::SHA256>
-                (get_user_password ("Please provide the password to decript your keys"), 2048);
+            crypto::symmetric_key<32> key = get_key ();
 
             crypto::initialization_vector<16> iv;
 
