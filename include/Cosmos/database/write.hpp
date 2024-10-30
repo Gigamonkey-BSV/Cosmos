@@ -2,7 +2,6 @@
 #define COSMOS_DATABASE_WRITE
 
 #include <data/net/JSON.hpp>
-#include <data/crypto/encrypted.hpp>
 
 #include <gigamonkey/timechain.hpp>
 #include <gigamonkey/schema/hd.hpp>
@@ -38,23 +37,6 @@ namespace Cosmos {
     JSON write_path (HD::BIP_32::path p);
 
     HD::BIP_32::path read_path (const JSON &j);
-
-    void write_to_file (const std::string &, const std::string &filename);
-
-    void inline write_to_file (const JSON &j, const std::string &filename) {
-        write_to_file (j.dump (' ', 2), filename);
-    }
-
-    struct file {
-        JSON Payload;
-        // If included, then the file is encrypted.
-        maybe<crypto::symmetric_key<32>> Key;
-        file (JSON &&j): Payload (j), Key {} {}
-        file (JSON &&j, const crypto::symmetric_key<32> &k): Payload (j), Key {k} {}
-    };
-
-    void write_to_file (const file &, const std::string &filename);
-    file read_from_file (const std::string &filename);
 
     std::string inline write (const N &n) {
         return encoding::decimal::write (n);

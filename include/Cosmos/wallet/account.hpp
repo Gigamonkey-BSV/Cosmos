@@ -57,10 +57,6 @@ namespace Cosmos {
 
     };
 
-    account inline read_account_from_file (const std::string &filename) {
-        return account (read_from_file (filename).Payload);
-    }
-
 }
 
 #endif

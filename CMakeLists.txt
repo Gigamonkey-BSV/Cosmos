@@ -27,6 +27,7 @@ add_library (cosmos_lib STATIC
     source/Cosmos/database/json/price_data.cpp
     source/Cosmos/network/whatsonchain.cpp
     source/Cosmos/network.cpp
+    source/Cosmos/files.cpp
     source/Cosmos/wallet/keys/derivation.cpp
     source/Cosmos/wallet/keys/sequence.cpp
     source/Cosmos/wallet/keys/pubkeys.cpp

@@ -284,8 +284,12 @@ namespace Cosmos {
     local_TXDB *Interface::get_local_txdb () {
         if (!bool (LocalTXDB)) {
             auto txf = txdb_filepath ();
-            if (bool (txf)) LocalTXDB = std::static_pointer_cast<Cosmos::local_TXDB>
-                (std::make_shared<JSON_local_TXDB> (read_JSON_local_TXDB_from_file (*txf)));
+            if (bool (txf)) {
+                auto [json, files] = Files.load (*txf);
+                Files = files;
+                LocalTXDB = std::static_pointer_cast<Cosmos::local_TXDB>
+                (std::make_shared<JSON_local_TXDB> (json));
+            }
             else return nullptr;
         }
 
@@ -310,7 +314,9 @@ namespace Cosmos {
         if (!bool (Account)) {
             auto af = account_filepath ();
             if (bool (af)) {
-                Account = std::make_shared<Cosmos::account> (read_account_from_file (*af));
+                auto [json, files] = Files.load (*af);
+                Files = files;
+                Account = std::make_shared<Cosmos::account> (json);
             }
         }
 
@@ -322,7 +328,9 @@ namespace Cosmos {
         if (!bool (Addresses)) {
             auto df = addresses_filepath ();
             if (bool (df)) {
-                Addresses = std::make_shared<Cosmos::addresses> (read_addresses_from_file (*df));
+                auto [json, files] = Files.load (*df);
+                Files = files;
+                Addresses = std::make_shared<Cosmos::addresses> (json);
             }
         }
 
@@ -333,7 +341,11 @@ namespace Cosmos {
 
         if (!bool (Pubkeys)) {
             auto pf = pubkeys_filepath ();
-            if (bool (pf)) Pubkeys = std::make_shared<Cosmos::pubkeys> (read_pubkeys_from_file (*pf));
+            if (bool (pf)) {
+                auto [json, files] = Files.load (*pf);
+                Files = files;
+                Pubkeys = std::make_shared<Cosmos::pubkeys> (json);
+            }
         }
 
         return Pubkeys.get ();
@@ -343,7 +355,11 @@ namespace Cosmos {
 
         if (!bool (Keys)) {
             auto kf = keychain_filepath ();
-            if (bool (kf)) Keys = std::make_shared<keychain> (read_keychain_from_file (*kf));
+            if (bool (kf)) {
+                auto [json, files] = Files.load (*kf);
+                Files = files;
+                Keys = std::make_shared<keychain> (json);
+            }
         }
 
         return Keys.get ();
@@ -354,8 +370,11 @@ namespace Cosmos {
             if (LocalPriceData == nullptr) {
                 auto pdf = price_data_filepath ();
                 if (!bool (pdf)) return nullptr;
+
+                auto [json, files] = Files.load (*pdf);
+                Files = files;
                 LocalPriceData = std::static_pointer_cast<Cosmos::local_price_data>
-                    (std::make_shared<Cosmos::JSON_price_data> (read_from_file (*pdf).Payload));
+                (std::make_shared<Cosmos::JSON_price_data> (json));
             }
 
             auto n = net ();
@@ -381,7 +400,11 @@ namespace Cosmos {
     history *Interface::get_history () {
         if (!bool (Events)) {
             auto hf = events_filepath ();
-            if (bool (hf)) Events = std::make_shared<Cosmos::history> (read_from_file (*hf).Payload, *get_txdb ());
+            if (bool (hf)) {
+                auto [json, files] = Files.load (*hf);
+                Files = files;
+                Events = std::make_shared<Cosmos::history> (json, *get_txdb ());
+            }
         }
 
         return Events.get ();
@@ -390,7 +413,11 @@ namespace Cosmos {
     payments *Interface::get_payments () {
         if (!bool (Payments)) {
             auto pf = payments_filepath ();
-            if (bool (pf)) Payments = std::make_shared<Cosmos::payments> (read_from_file (*pf).Payload);
+            if (bool (pf)) {
+                auto [json, files] = Files.load (*pf);
+                Files = files;
+                Payments = std::make_shared<Cosmos::payments> (json);
+            }
         }
 
         return Payments.get ();
@@ -409,22 +436,22 @@ namespace Cosmos {
         auto yf = payments_filepath ();
 
         if (bool (tf) && bool (LocalTXDB))
-            write_to_file (JSON (dynamic_cast<JSON_local_TXDB &> (*LocalTXDB)), *tf);
+            Files.write (*tf, JSON (dynamic_cast<JSON_local_TXDB &> (*LocalTXDB)));
 
-        if (bool (af) && bool (Account)) write_to_file (JSON (*Account), *af);
+        if (bool (af) && bool (Account)) Files.write (*af, JSON (*Account));
 
-        if (bool (df) && bool (Addresses)) write_to_file (JSON (*Addresses), *df);
+        if (bool (df) && bool (Addresses)) Files.write (*df, JSON (*Addresses));
 
-        if (bool (hf) && bool (Events)) write_to_file (JSON (*Events), *hf);
+        if (bool (hf) && bool (Events)) Files.write (*hf, JSON (*Events));
 
-        if (bool (pf) && bool (Pubkeys)) write_to_file (JSON (*Pubkeys), *pf);
+        if (bool (pf) && bool (Pubkeys)) Files.write (*pf, JSON (*Pubkeys));
 
-        if (bool (yf) && bool (Payments)) write_to_file (JSON (*Payments), *yf);
+        if (bool (yf) && bool (Payments)) Files.write (*yf, JSON (*Payments));
 
-        if (bool (kf) && bool (Keys)) write_to_file (JSON (*Keys), *kf);
+        if (bool (kf) && bool (Keys)) Files.write (*kf, JSON (*Keys));
 
         if (bool (pdf) && bool (LocalPriceData))
-            write_to_file (JSON (dynamic_cast<JSON_price_data &> (*LocalPriceData)), *pdf);
+            Files.write (*pdf, JSON (dynamic_cast<JSON_price_data &> (*LocalPriceData)));
 
     }
 

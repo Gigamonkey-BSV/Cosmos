@@ -11,6 +11,7 @@
 #include <Cosmos/database/json/txdb.hpp>
 #include <Cosmos/history.hpp>
 #include <Cosmos/random.hpp>
+#include <Cosmos/files.hpp>
 
 using arg_parser = data::io::arg_parser;
 
@@ -111,6 +112,8 @@ namespace Cosmos {
         maybe<std::string> PriceDataFilepath {};
         maybe<std::string> HistoryFilepath {};
         maybe<std::string> PaymentsFilepath {};
+
+        files Files;
 
         ptr<network> Net {nullptr};
         ptr<Cosmos::keychain> Keys {nullptr};

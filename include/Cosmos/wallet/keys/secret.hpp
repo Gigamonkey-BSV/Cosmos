@@ -26,10 +26,6 @@ namespace Cosmos {
         }
     };
 
-    keychain inline read_keychain_from_file (const std::string &filename) {
-        return keychain (read_from_file (filename).Payload);
-    }
-
     Bitcoin::secret inline keychain::derive (const derivation &d) const {
         return Bitcoin::secret (HD::BIP_32::secret {(*this)[d.Parent]}.derive (d.Path));
     }

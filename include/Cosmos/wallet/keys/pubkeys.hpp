@@ -63,14 +63,6 @@ namespace Cosmos {
         }
     };
 
-    pubkeys inline read_pubkeys_from_file (const std::string &filename) {
-        return pubkeys (read_from_file (filename).Payload);
-    }
-
-    addresses inline read_addresses_from_file (const std::string &filename) {
-        return addresses (read_from_file (filename).Payload);
-    }
-
     addresses inline addresses::next (const string &name) const {
         return addresses {data::replace_part (Sequences, name, Sequences[name].next ()), Receive, Change};
     }
