@@ -32,6 +32,7 @@ namespace Cosmos {
         if (!CasualRandom) {
             if (!SecureRandom) get_secure_random ();
 
+            Satoshi::RandomInit ();
             uint64 seed;
             Satoshi::GetStrongRandBytes ((byte *) &seed, 8);
 
