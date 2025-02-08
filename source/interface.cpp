@@ -377,10 +377,15 @@ namespace Cosmos {
                 (std::make_shared<Cosmos::JSON_price_data> (json));
             }
 
+            // We do not have remote price data at this time.
+            /*
             auto n = net ();
             if (!bool (n)) return LocalPriceData.get ();
 
             PriceData = std::make_shared<Cosmos::cached_remote_price_data> (*n, *LocalPriceData);
+            */
+
+            PriceData = std::make_shared<Cosmos::cached_remote_price_data> (std::make_shared<ask_for_price_data> (), *LocalPriceData);
         }
 
         return PriceData.get ();

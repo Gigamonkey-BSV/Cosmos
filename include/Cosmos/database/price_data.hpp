@@ -15,11 +15,23 @@ namespace Cosmos {
         virtual ~local_price_data () {}
     };
 
-    struct cached_remote_price_data final : price_data {
+    struct remote_price_data final : price_data {
         network &Net;
+        remote_price_data (network &n) : Net {n} {}
+        maybe<double> get (const Bitcoin::timestamp &t) final override;
+    };
+
+    struct cached_remote_price_data final : price_data {
+        ptr<price_data> Remote;
         local_price_data &Local;
         maybe<double> get (const Bitcoin::timestamp &t) final override;
-        cached_remote_price_data (network &n, local_price_data &l) : Net {n}, Local {l} {}
+        cached_remote_price_data (ptr<price_data> n, local_price_data &l) : Remote {n}, Local {l} {}
+    };
+
+    // we ask the user for price data.
+    struct ask_for_price_data final : price_data {
+        ask_for_price_data () {}
+        maybe<double> get (const Bitcoin::timestamp &t) final override;
     };
 }
 
