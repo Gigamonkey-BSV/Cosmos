@@ -3,6 +3,7 @@
 #include <gigamonkey/pay/SPV_envelope.hpp>
 #include <gigamonkey/pay/BEEF.hpp>
 #include <gigamonkey/p2p/checksum.hpp>
+#include <data/io/wait_for_enter.hpp>
 #include "interface.hpp"
 #include "Cosmos.hpp"
 
@@ -33,7 +34,7 @@ namespace Cosmos {
                 for (const auto &op : extx.Outputs) {
                     if (op.Script == script) {
                         total_value += op.Value;
-                        entry<Bitcoin::index, redeemable> e {i++, redeemable {op, sg}};
+                        entry<const Bitcoin::index, redeemable> e {i++, redeemable {op, sg}};
                         Out = Out.replace_part (txid, [e] (const imap &m) -> imap {
                             return m.insert (e);
                         });
@@ -219,7 +220,7 @@ void command_accept (const arg_parser &p) {
             throw exception {} << "Broadcast failed with error " << success;
 
         // TODO put these in history.
-        auto txids = tg.Out.keys ();
+        data::stack<Bitcoin::TXID> txids = data::stack<Bitcoin::TXID> (tg.Out.keys ());
         for (const auto &[id, a, b] : tg.RequestsSatisfied) {
             u.history ()->Payments <<= history::payment {id, a, txids};
             requests = requests.remove (id);

@@ -72,7 +72,7 @@ namespace Cosmos {
 
     account::operator JSON () const {
         JSON::object_t a;
-        for (const auto &[key, value] : *this) a[write (key)] = JSON (value);
+        for (const auto &[key, value] : *this) a[Cosmos::write (key)] = JSON (value);
 
         return a;
     }

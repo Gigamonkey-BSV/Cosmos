@@ -32,16 +32,16 @@ namespace Cosmos {
 
     pubkeys::operator JSON () const {
         JSON::object_t db {};
-        for (const data::entry<pubkey, derivation> &e : *this)
-            db [e.Key] = JSON (e.Value);
+        for (const auto &[key, val] : *this)
+            db [key] = JSON (val);
         return db;
     }
 
     addresses::operator JSON () const {
 
         JSON::object_t x {};
-        for (const data::entry<string, address_sequence> &e : Sequences)
-            x [e.Key] = JSON (e.Value);
+        for (const auto &[key, val] : Sequences)
+            x [key] = JSON (val);
 
         JSON::object_t j;
         j["sequences"] = x;

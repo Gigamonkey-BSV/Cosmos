@@ -1,5 +1,6 @@
 #include "interface.hpp"
 #include "Cosmos.hpp"
+#include <data/io/wait_for_enter.hpp>
 
 namespace Cosmos {
 
@@ -141,7 +142,7 @@ void command_split (const arg_parser &p) {
 
                 while (since_last_unused < *max_look_ahead) {
                     size_t last_size = z.size ();
-                    z = z + get_split_address (u, pay_to_address_signing (seq.last ()).Key);
+                    z = z & get_split_address (u, pay_to_address_signing (seq.last ()).Key);
                     seq = seq.next ();
                     if (z.size () == last_size) {
                         since_last_unused++;

@@ -156,14 +156,14 @@ namespace Cosmos {
         split_outputs.Outputs = shuffle (shuffle (split_outputs.Outputs, rand));
 
         extended_transaction completed = redeemable_transaction {1,
-            for_each ([k, p] (const entry<Bitcoin::outpoint, redeemable> &e) -> redeemer {
+            data::for_each ([k, p] (const data::entry<Bitcoin::outpoint, redeemable> &e) -> redeemer {
 
                 auto d = first (e.Value.Derivation);
                 Bitcoin::secret sec = find_secret (k, p, d);
                 if (!sec.valid ()) throw exception {} << "could not find secret key for " << d;
 
                 return redeemer {
-                    list<sigop> {sigop {sec}},
+                    data::list<sigop> {sigop {sec}},
                     Bitcoin::prevout {e.Key, e.Value.Prevout},
                     e.Value.ExpectedScriptSize};
 

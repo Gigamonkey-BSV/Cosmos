@@ -1,5 +1,6 @@
 
 #include <Cosmos/network.hpp>
+#include <data/io/wait_for_enter.hpp>
 #include <mutex>
 #include <iomanip>
 

@@ -517,7 +517,7 @@ void command_boost (const arg_parser &p) {
     Cosmos::read_wallet_options (e, p);
     Cosmos::read_random_options (p);
 
-    maybe<int64> value;
+    data::maybe<int64> value;
     p.get (3, "value", value);
     if (!bool (value))
         throw exception {2} << "could not read value to boost.";
@@ -589,7 +589,7 @@ void command_encrypt_private_keys (const arg_parser &p) {
     // load key file the normal way.
     auto kkk = e.keys ();
 
-    e.Files.replace_part (*keychain_filepath, new_key);
+    e.Files.replace_part (*keychain_filepath, {new_key});
 }
 
 void command_decrypt_private_keys (const arg_parser &p) {

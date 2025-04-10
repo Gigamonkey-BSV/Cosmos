@@ -19,7 +19,7 @@ namespace Cosmos {
         satoshis_per_byte fees,
         uint32 lock) const {
 
-        using namespace Gigamonkey;
+        namespace G = Gigamonkey;
 
         // TODO if we could we ought to estimate the size of the tx and
         // the fees required to spend it and include that in value_to_spend.
@@ -33,18 +33,18 @@ namespace Cosmos {
         // do we have enough funds to spend everything we want to spend?
         if (value_available < value_to_spend) throw exception {3} << "insufficient funds: " << value_available << " < " << value_to_spend;
 
-        list<redeemer> inputs;
+        list<G::redeemer> inputs;
         account_diff diff;
 
         // select funds to be spent and organize them into redeemers and keep
         // track of outputs that will be removed from the wallet.
         Bitcoin::index input_index = 0;
         for (const auto &[op, re] : Select (w.Account, value_to_spend, fees, Random)) {
-            inputs <<= redeemer {
-                for_each ([&k, w] (const derivation &x) -> sigop {
+            inputs <<= G::redeemer {
+                for_each ([&k, w] (const derivation &x) -> G::sigop {
                     Bitcoin::secret sec = find_secret (k, w.Pubkeys, x);
                     if (!sec.valid ()) throw exception {} << "could not find secret key for " << x;
-                    return sigop {sec};
+                    return G::sigop {sec};
                 }, re.Derivation),
                 Bitcoin::prevout {op, re.Prevout},
                 re.ExpectedScriptSize,
@@ -54,7 +54,7 @@ namespace Cosmos {
         }
 
         // transform selected into inputs
-        redeemable_transaction design_before_change {1, inputs, to, lock};
+        G::redeemable_transaction design_before_change {1, inputs, to, lock};
 
         // how much do we need to make in change?
         satoshis_per_byte fee_rate_before_change {design_before_change.fee (), design_before_change.expected_size ()};
@@ -73,7 +73,7 @@ namespace Cosmos {
         cross<size_t> outputs_ordering = random_ordering (to.size () + change_outputs.size (), Random);
 
         // shuffle outputs and construct tx.
-        redeemable_transaction design {1, inputs, shuffle (change_outputs + to, outputs_ordering), lock};
+        G::redeemable_transaction design {1, inputs, shuffle (change_outputs + to, outputs_ordering), lock};
 
         // Is the fee for this transaction sufficient?
         if (design.fee_rate () < fees) throw exception {3} << "failed to generate tx with sufficient fees";

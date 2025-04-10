@@ -151,7 +151,7 @@ namespace Cosmos {
                     // try to broadcast all sub transactions.
                     auto m = pn->Proof.get<SPV::proof::map> ();
                     auto successes = broadcast_map (txdb, m);
-                    so_far.Sub = so_far.Sub + successes.Sub;
+                    so_far.Sub = so_far.Sub & successes.Sub;
                     if (bool (successes)) {
                         so_far.Error = successes.Error;
                         return so_far;

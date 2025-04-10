@@ -1,6 +1,7 @@
 #include <gigamonkey/schema/bip_44.hpp>
 #include <gigamonkey/schema/bip_39.hpp>
 #include <Cosmos/wallet/restore.hpp>
+#include <data/io/wait_for_enter.hpp>
 #include "interface.hpp"
 #include "Cosmos.hpp"
 
