@@ -2,20 +2,13 @@
 #define COSMOS
 
 #include <data/io/arg_parser.hpp>
+#include <data/io/error.hpp>
 #include <Cosmos/types.hpp>
 
 using namespace data;
 
 using arg_parser = io::arg_parser;
-
-struct error {
-    int Code;
-    maybe<std::string> Message;
-    error () : Code {0}, Message {} {}
-    error (int code) : Code {code}, Message {} {}
-    error (int code, const string &err): Code {code}, Message {err} {}
-    error (const string &err): Code {1}, Message {err} {}
-};
+using error = io::error;
 
 error run (const arg_parser &);
 

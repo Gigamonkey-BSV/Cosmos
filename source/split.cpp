@@ -337,7 +337,7 @@ void command_split (const arg_parser &p) {
 
         std::cout << "broadcasting split transactions" << std::endl;
         for (const auto &sp : split_txs) {
-            broadcast_tree_result success = u.txdb ()->broadcast (sp.Proof);
+            broadcast_tree_result success = synced (&cached_remote_TXDB::broadcast, u.txdb (), sp.Proof);
             if (!success) {
                 // TODO we should analize the result more here but we will do that
                 // inside the broadcast method for now.

@@ -1,5 +1,5 @@
-#ifndef COSMOS_DATABASE_MEMORY_TXDB
-#define COSMOS_DATABASE_MEMORY_TXDB
+#ifndef COSMOS_DATABASE_SQLITE_TXDB
+#define COSMOS_DATABASE_SQLITE_TXDB
 
 #include <Cosmos/database/txdb.hpp>
 

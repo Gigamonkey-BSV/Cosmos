@@ -4,6 +4,7 @@
 #include <mutex>
 #include <iomanip>
 
+// we use this mutex to ensure that we don't call the map at the same time.
 std::mutex Mutex;
 
 namespace Cosmos {
@@ -40,33 +41,37 @@ namespace Cosmos {
         return broadcast_gorilla || broadcast_pow_co ? broadcast_error::none : broadcast_error::unknown;
     }*/
 
-    broadcast_single_result network::broadcast (const extended_transaction &tx) {
+    awaitable<broadcast_single_result> network::broadcast (const extended_transaction &tx) {
 
         std::cout << "attempting to broadcast tx " << tx.id () << std::endl;
         wait_for_enter ();
 
         ARC::submit_response response;
         try {
-            response = TAAL.submit (tx);
+            response = co_await TAAL.submit (tx);
         } catch (net::HTTP::exception ex) {
             std::cout << "Could not connect: " << ex.what () << std::endl;
-            return broadcast_result::ERROR_NETWORK_CONNECTION_FAIL;
+            co_return broadcast_result::ERROR_NETWORK_CONNECTION_FAIL;
         }
 
         std::cout << "response status: " << response.Status << std::endl;
 
-        if (response.Status == 401) broadcast_result::ERROR_INAUTHENTICATED;
+        if (response.Status == 401) co_return broadcast_result::ERROR_INAUTHENTICATED;
 
         std::cout << "response body: " << response.Body << std::endl;
 
-        if (response.Status == 200) return response.status ();
+        if (response.Status == 200) co_return response.status ();
 
-        if (response.Status == 465 || response.Status == 473) return {broadcast_result::ERROR_INSUFFICIENT_FEE, *response.body ()};
-        if (response.Status >= 460) return {broadcast_result::ERROR_INVALID, *response.body ()};
-        return {broadcast_result::ERROR_UNKNOWN, *response.body ()};
+        if (response.Status == 465 || response.Status == 473)
+            co_return broadcast_single_result {broadcast_result::ERROR_INSUFFICIENT_FEE, *response.body ()};
+
+        if (response.Status >= 460)
+            co_return broadcast_single_result {broadcast_result::ERROR_INVALID, *response.body ()};
+
+        co_return broadcast_single_result {broadcast_result::ERROR_UNKNOWN, *response.body ()};
     }
 
-    broadcast_multiple_result network::broadcast (list<extended_transaction> txs) {
+    awaitable<broadcast_multiple_result> network::broadcast (list<extended_transaction> txs) {
 
         std::cout << "attempting to broadcast " << std::endl;
         for (const auto &tx: txs) std::cout << "\t" << tx.id () << std::endl;
@@ -74,37 +79,44 @@ namespace Cosmos {
 
         ARC::submit_txs_response response;
         try {
-            response = TAAL.submit_txs (txs);
+            response = co_await TAAL.submit_txs (txs);
         } catch (net::HTTP::exception ex) {
             std::cout << "Could not connect: " << ex.what () << std::endl;
-            return broadcast_result::ERROR_NETWORK_CONNECTION_FAIL;
+            co_return broadcast_result::ERROR_NETWORK_CONNECTION_FAIL;
         }
 
         std::cout << "response status: " << response.Status << std::endl;
 
-        if (response.Status == 401) return broadcast_result::ERROR_INAUTHENTICATED;
+        if (response.Status == 401) co_return broadcast_result::ERROR_INAUTHENTICATED;
 
         std::cout << "response body: " << response.Body << std::endl;
 
-        if (response.Status == 200) return response.status ();
+        if (response.Status == 200) co_return response.status ();
 
-        if (response.Status == 465 || response.Status == 473) return {broadcast_result::ERROR_INSUFFICIENT_FEE, *response.body ()};
-        if (response.Status >= 460) return {broadcast_result::ERROR_INVALID, *response.body ()};
-        return {broadcast_result::ERROR_UNKNOWN, *response.body ()};
+        if (response.Status == 465 || response.Status == 473)
+            co_return broadcast_multiple_result {broadcast_result::ERROR_INSUFFICIENT_FEE, *response.body ()};
+
+        if (response.Status >= 460)
+            co_return broadcast_multiple_result {broadcast_result::ERROR_INVALID, *response.body ()};
+
+        co_return broadcast_multiple_result {broadcast_result::ERROR_UNKNOWN, *response.body ()};
 
     }
 
-    bytes network::get_transaction (const Bitcoin::TXID &txid) {
+    awaitable<maybe<bytes>> network::get_transaction (const Bitcoin::TXID &txid) {
         static map<Bitcoin::TXID, bytes> cache;
 
         auto known = cache.contains (txid);
-        if (known) return *known;
+        if (known) co_return maybe<bytes> {*known};
 
-        bytes tx = WhatsOnChain.transaction ().get_raw (txid);
+        bytes tx = co_await WhatsOnChain.transaction ().get_raw (txid);
 
-        if (tx != bytes {}) cache = cache.insert (txid, tx);
+        if (tx == bytes {})
+            co_return maybe<bytes> {};
 
-        return tx;
+        cache = cache.insert (txid, tx);
+
+        co_return tx;
     }
 
     // transactions by txid
@@ -113,16 +125,19 @@ namespace Cosmos {
     // script histories by script hash
     map<digest256, list<Bitcoin::TXID>> History;
 
-    satoshis_per_byte network::mining_fee () {
+    awaitable<satoshis_per_byte> network::mining_fee () {
         std::lock_guard<std::mutex> lock (Mutex);
-        auto z = Gorilla.get_fee_quote ();
-        if (!z.valid ()) throw exception {} << "invalid fee quote response received: " << string (JSON (z));
+        auto z = co_await Gorilla.get_fee_quote ();
+
+        if (!z.valid ())
+            throw exception {} << "invalid fee quote response received: " << string (JSON (z));
+
         auto j = JSON (z);
 
-        return z.Fees["standard"].MiningFee;
+        co_return z.Fees["standard"].MiningFee;
     }
 
-    double network::price (const Bitcoin::timestamp &tm) {
+    awaitable<double> network::price (const Bitcoin::timestamp &tm) {
 
         std::tm time (tm);
 
@@ -140,10 +155,10 @@ namespace Cosmos {
         // If it doesn't work we wait 30 seconds.
         while (true) {
 
-            auto response = CoinGecko (request);
+            auto response = co_await CoinGecko (request);
             if (response.Status == net::HTTP::status::ok) {
                 JSON info = JSON::parse (response.Body);
-                return info["market_data"]["current_price"]["usd"];
+                co_return info["market_data"]["current_price"]["usd"];
             }
 
             net::asio::io_context io {};

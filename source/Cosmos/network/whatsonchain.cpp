@@ -12,26 +12,28 @@ namespace Cosmos {
         return Bitcoin::TXID {std::string {"0x"} + std::string (j)};
     }
 
-    bool whatsonchain::transactions::broadcast (const bytes &tx) {
+    awaitable<bool> whatsonchain::transactions::broadcast (const bytes &tx) {
 
         auto request = API.REST.POST ("/v1/bsv/main/tx/raw",
             {{net::HTTP::header::content_type, "application/JSON"}},
             JSON {{"tx_hex", encoding::hex::write (tx)}}.dump ());
 
-        auto response = API (request);
-            std::cout << "response of broadcasting to whatsonchain: " << response << std::endl;
+        auto response = co_await API (request);
+
+        std::cout << "response of broadcasting to whatsonchain: " << response << std::endl;
 
         if (response.Status >= 500)
             throw net::HTTP::exception {request, response, string {"problem reading txid."}};
 
         if (response.Status != 200 ||
             response.Headers[net::HTTP::header::content_type] == "text/plain") {
-            return false;
+            co_return false;
         }
 
-        if (response.Body == "") return false;
+        if (response.Body == "")
+            co_return false;
 
-        return true;
+        co_return true;
     }
 
     whatsonchain::UTXO::UTXO () : Outpoint {}, Value {}, Height {} {}
@@ -57,11 +59,11 @@ namespace Cosmos {
             {"height", Height}};
     }
 
-    list<whatsonchain::UTXO> whatsonchain::addresses::get_unspent (const Bitcoin::address &addr) {
+    awaitable<list<whatsonchain::UTXO>> whatsonchain::addresses::get_unspent (const Bitcoin::address &addr) {
 
         auto request = API.REST.GET
             ((std::stringstream {} << "/v1/bsv/main/address/" << static_cast<const std::string &> (addr) << "/unspent").str ());
-        auto response = API (request);
+        auto response = co_await API (request);
 
         if (response.Status != net::HTTP::status::ok) {
             std::stringstream z;
@@ -72,7 +74,7 @@ namespace Cosmos {
 
         JSON info = JSON::parse (response.Body);
 
-        if (!info.is_array ()) throw response;
+        if (!info.is_array ()) throw net::HTTP::exception {request, response, "expect array"};
 
         list<UTXO> UTXOs;
 
@@ -85,13 +87,13 @@ namespace Cosmos {
 
         }
 
-        return UTXOs;
+        co_return UTXOs;
     }
 
-    list<whatsonchain::UTXO> whatsonchain::scripts::get_unspent (const digest256 &script_hash) {
+    awaitable<list<whatsonchain::UTXO>> whatsonchain::scripts::get_unspent (const digest256 &script_hash) {
 
         auto request = API.REST.GET ((std::stringstream {} << "/v1/bsv/main/script/" << write (script_hash) << "/unspent").str ());
-        auto response = API (request);
+        auto response = co_await API (request);
 
         if (response.Status != net::HTTP::status::ok)
             throw net::HTTP::exception {request, response, string {"response status is not ok. body is: "} + response.Body};
@@ -117,13 +119,13 @@ namespace Cosmos {
             throw net::HTTP::exception {request, response, string {"problem reading JSON: "} + string {exception.what()}};
         }
 
-        return UTXOs;
+        co_return UTXOs;
     }
 
-    list<Bitcoin::TXID> whatsonchain::addresses::get_history (const Bitcoin::address& addr) {
+    awaitable<list<Bitcoin::TXID>> whatsonchain::addresses::get_history (const Bitcoin::address& addr) {
 
         auto request = API.REST.GET ((std::stringstream {} << "/v1/bsv/main/address/" + addr + "/history").str ());
-        auto response = API (request);
+        auto response = co_await API (request);
 
         if (response.Status != net::HTTP::status::ok)
             throw net::HTTP::exception {request, response, "response status is not ok"};
@@ -142,13 +144,13 @@ namespace Cosmos {
             throw net::HTTP::exception {request, response, string {"problem reading JSON: "} + string {exception.what ()}};
         }
 
-        return txids;
+        co_return txids;
     }
 
-    list<Bitcoin::TXID> whatsonchain::scripts::get_history (const digest256 &script_hash) {
+    awaitable<list<Bitcoin::TXID>> whatsonchain::scripts::get_history (const digest256 &script_hash) {
 
         auto request = API.REST.GET ((std::stringstream {} << "/v1/bsv/main/script/" << write (script_hash) << "/history").str ());
-        auto response = API (request);
+        auto response = co_await API (request);
 
         if (response.Status != net::HTTP::status::ok)
             throw net::HTTP::exception {request, response, "response status is not ok"};
@@ -167,44 +169,45 @@ namespace Cosmos {
             throw net::HTTP::exception {request, response, string {"problem reading JSON: "} + string {exception.what ()}};
         }
 
-        return txids;
+        co_return txids;
     }
 
-    bytes whatsonchain::transactions::get_raw (const Bitcoin::TXID &txid) {
+    awaitable<bytes> whatsonchain::transactions::get_raw (const Bitcoin::TXID &txid) {
 
         auto request = API.REST.GET ((std::stringstream {} << "/v1/bsv/main/tx/" << write (txid) << "/hex").str ());
-        auto response = API (request);
+        auto response = co_await API (request);
 
-        if (response.Status == 404) return {};
+        if (response.Status == 404) co_return bytes {};
 
         if (response.Status != net::HTTP::status::ok)
             throw net::HTTP::exception {request, response, "response status is not ok"};
 
         maybe<bytes> tx = encoding::hex::read (response.Body);
 
-        if (!bool (tx)) return {};
-        return *tx;
+        if (!bool (tx)) co_return bytes {};
+        co_return *tx;
     }
 
-    JSON whatsonchain::transactions::tx_data (const Bitcoin::TXID &txid) {
+    awaitable<JSON> whatsonchain::transactions::tx_data (const Bitcoin::TXID &txid) {
 
         auto request = API.REST.GET ((std::stringstream {} << "/v1/bsv/main/tx/hash/" << write (txid)).str ());
-        auto response = API (request);
+        auto response = co_await API (request);
 
-        if (response.Status == 404) return {};
+        if (response.Status == 404) co_return JSON {};
 
         if (response.Status != net::HTTP::status::ok)
             throw net::HTTP::exception {request, response, "response status is not ok"};
 
-        return JSON::parse (response.Body);
+        co_return JSON::parse (response.Body);
     }
 
-    maybe<whatsonchain::merkle_proof> whatsonchain::transactions::get_merkle_proof (const Bitcoin::TXID &txid) {
+    awaitable<maybe<whatsonchain::merkle_proof>> whatsonchain::transactions::get_merkle_proof (const Bitcoin::TXID &txid) {
+        using result = maybe<whatsonchain::merkle_proof>;
 
         auto request = API.REST.GET ((std::stringstream {} << "/v1/bsv/main/tx/" << write (txid) << "/proof").str ());
-        auto response = API (request);
+        auto response = co_await API (request);
 
-        if (response.Status == 404) return {};
+        if (response.Status == 404) co_return result {};
 
         if (response.Status != net::HTTP::status::ok) {
             throw net::HTTP::exception {request, response, "response status is not ok"};
@@ -212,7 +215,7 @@ namespace Cosmos {
 
         JSON proof = JSON::parse (response.Body)[0];
 
-        if (proof == JSON (nullptr)) return {};
+        if (proof == JSON (nullptr)) co_return result {};
 
         whatsonchain::merkle_proof p;
         p.BlockHash = read_TXID (proof["blockHash"]);
@@ -226,17 +229,17 @@ namespace Cosmos {
             if (std::string (b["pos"]) == "L") p.Proof.Branch.Leaf.Index++;
         }
 
-        return {p};
+        co_return result {p};
 
     }
 
-    whatsonchain::header whatsonchain::blocks::get_header (const digest256 &hash) {
+    awaitable<whatsonchain::header> whatsonchain::blocks::get_header_by_hash (const digest256 &hash) {
 
         auto request = API.REST.GET ((std::stringstream {} << "/v1/bsv/main/block/" << write (hash) << "/header").str ());
-        auto response = API (request);
+        auto response = co_await API (request);
 
-        if (response.Status == 404) return {};
-        if (response.Status == 400) return {};
+        if (response.Status == 404) co_return header {};
+        if (response.Status == 400) co_return header {};
 
         if (response.Status != net::HTTP::status::ok)
             throw net::HTTP::exception {request, response, "response status is not ok"};
@@ -249,20 +252,20 @@ namespace Cosmos {
         boost::algorithm::unhex (bits.begin (), bits.end (), j.begin ());
         Bitcoin::target t {uint32_little {j}};
 
-        return header {N {uint32 (h["height"])}, Bitcoin::header {
+        co_return header {N {uint32 (h["height"])}, Bitcoin::header {
             int32 (h["version"]), read_TXID (h["previousblockhash"]),
             read_TXID (h["merkleroot"]), Bitcoin::timestamp {uint32 (h["time"])},
             t, uint32 (h["nonce"])}};
 
     }
 
-    whatsonchain::header whatsonchain::blocks::get_header (const N &n) {
+    awaitable<whatsonchain::header> whatsonchain::blocks::get_header_by_height (const N &n) {
 
         auto request = API.REST.GET ((std::stringstream {} << "/v1/bsv/main/block/" << encoding::decimal::write (n) << "/header").str ());
-        auto response = API (request);
+        auto response = co_await API (request);
 
-        if (response.Status == 404) return {};
-        if (response.Status == 400) return {};
+        if (response.Status == 404) co_return header {};
+        if (response.Status == 400) co_return header {};
 
         if (response.Status != net::HTTP::status::ok)
             throw net::HTTP::exception {request, response, "response status is not ok"};
@@ -275,7 +278,7 @@ namespace Cosmos {
         boost::algorithm::unhex (bits.begin (), bits.end (), j.begin ());
         Bitcoin::target t {uint32_little {j}};
 
-        return header {N {uint32 (h["height"])}, Bitcoin::header {
+        co_return header {N {uint32 (h["height"])}, Bitcoin::header {
             int32 (h["version"]), read_TXID (h["previousblockhash"]),
             read_TXID (h["merkleroot"]), Bitcoin::timestamp {uint32 (h["time"])},
             t, uint32 (h["nonce"])}};

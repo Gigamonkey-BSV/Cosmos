@@ -8,7 +8,7 @@
 
 namespace Cosmos {
 
-    struct whatsonchain : net::HTTP::client_blocking {
+    struct whatsonchain : net::HTTP::client {
         struct UTXO {
 
             Bitcoin::outpoint Outpoint;
@@ -32,8 +32,13 @@ namespace Cosmos {
         };
 
         whatsonchain (ptr<net::HTTP::SSL> ssl) :
-            net::HTTP::client_blocking {ssl, net::HTTP::REST {"https", "api.whatsonchain.com"}, tools::rate_limiter {3, 1}} {}
-        whatsonchain (): net::HTTP::client_blocking {net::HTTP::REST {"https", "api.whatsonchain.com"}, tools::rate_limiter {3, 1}} {}
+            net::HTTP::client {ssl,
+                net::HTTP::REST {"https", "api.whatsonchain.com"},
+                tools::rate_limiter {3, data::milliseconds {1000}}} {}
+
+        whatsonchain (): net::HTTP::client {
+            net::HTTP::REST {"https", "api.whatsonchain.com"},
+            tools::rate_limiter {3, data::milliseconds {1000}}} {}
 
         static std::string write (const Bitcoin::TXID &);
         static Bitcoin::TXID read_TXID (const JSON &);
@@ -44,12 +49,12 @@ namespace Cosmos {
                 Bitcoin::satoshi Unconfirmed;
             };
 
-            balance get_balance (const Bitcoin::address &);
+            awaitable<balance> get_balance (const Bitcoin::address &);
 
             // txids of all transactions that spend to or redeem from a given address.
-            list<Bitcoin::TXID> get_history (const Bitcoin::address &);
+            awaitable<list<Bitcoin::TXID>> get_history (const Bitcoin::address &);
 
-            list<UTXO> get_unspent (const Bitcoin::address &);
+            awaitable<list<UTXO>> get_unspent (const Bitcoin::address &address);
 
             whatsonchain &API;
         };
@@ -63,13 +68,13 @@ namespace Cosmos {
 
         struct transactions {
 
-            bool broadcast (const bytes& tx);
+            awaitable<bool> broadcast (const bytes& tx);
 
-            bytes get_raw (const Bitcoin::TXID &);
+            awaitable<bytes> get_raw (const Bitcoin::TXID &);
 
-            JSON tx_data (const Bitcoin::TXID &);
+            awaitable<JSON> tx_data (const Bitcoin::TXID &);
 
-            maybe<merkle_proof> get_merkle_proof (const Bitcoin::TXID &);
+            awaitable<maybe<merkle_proof>> get_merkle_proof (const Bitcoin::TXID &);
 
             whatsonchain &API;
         };
@@ -78,8 +83,8 @@ namespace Cosmos {
 
         struct scripts {
 
-            list<UTXO> get_unspent (const digest256& script_hash);
-            list<Bitcoin::TXID> get_history (const digest256& script_hash);
+            awaitable<list<UTXO>> get_unspent (const digest256 &script_hash);
+            awaitable<list<Bitcoin::TXID>> get_history (const digest256 &script_hash);
 
             whatsonchain &API;
 
@@ -97,10 +102,10 @@ namespace Cosmos {
 
         struct blocks {
             // by block hash, not by merkle root.
-            header get_header (const digest256 &);
+            awaitable<header> get_header_by_hash (const digest256 &);
 
             // by height
-            header get_header (const N &);
+            awaitable<header> get_header_by_height (const N &);
 
             whatsonchain &API;
         };

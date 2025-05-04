@@ -1,6 +1,7 @@
 #include <data/crypto/encrypted.hpp>
 #include <data/crypto/stream/one_way.hpp>
 #include <data/crypto/block/cipher.hpp>
+#include <data/crypto/block/cryptopp.hpp>
 #include <data/crypto/PKCS5_PBKDF2_HMAC.hpp>
 #include <data/io/wait_for_enter.hpp>
 #include <Cosmos/files.hpp>

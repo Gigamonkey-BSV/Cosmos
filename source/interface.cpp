@@ -32,7 +32,7 @@ namespace Cosmos {
 
         std::cout << "Checking network health" << std::endl;
         if (online) {
-            auto health_response = e.net ()->TAAL.health ();
+            auto health_response = synced (&ARC::client::health, e.net ()->TAAL);
             std::cout << "Get TAAL health: " << health_response << std::endl;
             if (bool (health_response)) {
                 auto health = health_response.health ();
@@ -41,7 +41,7 @@ namespace Cosmos {
             }
 
             satoshis_per_byte network_fee_rate;
-            auto policy_response = e.net ()->TAAL.policy ();
+            auto policy_response = synced (&ARC::client::policy, e.net ()->TAAL);
             std::cout << "Get TAAL policy: " << policy_response << std::endl;
             if (bool (policy_response) && !bool (sats_per_byte)) {
                 *sats_per_byte = policy_response.policy ().mining_fee ();
@@ -101,7 +101,7 @@ namespace Cosmos {
             bool broadcast = true;
             list<Bitcoin::TXID> ids;
             for (const auto diff : proposal.Value.Diff)
-                if (txdb->import_transaction (diff.TXID)) {
+                if (synced (&cached_remote_TXDB::import_transaction, txdb, diff.TXID)) {
                     // catching an error means that we have already accounted for this tx in our account.
                     try {
                         pruned_account <<= diff;
@@ -139,7 +139,7 @@ namespace Cosmos {
         for (const auto &[_, diff] : payment) next_wallet.Account <<= diff;
 
         // we assume that the proof exists and can be generated.
-        auto success = txdb ()->broadcast (
+        auto success = synced (&cached_remote_TXDB::broadcast, txdb (),
             *SPV::generate_proof (*txdb (),
                 for_each ([] (const auto p) -> Bitcoin::transaction {
                     return p.first;

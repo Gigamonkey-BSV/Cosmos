@@ -26,6 +26,9 @@ find_package (Boost 1.86 COMPONENTS thread chrono log_setup log REQUIRED)
 
 add_definitions ("-DHAS_BOOST")
 
+find_package(SQLite3 REQUIRED)
+# sudo apt install libsqlite3-dev sqlite3
+
 find_package (OpenSSL REQUIRED Crypto SSL)
 # if we do not have openssl
 #   * on linux, `sudo apt-get install libssl-dev`
@@ -63,6 +66,21 @@ FetchContent_MakeAvailable (argh)
 FetchContent_Declare (ctre URL https://github.com/hanickadot/compile-time-regular-expressions/archive/refs/tags/v3.9.0.zip)
 FetchContent_MakeAvailable (ctre)
 
+# You can configure this for your need, presumbably you want speificy a git tag here instead of a branch
+FetchContent_Declare (sqliteOrm
+  GIT_REPOSITORY https://github.com/fnc12/sqlite_orm
+  GIT_TAG        origin/dev
+)
+
+FetchContent_MakeAvailable (sqliteOrm)
+
+FetchContent_Declare (dotenv
+  GIT_REPOSITORY https://github.com/laserpants/dotenv-cpp
+  GIT_TAG        origin/master  # or a specific tag like v1.0.1
+)
+
+FetchContent_MakeAvailable (dotenv)
+
 find_package (data CONFIG REQUIRED)
 
 find_package (gigamonkey CONFIG REQUIRED)
@@ -97,7 +115,7 @@ target_include_directories (cosmos_lib PUBLIC include)
 
 target_link_libraries (cosmos_lib PUBLIC nlohmann_json argh gigamonkey Data::data)
 
-target_compile_features (cosmos_lib PUBLIC cxx_std_20)
+target_compile_features (cosmos_lib PUBLIC cxx_std_23)
 set_target_properties (cosmos_lib PROPERTIES CXX_EXTENSIONS OFF)
 
 add_executable (CosmosWallet
@@ -109,13 +127,17 @@ add_executable (CosmosWallet
     source/accept.cpp
     source/split.cpp
     source/import.cpp
-    source/Cosmos.cpp)
+    source/Cosmos.cpp
+)
 
 target_link_libraries (CosmosWallet PUBLIC
+    SQLite::SQLite3
     cosmos_lib
 )
 
-target_include_directories (CosmosWallet PUBLIC include)
+target_include_directories (CosmosWallet PUBLIC
+    include
+)
 
 target_compile_features (CosmosWallet PUBLIC cxx_std_20)
 set_target_properties (CosmosWallet PROPERTIES CXX_EXTENSIONS OFF)

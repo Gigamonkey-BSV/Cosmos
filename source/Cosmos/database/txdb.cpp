@@ -42,44 +42,51 @@ namespace Cosmos {
 
     namespace {
         const entry<N, Bitcoin::header> *import_header (local_TXDB &local, network &net, const N &n) {
-            auto header = net.WhatsOnChain.block ().get_header (n);
+            auto block = net.WhatsOnChain.block ();
+            auto header = synced (&whatsonchain::blocks::get_header_by_height, &block, n);
             return local.insert (header.Height, header.Header);
         }
 
         const entry<N, Bitcoin::header> *import_header (local_TXDB &local, network &net, const digest256 &d) {
-            auto header = net.WhatsOnChain.block ().get_header (d);
+            auto block = net.WhatsOnChain.block ();
+            auto header = synced (&whatsonchain::blocks::get_header_by_hash, &block, d);
             return local.insert (header.Height, header.Header);
         }
     }
 
-    bool cached_remote_TXDB::import_transaction (const Bitcoin::TXID &txid) {
+    awaitable<bool> cached_remote_TXDB::import_transaction (const Bitcoin::TXID &txid) {
 
-        bytes tx = Net.get_transaction (txid);
-        if (tx.size () == 0) return false;
+        maybe<bytes> tx = co_await Net.get_transaction (txid);
+        if (!bool (tx)) co_return false;
 
-        auto proof = Net.WhatsOnChain.transaction ().get_merkle_proof (txid);
+        auto proof = co_await Net.WhatsOnChain.transaction ().get_merkle_proof (txid);
 
         if (!bool (proof)) {
-            Local.insert (Bitcoin::transaction {tx});
-            return true;
+            Local.insert (Bitcoin::transaction {*tx});
+            co_return true;
         }
 
-        if (!proof->Proof.valid ()) return false;
+        if (!proof->Proof.valid ()) co_return false;
         const entry<N, Bitcoin::header> *h = Local.header (proof->BlockHash);
         if (!bool (h)) h = import_header (Local, Net, proof->BlockHash);
-        if (!bool (h)) return false;
-        return Local.import_transaction (Bitcoin::transaction {tx}, Merkle::path (proof->Proof.Branch), h->Value);
+        if (!bool (h)) co_return false;
+        co_return Local.import_transaction (Bitcoin::transaction {*tx}, Merkle::path (proof->Proof.Branch), h->Value);
     }
 
     events cached_remote_TXDB::by_address (const Bitcoin::address &a) {
         auto x = Local.by_address (a);
         if (!data::empty (x) && x.valid ()) return x;
 
-        auto ids = Net.WhatsOnChain.address ().get_history (a);
+        auto address = Net.WhatsOnChain.address ();
+        list<Bitcoin::TXID> ids = synced (&whatsonchain::addresses::get_history, &address, a);
 
         int i = 0;
         for (const Bitcoin::TXID &txid : ids) {
-            import_transaction (txid);
+            if (!synced (&cached_remote_TXDB::import_transaction, this, txid))
+                // we just print the error because we may be in the middle of an
+                // operation and then what do we do? This would require the user
+                // to fix it up.
+                std::cout << "error importing txid " << txid << std::endl;
             i++;
         }
 
@@ -90,8 +97,12 @@ namespace Cosmos {
         auto x = Local.by_script_hash (z);
         if (data::empty (x)) return x;
 
-        auto ids = Net.WhatsOnChain.script ().get_history (z);
-        for (const Bitcoin::TXID &txid : ids) import_transaction (txid);
+        auto scripts = Net.WhatsOnChain.script ();
+        auto ids = synced (&whatsonchain::scripts::get_history, &scripts, z);
+        for (const Bitcoin::TXID &txid : ids) {
+            if (!synced (&cached_remote_TXDB::import_transaction, this, txid))
+                std::cout << "error importing txid " << txid << std::endl;
+        }
         return Local.by_script_hash (z);
     }
 
@@ -105,7 +116,8 @@ namespace Cosmos {
     SPV::database::tx cached_remote_TXDB::transaction (const Bitcoin::TXID &xd) {
         auto p = Local.transaction (xd);
         if (p.valid () && p.confirmed ()) return p;
-        import_transaction (xd);
+        if (!synced (&cached_remote_TXDB::import_transaction, this, xd))
+            std::cout << "error importing txid " << xd << std::endl;
         return Local.transaction (xd);
     }
 
@@ -124,19 +136,19 @@ namespace Cosmos {
     }
 
     namespace {
-        broadcast_single_result broadcast_tx (cached_remote_TXDB &txdb, const extended_transaction &tx) {
-            auto success = txdb.Net.broadcast (tx);
+        awaitable<broadcast_single_result> broadcast_tx (cached_remote_TXDB &txdb, const extended_transaction &tx) {
+            auto success = co_await txdb.Net.broadcast (tx);
             if (bool (success)) txdb.Local.insert (Bitcoin::transaction (tx));
-            return success;
+            co_return success;
         }
 
-        broadcast_multiple_result broadcast_txs (cached_remote_TXDB &txdb, const list<extended_transaction> &txs) {
-            auto success = txdb.Net.broadcast (txs);
+        awaitable<broadcast_multiple_result> broadcast_txs (cached_remote_TXDB &txdb, const list<extended_transaction> &txs) {
+            auto success = co_await txdb.Net.broadcast (txs);
             if (bool (success)) for (const auto &tx : txs) txdb.Local.insert (Bitcoin::transaction (tx));
-            return success;
+            co_return success;
         }
 
-        broadcast_tree_result broadcast_map (cached_remote_TXDB &txdb, SPV::proof::map map) {
+        awaitable<broadcast_tree_result> broadcast_map (cached_remote_TXDB &txdb, SPV::proof::map map) {
             broadcast_tree_result so_far {};
             // go down the tree and process leaves first.
             for (const auto &[txid, pn] : map) if (pn->Proof.is<SPV::confirmation> ()) {
@@ -145,39 +157,42 @@ namespace Cosmos {
                     const auto &conf = pn->Proof.get<SPV::confirmation> ();
                     if (!txdb.Local.import_transaction (pn->Transaction, conf.Path, conf.Header)) {
                         so_far.Sub = so_far.Sub.insert (txid, broadcast_result::ERROR_INVALID);
-                        return so_far;
+                        co_return so_far;
                     }
                 } else {
                     // try to broadcast all sub transactions.
                     auto m = pn->Proof.get<SPV::proof::map> ();
-                    auto successes = broadcast_map (txdb, m);
+                    auto successes = co_await broadcast_map (txdb, m);
                     so_far.Sub = so_far.Sub & successes.Sub;
                     if (bool (successes)) {
                         so_far.Error = successes.Error;
-                        return so_far;
+                        co_return so_far;
                     } else {
-                        auto success = broadcast_tx (txdb, SPV::extended_transaction (pn->Transaction, m));
+                        auto success = co_await broadcast_tx (txdb, SPV::extended_transaction (pn->Transaction, m));
                         so_far.Sub = so_far.Sub.insert (txid, success);
                         if (bool (success)) txdb.Local.insert (pn->Transaction);
                         else {
                             so_far.Error = success.Error;
-                            return so_far;
+                            co_return so_far;
                         }
                     }
                 }
 
             //
-            return so_far;
+            co_return so_far;
         }
     }
 
-    broadcast_tree_result cached_remote_TXDB::broadcast (SPV::proof p) {
-        if (!p.valid ()) return broadcast_result::ERROR_INVALID;
-        broadcast_tree_result success_map = broadcast_map (*this, p.Proof);
+    awaitable<broadcast_tree_result> cached_remote_TXDB::broadcast (SPV::proof p) {
+        if (!p.valid ()) co_return broadcast_result::ERROR_INVALID;
+
+        broadcast_tree_result success_map = co_await broadcast_map (*this, p.Proof);
+
         // if there are any errors, return those.
         for (const auto &[_, x] : success_map.Sub) if (!bool (x))
-            return {{x.Error, x.Details}, success_map.Sub};
-        return {broadcast_txs (*this, SPV::extended_transactions (p.Payment, p.Proof)), success_map.Sub};
+            co_return broadcast_tree_result {{x.Error, x.Details}, success_map.Sub};
+
+        co_return broadcast_tree_result {co_await broadcast_txs (*this, SPV::extended_transactions (p.Payment, p.Proof)), success_map.Sub};
     }
 
     std::ostream &operator << (std::ostream &o, const event &r) {
@@ -198,12 +213,22 @@ namespace Cosmos {
     }
 
     std::partial_ordering when::operator <=> (const when &w) const {
-        if (*this == w) return *this == unconfirmed () ? std::partial_ordering::unordered : std::partial_ordering::equivalent;
+        if (*this == w) return *this == unconfirmed () ?
+            std::partial_ordering::unordered :
+            std::partial_ordering::equivalent;
+
         // so we know that they are not equal.
-        if (this->is<bool> ()) this->get<bool> () ? std::partial_ordering::greater : std::partial_ordering::less;
-        if (w.is<bool> ()) return w.get<bool> () ? std::partial_ordering::less : std::partial_ordering::greater;
+        if (this->is<bool> ()) this->get<bool> () ?
+            std::partial_ordering::greater :
+            std::partial_ordering::less;
+
+        if (w.is<bool> ()) return w.get<bool> () ?
+            std::partial_ordering::less :
+            std::partial_ordering::greater;
+
         // they must both be timestamps at this point.
-        return *this == unconfirmed () ? std::partial_ordering::greater : this->get<Bitcoin::timestamp> () <=> w.get<Bitcoin::timestamp> ();
+        return *this == unconfirmed () ? std::partial_ordering::greater :
+            this->get<Bitcoin::timestamp> () <=> w.get<Bitcoin::timestamp> ();
     }
 
     std::partial_ordering event::operator <=> (const event &e) const {

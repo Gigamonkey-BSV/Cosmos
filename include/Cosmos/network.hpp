@@ -63,27 +63,27 @@ namespace Cosmos {
         ptr<net::HTTP::SSL> SSL;
         whatsonchain WhatsOnChain;
         MAPI::client Gorilla;
-        net::HTTP::client_blocking CoinGecko;
+        net::HTTP::client CoinGecko;
         ARC::client TAAL;
 
         network () : IO {}, SSL {std::make_shared<net::HTTP::SSL> (net::HTTP::SSL::tlsv12_client)},
             WhatsOnChain {SSL}, Gorilla {SSL, net::HTTP::REST {"https", "mapi.gorillapool.io"}},
-            CoinGecko {SSL, net::HTTP::REST {"https", "api.coingecko.com"}, tools::rate_limiter {1, 10}},
+            CoinGecko {SSL, net::HTTP::REST {"https", "api.coingecko.com"}, tools::rate_limiter {1, data::milliseconds {10}}},
             // TODO I don't know what to put for TAAL's rate limiter.
-            TAAL {SSL, net::HTTP::REST {"https", "arc.taal.com"}, tools::rate_limiter {1, 10}} {
+            TAAL {SSL, net::HTTP::REST {"https", "arc.taal.com"}, tools::rate_limiter {1, data::milliseconds {10}}} {
             SSL->set_default_verify_paths ();
             SSL->set_verify_mode (net::asio::ssl::verify_peer);
         }
         
-        bytes get_transaction (const Bitcoin::TXID &);
+        awaitable<maybe<bytes>> get_transaction (const Bitcoin::TXID &);
         
-        satoshis_per_byte mining_fee ();
+        awaitable<satoshis_per_byte> mining_fee ();
         
         // standard tx format and extended are allowed.
-        broadcast_single_result broadcast (const extended_transaction &tx);
-        broadcast_multiple_result broadcast (list<extended_transaction> tx);
+        awaitable<broadcast_single_result> broadcast (const extended_transaction &tx);
+        awaitable<broadcast_multiple_result> broadcast (list<extended_transaction> tx);
 
-        double price (const Bitcoin::timestamp &);
+        awaitable<double> price (const Bitcoin::timestamp &);
         
     };
     
@@ -106,7 +106,7 @@ namespace Cosmos {
         network_fees (network &n, double d = .05) : Net {n}, Default {d} {}
         double get () final override {
             try {
-                return double (Net.mining_fee ());
+                return double (synced (&network::mining_fee, &Net));
             } catch (std::exception &e) {
                 std::cout << "Warning! Exception caught while trying to get a fee quote: " << e.what () << std::endl;
                 return Default;

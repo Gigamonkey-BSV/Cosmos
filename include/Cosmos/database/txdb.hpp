@@ -176,9 +176,9 @@ namespace Cosmos {
         events by_script_hash (const digest256 &) final override;
         event redeeming (const Bitcoin::outpoint &) final override;
 
-        bool import_transaction (const Bitcoin::TXID &);
+        awaitable<bool> import_transaction (const Bitcoin::TXID &);
 
-        broadcast_tree_result broadcast (SPV::proof);
+        awaitable<broadcast_tree_result> broadcast (SPV::proof);
     };
 
     set<Bitcoin::TXID> inline cached_remote_TXDB::unconfirmed () {

@@ -5,7 +5,7 @@ namespace Cosmos {
 
     maybe<double> remote_price_data::get (const Bitcoin::timestamp &t) {
         try {
-            return Net.price (t);
+            return synced (&network::price, &Net, t);
         } catch (const net::HTTP::exception &) {
             return {};
         }
