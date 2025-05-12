@@ -130,7 +130,16 @@ add_executable (CosmosWallet
     source/Cosmos.cpp
 )
 
+add_executable (CosmosWalletServer
+    source/Cosmos/database/SQLite.cpp
+    source/Server.cpp
+)
+
 target_link_libraries (CosmosWallet PUBLIC
+    cosmos_lib
+)
+
+target_link_libraries (CosmosWalletServer PUBLIC
     SQLite::SQLite3
     cosmos_lib
 )
@@ -139,8 +148,16 @@ target_include_directories (CosmosWallet PUBLIC
     include
 )
 
+target_include_directories (CosmosWalletServer PUBLIC
+    ${CMAKE_BINARY_DIR}/_deps/sqliteorm-src/include
+    include
+)
+
 target_compile_features (CosmosWallet PUBLIC cxx_std_20)
 set_target_properties (CosmosWallet PROPERTIES CXX_EXTENSIONS OFF)
+
+target_compile_features (CosmosWalletServer PUBLIC cxx_std_20)
+set_target_properties (CosmosWalletServer PROPERTIES CXX_EXTENSIONS OFF)
 
 # add_definitions ("-DHAS_BOOST")
 

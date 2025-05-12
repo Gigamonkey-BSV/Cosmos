@@ -15,11 +15,15 @@ namespace Cosmos {
         events by_script_hash (const digest256 &) final override;
         event redeeming (const Bitcoin::outpoint &) final override;
 
-        void add_address (const Bitcoin::address &, const Bitcoin::outpoint &) final override;
-        void add_script (const digest256 &, const Bitcoin::outpoint &) final override;
+        void add_address (const Bitcoin::address &, const digest256 &) final override;
+        digest256 add_script (const data::bytes &) final override;
+        void add_output (const digest256 &, const Bitcoin::outpoint &) final override;
         void set_redeem (const Bitcoin::outpoint &, const inpoint &) final override;
 
-        std::map<Bitcoin::address, list<Bitcoin::outpoint>> AddressIndex {};
+        // NOTE: if a tx is ever dropped from the mempool (which shouldn't really happen)
+        // Some information about it will not be dropped from these indices. Too bad but
+        // it's not worth fixing. The in-memory database is just scaffolding.
+        std::map<Bitcoin::address, list<digest256>> AddressIndex {};
         std::map<digest256, list<Bitcoin::outpoint>> ScriptIndex {};
         std::map<Bitcoin::outpoint, inpoint> RedeemIndex {};
 

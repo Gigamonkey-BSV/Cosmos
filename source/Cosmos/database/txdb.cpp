@@ -26,12 +26,13 @@ namespace Cosmos {
 
             i = 0;
             for (const Bitcoin::output out : tx.Outputs) {
+                auto script_hash = this->add_script (out.Script);
                 auto op = Bitcoin::outpoint {txid, i};
-                this->add_script (Gigamonkey::SHA2_256 (out.Script), op);
+                this->add_output (script_hash, op);
 
                 pay_to_address p2a {out.Script};
                 if (p2a.valid ())
-                    this->add_address (Bitcoin::address {Bitcoin::address {Bitcoin::address::main, p2a.Address}}, op);
+                    this->add_address (Bitcoin::address {Bitcoin::address {Bitcoin::address::main, p2a.Address}}, script_hash);
 
                 i++;
             }
@@ -41,13 +42,13 @@ namespace Cosmos {
     }
 
     namespace {
-        const entry<N, Bitcoin::header> *import_header (local_TXDB &local, network &net, const N &n) {
+        const ptr<const entry<N, Bitcoin::header>> import_header (local_TXDB &local, network &net, const N &n) {
             auto block = net.WhatsOnChain.block ();
             auto header = synced (&whatsonchain::blocks::get_header_by_height, &block, n);
             return local.insert (header.Height, header.Header);
         }
 
-        const entry<N, Bitcoin::header> *import_header (local_TXDB &local, network &net, const digest256 &d) {
+        const ptr<const entry<N, Bitcoin::header>> import_header (local_TXDB &local, network &net, const digest256 &d) {
             auto block = net.WhatsOnChain.block ();
             auto header = synced (&whatsonchain::blocks::get_header_by_hash, &block, d);
             return local.insert (header.Height, header.Header);
@@ -67,7 +68,7 @@ namespace Cosmos {
         }
 
         if (!proof->Proof.valid ()) co_return false;
-        const entry<N, Bitcoin::header> *h = Local.header (proof->BlockHash);
+        ptr<const entry<N, Bitcoin::header>> h = Local.header (proof->BlockHash);
         if (!bool (h)) h = import_header (Local, Net, proof->BlockHash);
         if (!bool (h)) co_return false;
         co_return Local.import_transaction (Bitcoin::transaction {*tx}, Merkle::path (proof->Proof.Branch), h->Value);
@@ -121,18 +122,16 @@ namespace Cosmos {
         return Local.transaction (xd);
     }
 
-    const Bitcoin::header *cached_remote_TXDB::header (const N &n) {
-        const auto *h = Local.header (n);
+    ptr<const entry<N, Bitcoin::header>> cached_remote_TXDB::header (const N &n) {
+        const auto h = Local.header (n);
         if (bool (h)) return h;
-        if (!import_header (Local, Net, n)) return nullptr;
-        return Local.header (n);
+        return import_header (Local, Net, n);
     }
 
-    const entry<N, Bitcoin::header> *cached_remote_TXDB::header (const digest256 &d) {
-        const auto *e = Local.header (d);
+    ptr<const entry<N, Bitcoin::header>> cached_remote_TXDB::header (const digest256 &d) {
+        const auto e = Local.header (d);
         if (bool (e)) return e;
-        if (!import_header (Local, Net, d)) return nullptr;
-        return Local.header (d);
+        return import_header (Local, Net, d);
     }
 
     namespace {
@@ -184,7 +183,7 @@ namespace Cosmos {
     }
 
     awaitable<broadcast_tree_result> cached_remote_TXDB::broadcast (SPV::proof p) {
-        if (!p.valid ()) co_return broadcast_result::ERROR_INVALID;
+        if (!p.validate (*this)) co_return broadcast_result::ERROR_INVALID;
 
         broadcast_tree_result success_map = co_await broadcast_map (*this, p.Proof);
 

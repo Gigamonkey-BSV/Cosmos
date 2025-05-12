@@ -27,6 +27,7 @@ namespace Cosmos {
 
         // account of the wallet after going through all the events.
         std::map<Bitcoin::outpoint, Bitcoin::output> Account;
+
         // events from latest to earliest.
         stack<tx> Events;
 

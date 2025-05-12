@@ -7,10 +7,10 @@ namespace Cosmos {
 
     JSON write (const SPV::database::memory::entry &e) {
         JSON::object_t o;
-        o["header"] = Cosmos::write (e.Header.Value);
+        o["header"] = Cosmos::write (e.Header->Value);
         Merkle::BUMP bump = e.BUMP ();
         if (bump.valid ()) o["tree"] = JSON (bump);
-        else o["height"] = uint64 (e.Header.Key);
+        else o["height"] = uint64 (e.Header->Key);
         return o;
     }
 
@@ -33,11 +33,11 @@ namespace Cosmos {
 
         JSON::object_t by_hash;
         for (const auto &[hash, entry] : this->ByHash)
-            by_hash[write (hash)] = write (entry->Header.Key);
+            by_hash[write (hash)] = write (entry->Header->Key);
 
         JSON::object_t by_root;
         for (const auto &[root, entry] : this->ByRoot)
-            by_root[write (root)] = write (entry->Header.Key);
+            by_root[write (root)] = write (entry->Header->Key);
 
         JSON::object_t txs;
         for (const auto &[txid, tx] : this->Transactions)
@@ -50,9 +50,9 @@ namespace Cosmos {
 
         JSON::object_t addresses;
         for (const auto &[key, value] : this->AddressIndex) {
-            JSON::array_t outpoints;
-            for (const auto &out : value) outpoints.push_back (write (out));
-            addresses[std::string (key)] = outpoints;
+            JSON::array_t script_hashes;
+            for (const auto &out : value) script_hashes.push_back (write (out));
+            addresses[std::string (key)] = script_hashes;
         }
 
         JSON::object_t scripts;
@@ -96,9 +96,9 @@ namespace Cosmos {
         ptr<SPV::database::memory::entry> last {nullptr};
         for (const auto &jj : *by_height) {
             ptr<SPV::database::memory::entry> e = read_db_entry (jj);
-            if (last != nullptr && last->Header.Key + 1 == e->Header.Key) e->Last = last;
+            if (last != nullptr && last->Header->Key + 1 == e->Header->Key) e->Previous = last;
             last = e;
-            txdb.ByHeight[e->Header.Key] = e;
+            txdb.ByHeight[e->Header->Key] = e;
             for (const auto &d: e->Paths.keys ()) txdb.ByTXID[d] = e;
         }
 
@@ -146,21 +146,54 @@ namespace Cosmos {
         // in the future we will always just do this.
         else read_SPVDB (*this, j);
 
-        for (const auto &[key, value] : addresses.items ()) {
-            list<Bitcoin::outpoint> outpoints;
-            for (const auto &k : value) outpoints <<= read_outpoint (std::string (k));
-            this->AddressIndex[Bitcoin::address (std::string (key))] = outpoints;
-        }
-
         for (const auto &[key, value] : scripts.items ()) {
             list<Bitcoin::outpoint> outpoints;
             for (const auto &k : value) outpoints <<= read_outpoint (std::string (k));
-            this->ScriptIndex[read_TXID (key)] = outpoints;
+            digest256 script_hash = read_TXID (key);
+            this->ScriptIndex[script_hash] = outpoints;
         }
 
         for (const auto &[key, value] : redeems.items ())
             this->RedeemIndex[read_outpoint (key)] = inpoint {read_outpoint (value)};
 
+
+        // Here is another issue relating to changes in format.
+        // We used to have a map address => outpoint
+        // However, now the map is address => script hash.
+
+        // If there are no addresses, then we can continue.
+        if (addresses.size () == 0) return;
+
+        bool old_format;
+        try {
+            // we try to read the first entry as an output.
+            for (const auto &[key, value] : addresses.items ()) {
+                for (const auto &k : value) {
+                    read_outpoint (std::string (k));
+                    break;
+                }
+
+                break;
+            }
+            old_format = true;
+        } catch (const data::exception &) {
+            old_format = false;
+        }
+
+        if (old_format) for (const auto &[key, value] : addresses.items ()) {
+            list<Bitcoin::outpoint> outpoints;
+            for (const auto &k : value) outpoints <<= read_outpoint (std::string (k));
+
+            list<digest256> script_hashes;
+            for (const auto &o : outpoints)
+                script_hashes <<= Gigamonkey::SHA2_256 (this->Transactions[o.Digest]->Outputs[o.Index].Script);
+
+            this->AddressIndex[Bitcoin::address (std::string (key))] = script_hashes;
+        } else for (const auto &[key, value] : addresses.items ()) {
+            list<digest256> script_hashes;
+            for (const auto &k : value) script_hashes <<= read_TXID (std::string (k));
+            this->AddressIndex[Bitcoin::address (std::string (key))] = script_hashes;
+        }
     }
 }
 

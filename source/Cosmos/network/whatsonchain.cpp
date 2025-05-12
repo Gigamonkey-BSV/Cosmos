@@ -14,24 +14,20 @@ namespace Cosmos {
 
     awaitable<bool> whatsonchain::transactions::broadcast (const bytes &tx) {
 
-        auto request = API.REST.POST ("/v1/bsv/main/tx/raw",
-            {{net::HTTP::header::content_type, "application/JSON"}},
-            JSON {{"tx_hex", encoding::hex::write (tx)}}.dump ());
+        net::HTTP::request req = net::HTTP::request (API.REST (net::HTTP::request::make {}.method (net::HTTP::method::post).
+            path ("/v1/bsv/main/tx/raw").body (JSON {{"tx_hex", encoding::hex::write (tx)}})));
 
-        auto response = co_await API (request);
+        auto response = co_await API (req);
 
         std::cout << "response of broadcasting to whatsonchain: " << response << std::endl;
 
         if (response.Status >= 500)
-            throw net::HTTP::exception {request, response, string {"problem reading txid."}};
+            throw net::HTTP::exception {req, response, string {"problem reading txid."}};
 
-        if (response.Status != 200 ||
-            response.Headers[net::HTTP::header::content_type] == "text/plain") {
+        if (response.Status != 200 || (bool (response.content_type ()) && *response.content_type () == "text/plain"))
             co_return false;
-        }
 
-        if (response.Body == "")
-            co_return false;
+        if (response.Body == "") co_return false;
 
         co_return true;
     }
@@ -67,8 +63,9 @@ namespace Cosmos {
 
         if (response.Status != net::HTTP::status::ok) {
             std::stringstream z;
-            z << "status = \"" << response.Status << "\"; content_type = " <<
-                response.Headers[net::HTTP::header::content_type] << "; body = \"" << response.Body << "\"";
+            z << "status = \"" << response.Status << "\"; ";
+            if (response.content_type ()) z << "content-type = " << *response.content_type () << "; ";
+            z << "body = \"" << response.Body << "\"";
             throw net::HTTP::exception {request, response, z.str ()};
         }
 

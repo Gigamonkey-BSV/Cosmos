@@ -110,6 +110,7 @@ namespace Cosmos {
 
         // all events for a given address.
         virtual events by_address (const Bitcoin::address &) = 0;
+        // using SHA2_256;
         virtual events by_script_hash (const digest256 &) = 0;
         virtual event redeeming (const Bitcoin::outpoint &) = 0;
 
@@ -127,17 +128,18 @@ namespace Cosmos {
 
     };
 
-    struct local_TXDB : public virtual SPV::writable, public TXDB {
-
+    struct  local_TXDB : public virtual SPV::writable, public TXDB {
         // Check proof before entering it into the database.
         bool import_transaction (const Bitcoin::transaction &, const Merkle::path &, const Bitcoin::header &h);
+        virtual void add_address (const Bitcoin::address &, const digest256 &script_hash) = 0;
 
-        virtual void add_address (const Bitcoin::address &, const Bitcoin::outpoint &) = 0;
-        virtual void add_script (const digest256 &, const Bitcoin::outpoint &) = 0;
+    private:
+        virtual digest256 add_script (const data::bytes &) = 0;
+        // associate a script with a given hash with an output.
+        virtual void add_output (const digest256 &, const Bitcoin::outpoint &) = 0;
         virtual void set_redeem (const Bitcoin::outpoint &, const inpoint &) = 0;
-
+    public:
         virtual ~local_TXDB () {}
-
     };
 
     // Since we might end up trying to broadcast multiple txs at once
@@ -160,12 +162,12 @@ namespace Cosmos {
 
         cached_remote_TXDB (network &n, local_TXDB &x): TXDB {}, Net {n}, Local {x} {}
 
-        const Bitcoin::header *header (const N &) final override;
+        ptr<const entry<N, Bitcoin::header>> header (const N &) final override;
 
-        const entry<N, Bitcoin::header> *latest () final override;
+        ptr<const entry<N, Bitcoin::header>> latest () final override;
 
         // get by hash or merkle root (need both)
-        const entry<N, Bitcoin::header> *header (const digest256 &) final override;
+        ptr<const entry<N, Bitcoin::header>> header (const digest256 &) final override;
 
         // do we have a tx or merkle proof for a given tx?
         SPV::database::tx transaction (const Bitcoin::TXID &) final override;
@@ -185,7 +187,7 @@ namespace Cosmos {
         return Local.unconfirmed ();
     }
 
-    const inline entry<N, Bitcoin::header> *cached_remote_TXDB::latest () {
+    ptr<const entry<N, Bitcoin::header>> inline cached_remote_TXDB::latest () {
         return Local.latest ();
     }
 
