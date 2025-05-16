@@ -1,6 +1,8 @@
 #include <Cosmos/database/SQLite/SQLite.hpp>
 #include <data/maybe.hpp>
 
+#include <gigamonkey/p2p/net_address.hpp>
+
 #include <sqlite_orm/sqlite_orm.h>
 #include <sqlite3.h>
 
@@ -296,57 +298,76 @@ namespace Cosmos::SQLite {
         digest256 script_hash;
     };
 
-    struct PrivateKey {
-        std::string Name;
-        std::string Key;
+    // this could be a private key or a shared secret.
+    // we interpret it based on the string we read, so
+    // it could be WIF, HD, or some encrypted format as
+    // long as we can distinguish them.
+    struct Secret {
+        std::string name;
+        std::string key;
     };
 
     struct PublicKey {
-        std::string Name;
-        std::string Key;
-        std::string Private;
+        std::string name;
+        std::string key;
+        std::string secret;
+    };
+
+    struct Wallet {
+        int id;
+        std::string name;
     };
 
     struct WalletOutput {
-        std::string WalletName;
-        Bitcoin::outpoint Outpoint;
+        Bitcoin::outpoint outpoint;
+        std::string wallet_name;
     };
 
-    struct WalletPrivateKey {
-        std::string WalletName;
-        std::string KeyName;
+    struct WalletSecret {
+        std::string key_name;
+        std::string wallet_name;
     };
 
     struct WalletPublicKey {
-        std::string WalletName;
-        std::string KeyName;
+        std::string key_name;
+        std::string wallet_name;
     };
 
     struct Redeemable {
-        Bitcoin::outpoint Prevout;
-        uint64_t ExpectedInputScriptSize;
-        data::bytes InputScriptSofar;
+        Bitcoin::outpoint prevout;
+        uint64_t expected_input_script_size;
+        data::bytes input_script_so_far;
     };
 
     struct RedeemKey {
-        Bitcoin::outpoint Prevout;
-        std::string Key;
+        Bitcoin::outpoint prevout;
+        std::string key;
     };
 
     struct Event {
+        int id;
         Bitcoin::TXID tx;
-        Bitcoin::timestamp when;
-        Bitcoin::satoshi Received;
-        Bitcoin::satoshi Spent;
-        Bitcoin::satoshi Moved;
+        uint32_t when;
+        int64_t received;
+        int64_t spent;
+        int64_t moved;
     };
 
     struct Price {
-        Bitcoin::timestamp time;
+        int id;
+        std::string unit;
+        uint32_t timestamp;
         double price;
     };
 
-
+    struct Connection {
+        Bitcoin::p2p::net_address net_address;
+        bool success;
+        uint64_t duration;
+        uint64_t bytes_received;
+        uint64_t bytes_sent;
+        int friendship_score;
+    };
 
     inline auto init_storage (const std::string &path) {
         return make_storage (path,
@@ -399,6 +420,67 @@ namespace Cosmos::SQLite {
                 make_column ("address", &Address::address),
                 make_column ("script_hash", &Address::script_hash),
                 unique (&Address::address, &Address::script_hash)
+            ),
+
+            make_table ("secrets",
+                make_column ("name", &Secret::name, primary_key ()),
+                make_column ("key", &Secret::key)
+            ),
+
+            make_table ("public_key",
+                make_column ("name", &PublicKey::name, primary_key ()),
+                make_column ("key", &PublicKey::key),
+                make_column ("secret", &PublicKey::secret)
+            ),
+
+            make_table ("wallets",
+                make_column ("id", &Wallet::id, primary_key ().autoincrement ()),
+                make_column ("name", &Wallet::name)
+            ),
+
+            make_table ("wallet_outputs",
+                make_column ("output", &WalletOutput::outpoint, primary_key ()),
+                make_column ("wallet_name", &WalletOutput::wallet_name)
+            ),
+
+            make_table ("wallet_secrets",
+                make_column ("key_name", &WalletSecret::key_name, primary_key ()),
+                make_column ("wallet_name", &WalletSecret::wallet_name)
+            ),
+
+            make_table ("wallet_public_keys",
+                make_column ("key_name", &WalletPublicKey::key_name, primary_key ()),
+                make_column ("wallet_name", &WalletPublicKey::wallet_name)
+            ),
+
+            make_table ("redeemables",
+                make_column ("id", &Redeemable::prevout, primary_key ()),
+                make_column ("expected_input_script_size", &Redeemable::expected_input_script_size),
+                make_column ("input_script_so_far", &Redeemable::input_script_so_far)
+            ),
+
+            make_table ("redeem_keys",
+                make_column ("prevout", &RedeemKey::prevout, primary_key ()),
+                make_column ("key", &RedeemKey::key)
+            ),
+
+            make_table ("events",
+                make_column ("id", &Event::id, primary_key ().autoincrement ()),
+                make_column ("tx", &Event::tx),
+                make_column ("when", &Event::when),
+                make_column ("received", &Event::received),
+                make_column ("spent", &Event::spent),
+                make_column ("moved", &Event::moved)
+            ),
+
+            make_index ("idx_prices", &Price::unit, &Price::timestamp),
+
+            make_table ("prices",
+                make_column ("id", &Price::id, primary_key ().autoincrement ()),
+                make_column ("unit", &Price::unit),
+                make_column ("timestamp", &Price::timestamp),
+                make_column ("price", &Price::price),
+                unique (&Price::unit, &Price::timestamp)
             )
         );
     }
@@ -770,7 +852,33 @@ namespace Cosmos::SQLite {
 
         maybe<double> get_price (monetary_unit, const Bitcoin::timestamp &t) final override;
         void set_price (monetary_unit, const Bitcoin::timestamp &t, double) final override;
-        ptr<readable_wallet> get_wallet (const std::string &name) final override;
+
+        struct readable_wallet : database::readable_wallet {
+
+            const Cosmos::keychain *keys () final override;
+            const Cosmos::pubkeys *pubkeys () final override;
+            const Cosmos::addresses *addresses () final override;
+            const Cosmos::account *account () final override;
+
+            const Cosmos::history *load_history () final override;
+
+            const Cosmos::payments *payments () final override;
+        };
+
+        struct writable_wallet : database::writable_wallet {
+
+            Cosmos::history *history () final override;
+
+            void set_keys (const Cosmos::keychain &) final override;
+            void set_pubkeys (const Cosmos::pubkeys &) final override;
+            void set_account (const Cosmos::account &) final override;
+            void set_addresses (const Cosmos::addresses &) final override;
+
+            void set_wallet (const Cosmos::wallet &) final override;
+            void set_payments (const Cosmos::payments &) final override;
+        };
+
+        ptr<database::readable_wallet> get_wallet (const std::string &name) final override;
 
     };
 

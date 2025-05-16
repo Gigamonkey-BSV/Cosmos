@@ -19,16 +19,16 @@ namespace Cosmos {
 
         struct readable_wallet {
 
-            virtual const Cosmos::keychain *keys (const std::string &name) = 0;
-            virtual const Cosmos::pubkeys *pubkeys (const std::string &name) = 0;
-            virtual const Cosmos::addresses *addresses (const std::string &name) = 0;
-            virtual const Cosmos::account *account (const std::string &name) = 0;
+            virtual const Cosmos::keychain *keys () = 0;
+            virtual const Cosmos::pubkeys *pubkeys () = 0;
+            virtual const Cosmos::addresses *addresses () = 0;
+            virtual const Cosmos::account *account () = 0;
 
-            virtual const Cosmos::history *load_history (const std::string &name) = 0;
+            virtual const Cosmos::history *load_history () = 0;
 
-            virtual const Cosmos::payments *payments (const std::string &name) = 0;
+            virtual const Cosmos::payments *payments () = 0;
 
-            const maybe<Cosmos::wallet> wallet (const std::string &name);
+            const maybe<Cosmos::wallet> wallet ();
 
             // if this function returns normally, any changes
             // to the database will be saved. If an exception
@@ -39,7 +39,8 @@ namespace Cosmos {
         };
 
         struct writable_wallet {
-            Cosmos::history *history ();
+            // Do we need this?
+            virtual Cosmos::history *history () = 0;
 
             virtual void set_keys (const Cosmos::keychain &) = 0;
             virtual void set_pubkeys (const Cosmos::pubkeys &) = 0;
