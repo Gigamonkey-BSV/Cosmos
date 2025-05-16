@@ -1,7 +1,7 @@
-#ifndef COSMOS_DATABASE_MEMORY_TXDB
-#define COSMOS_DATABASE_MEMORY_TXDB
+#ifndef COSMOS_DATABASE_MEMORY_DATABASE
+#define COSMOS_DATABASE_MEMORY_DATABASE
 
-#include <Cosmos/database/txdb.hpp>
+#include <Cosmos/database.hpp>
 
 namespace Cosmos {
 
@@ -26,12 +26,13 @@ namespace Cosmos {
         std::map<Bitcoin::address, list<digest256>> AddressIndex {};
         std::map<digest256, list<Bitcoin::outpoint>> ScriptIndex {};
         std::map<Bitcoin::outpoint, inpoint> RedeemIndex {};
+        std::map<Bitcoin::timestamp, double> Price;
 
         virtual ~memory_local_TXDB () {}
     };
 
     inline memory_local_TXDB::memory_local_TXDB () :
-        SPV::database::memory {}, local_TXDB {}, AddressIndex {}, ScriptIndex {}, RedeemIndex {} {}
+        local_TXDB {}, SPV::database::memory {}, AddressIndex {}, ScriptIndex {}, RedeemIndex {} {}
 
     void inline memory_local_TXDB::set_redeem (const Bitcoin::outpoint &op, const inpoint &ip) {
         RedeemIndex[op] = ip;

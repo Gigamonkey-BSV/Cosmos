@@ -1,4 +1,4 @@
-#include <Cosmos/database/memory/txdb.hpp>
+#include <Cosmos/database/memory/database.hpp>
 
 namespace Cosmos {
 

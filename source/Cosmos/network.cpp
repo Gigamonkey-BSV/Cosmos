@@ -137,7 +137,7 @@ namespace Cosmos {
         co_return z.Fees["standard"].MiningFee;
     }
 
-    awaitable<double> network::price (const Bitcoin::timestamp &tm) {
+    awaitable<double> network::price (monetary_unit, const Bitcoin::timestamp &tm) {
 
         std::tm time (tm);
 

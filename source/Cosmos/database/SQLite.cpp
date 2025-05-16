@@ -322,6 +322,32 @@ namespace Cosmos::SQLite {
         std::string KeyName;
     };
 
+    struct Redeemable {
+        Bitcoin::outpoint Prevout;
+        uint64_t ExpectedInputScriptSize;
+        data::bytes InputScriptSofar;
+    };
+
+    struct RedeemKey {
+        Bitcoin::outpoint Prevout;
+        std::string Key;
+    };
+
+    struct Event {
+        Bitcoin::TXID tx;
+        Bitcoin::timestamp when;
+        Bitcoin::satoshi Received;
+        Bitcoin::satoshi Spent;
+        Bitcoin::satoshi Moved;
+    };
+
+    struct Price {
+        Bitcoin::timestamp time;
+        double price;
+    };
+
+
+
     inline auto init_storage (const std::string &path) {
         return make_storage (path,
 
@@ -377,7 +403,7 @@ namespace Cosmos::SQLite {
         );
     }
 
-    struct db final : local_TXDB {
+    struct db final : database {
         using SPV::database::block_header;
         using SPV::database::tx;
 
@@ -742,10 +768,14 @@ namespace Cosmos::SQLite {
 
         }
 
+        maybe<double> get_price (monetary_unit, const Bitcoin::timestamp &t) final override;
+        void set_price (monetary_unit, const Bitcoin::timestamp &t, double) final override;
+        ptr<readable_wallet> get_wallet (const std::string &name) final override;
+
     };
 
-    ptr<local_TXDB> load (const std::string &fzf) {
-        return std::static_pointer_cast<local_TXDB> (std::make_shared<db> (fzf));
+    ptr<database> load (const std::string &fzf) {
+        return std::static_pointer_cast<database> (std::make_shared<db> (fzf));
     }
 
 }

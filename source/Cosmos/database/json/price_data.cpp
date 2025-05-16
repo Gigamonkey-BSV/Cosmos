@@ -3,7 +3,7 @@
 namespace Cosmos {
 
     JSON_price_data::JSON_price_data (const JSON &j) {
-        for (const JSON &x : j) Price[Bitcoin::timestamp {uint32 (x[0])}] = double (x[1]);
+        for (const JSON &x : j) Price = Price.insert (Bitcoin::timestamp {uint32 (x[0])}, double (x[1]));
     }
 
     JSON_price_data::operator JSON () const {
@@ -14,16 +14,43 @@ namespace Cosmos {
         return data;
     }
 
-    maybe<double> JSON_price_data::get (const Bitcoin::timestamp &t) {
-        if (auto x = Price.find (t); x != Price.end ()) return x->second;
-        return {};
+    uint32 time_distance (Bitcoin::timestamp a, Bitcoin::timestamp b) {
+        if (a > b) return a - b;
+        else return b - a;
     }
 
-    void JSON_price_data::set (const Bitcoin::timestamp &t, double p) {
-        if (auto x = Price.find (t); x != Price.end () &&
-            !(x->second - p == 0 || (std::max (x->second, p) / std::abs (x->second - p)) < .005))
-                throw exception {} << " We already have a different value for that price already: " << x->second << " vs " << p;
-        Price[t] = p;
+    maybe<const data::entry<const Bitcoin::timestamp, double> &>
+    get_price_inner (data::map<Bitcoin::timestamp, double> price, const Bitcoin::timestamp &t) {
+        if (data::empty (price)) return {};
+
+        const data::entry<const Bitcoin::timestamp, double> &root = price.root ();
+
+        if (root.Key < t) {
+            if (uint32 (root.Key) + price_data::OneDay > uint32 (t)) {
+                auto z = get_price_inner (data::left (price), t);
+                if (!bool (z) || time_distance (root.Key, t) < time_distance (z->Key, t))
+                    return {root};
+                    else return {z};
+            } else return get_price_inner (data::left (price), t);
+        } else if (root.Key > t) {
+            if (uint32 (root.Key) - price_data::OneDay < uint32 (t)) {
+                auto z = get_price_inner (data::right (price), t);
+                if (!bool (z), time_distance (root.Key, t) < time_distance (z->Key, t))
+                    return {root};
+                    else return {z};
+            } else return get_price_inner (data::right (price), t);
+        } else return price.root ();
+
+    }
+
+    maybe<double> JSON_price_data::get_price (monetary_unit, const Bitcoin::timestamp &t) {
+        auto e = get_price_inner (Price, t);
+        if (!bool (e)) return {};
+        return {e->Value};
+    }
+
+    void JSON_price_data::set_price (monetary_unit, const Bitcoin::timestamp &t, double p) {
+        if (!Price.contains (t)) Price = Price.insert (t, p);
     }
 }
 

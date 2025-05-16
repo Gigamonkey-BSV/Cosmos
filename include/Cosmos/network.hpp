@@ -58,6 +58,10 @@ namespace Cosmos {
 
     std::ostream &operator << (std::ostream &, broadcast_result);
 
+    enum monetary_unit {
+        USD
+    };
+
     struct network {
         net::asio::io_context IO;
         ptr<net::HTTP::SSL> SSL;
@@ -83,7 +87,7 @@ namespace Cosmos {
         awaitable<broadcast_single_result> broadcast (const extended_transaction &tx);
         awaitable<broadcast_multiple_result> broadcast (list<extended_transaction> tx);
 
-        awaitable<double> price (const Bitcoin::timestamp &);
+        awaitable<double> price (monetary_unit, const Bitcoin::timestamp &);
         
     };
     

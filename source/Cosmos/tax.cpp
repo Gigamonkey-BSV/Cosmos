@@ -25,7 +25,7 @@ namespace Cosmos {
             // we are assuming that we have a regular timestamp here
             // instead of unconfirmed or infinity. You'd think this would
             // be ok since people typically do taxes on past events.
-            potential.Price = *pd->get (e.When.get<Bitcoin::timestamp> ());
+            potential.Price = *pd->get_price (USD, e.When.get<Bitcoin::timestamp> ());
 
             Bitcoin::satoshi current_moved {0};
             Bitcoin::satoshi current_income {0};
@@ -41,7 +41,7 @@ namespace Cosmos {
                         // when was the original output created?
                         Bitcoin::timestamp when = txs[op.Digest]->when ().get<Bitcoin::timestamp> ();
                         // At what price was it bought?
-                        double buy_price = *pd->get (when);
+                        double buy_price = *pd->get_price (USD, when);
                         // if the buy price is greater than the sell price, it's a capital loss.
                         if (potential.Price < buy_price) {
                             cg.Loss += (buy_price - potential.Price) * double (value);
