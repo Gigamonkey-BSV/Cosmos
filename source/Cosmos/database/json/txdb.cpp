@@ -156,7 +156,6 @@ namespace Cosmos {
         for (const auto &[key, value] : redeems.items ())
             this->RedeemIndex[read_outpoint (key)] = inpoint {read_outpoint (value)};
 
-
         // Here is another issue relating to changes in format.
         // We used to have a map address => outpoint
         // However, now the map is address => script hash.

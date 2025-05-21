@@ -7,7 +7,7 @@ namespace Cosmos {
 
     // construct a set of change outputs.
     change make_change_parameters::operator ()
-        (address_sequence x, Bitcoin::satoshi val, satoshis_per_byte fees, data::crypto::random &r) const {
+        (Bitcoin::satoshi val, satoshis_per_byte fees, key_source x, data::crypto::random &r) const {
 
         list<redeemable> cx {};
 
@@ -24,7 +24,7 @@ namespace Cosmos {
 
                 uint64 expected_size = pay_to_address::redeem_expected_size (true);
 
-                entry<Bitcoin::address, signing> derived = pay_to_address_signing (x.last ());
+                entry<Bitcoin::address, signing> derived = pay_to_address_signing (x.last_private ());
                 x = x.next ();
 
                 cx <<= redeemable {

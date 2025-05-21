@@ -2,7 +2,7 @@
 #define COSMOS_PAY
 
 #include <Cosmos/wallet/account.hpp>
-#include <Cosmos/wallet/keys/pubkeys.hpp>
+//#include <Cosmos/wallet/keys/pubkeys.hpp>
 #include <gigamonkey/pay/BEEF.hpp>
 
 namespace Cosmos {
@@ -25,18 +25,20 @@ namespace Cosmos {
             request ();
         };
 
-        using payment_request = entry<string, payments::request>;
+        using payment_request = entry<string, request>;
 
         static payment_request read_payment_request (const JSON &);
         static JSON write_payment_request (const payment_request &);
 
+        // Given a payment request, we need to keep track of
+        // how we will redeem the outputs to us once the
+        // payment is received.
         struct redeemable {
             payment_request Request;
 
-            // TODO in some cases we need more information than this.
-            derivation Derivation;
+            signing Redeem;
 
-            redeemable (const payment_request &inv, const derivation &d) : Request {inv}, Derivation {d} {};
+            redeemable (const payment_request &inv, const signing &d) : Request {inv}, Redeem {d} {};
         };
 
         struct offer {
@@ -66,13 +68,12 @@ namespace Cosmos {
             xpub
         };
 
-        static new_request request_payment (type t, const payments &p, const addresses &k, const request &x);
+        static new_request request_payment (type t, const payments &p, const request &x);
     };
 
     struct payments::new_request {
         payments::payment_request Request;
         payments Payments;      // new payments
-        addresses Addresses;    // new addresses
     };
 
     payments::payment_request inline payments::read_payment_request (const JSON &j) {

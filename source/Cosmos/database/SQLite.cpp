@@ -292,6 +292,7 @@ namespace Cosmos::SQLite {
         digest256 script_hash;
     };
 
+    // an address that is found in a script hash.
     struct Address {
         int id;
         Bitcoin::address address;
@@ -307,10 +308,26 @@ namespace Cosmos::SQLite {
         std::string key;
     };
 
-    struct PublicKey {
+    // Define one key as deriving from another via a
+    // to_public function application. Thus, key is
+    // an expression for a private key.
+    struct Pubkey {
         std::string name;
         std::string key;
-        std::string secret;
+    };
+
+    // Information on how to redeem an output.
+    struct Redeemable {
+        Bitcoin::outpoint prevout;
+        uint64_t expected_input_script_size;
+        data::bytes input_script_so_far;
+    };
+
+    // a key required to redeem an output
+    // (we may need more than one for a given output)
+    struct RedeemKey {
+        Bitcoin::outpoint prevout;
+        std::string key;
     };
 
     struct Wallet {
@@ -318,30 +335,38 @@ namespace Cosmos::SQLite {
         std::string name;
     };
 
+    // an output belonging to a wallet.
     struct WalletOutput {
         Bitcoin::outpoint outpoint;
         std::string wallet_name;
     };
 
-    struct WalletSecret {
-        std::string key_name;
+    // a key that belongs to a wallet.
+    struct WalletKey {
+        int id;
         std::string wallet_name;
-    };
-
-    struct WalletPublicKey {
+        std::string name; //typically 'master' or 'account0'
         std::string key_name;
+    };
+
+    struct AddressSequence {
+        int id;
+
         std::string wallet_name;
-    };
 
-    struct Redeemable {
-        Bitcoin::outpoint prevout;
-        uint64_t expected_input_script_size;
-        data::bytes input_script_so_far;
-    };
+        // typically 'receive' or 'change'
+        std::string name;
 
-    struct RedeemKey {
-        Bitcoin::outpoint prevout;
-        std::string key;
+        int32_t next;
+
+        // given an index, this string
+        // defines a function that transforms a key
+        // (either public or private) into another key.
+        std::string derivation_function;
+
+        // this is an expression that gives
+        // us a private key from a master key.
+        std::string key_name;
     };
 
     struct Event {
@@ -427,10 +452,20 @@ namespace Cosmos::SQLite {
                 make_column ("key", &Secret::key)
             ),
 
-            make_table ("public_key",
-                make_column ("name", &PublicKey::name, primary_key ()),
-                make_column ("key", &PublicKey::key),
-                make_column ("secret", &PublicKey::secret)
+            make_table ("pubkeys",
+                make_column ("name", &Pubkey::name, primary_key ()),
+                make_column ("key", &Pubkey::key)
+            ),
+
+            make_table ("redeemables",
+                make_column ("id", &Redeemable::prevout, primary_key ()),
+                make_column ("expected_input_script_size", &Redeemable::expected_input_script_size),
+                make_column ("input_script_so_far", &Redeemable::input_script_so_far)
+            ),
+
+            make_table ("redeem_keys",
+                make_column ("prevout", &RedeemKey::prevout, primary_key ()),
+                make_column ("key", &RedeemKey::key)
             ),
 
             make_table ("wallets",
@@ -443,25 +478,20 @@ namespace Cosmos::SQLite {
                 make_column ("wallet_name", &WalletOutput::wallet_name)
             ),
 
-            make_table ("wallet_secrets",
-                make_column ("key_name", &WalletSecret::key_name, primary_key ()),
-                make_column ("wallet_name", &WalletSecret::wallet_name)
+            make_table ("wallet_keys",
+                make_column ("id", &WalletKey::id, primary_key ().autoincrement ()),
+                make_column ("wallet_name", &WalletKey::wallet_name),
+                make_column ("name", &WalletKey::name),
+                make_column ("key_name", &WalletKey::key_name)
             ),
 
-            make_table ("wallet_public_keys",
-                make_column ("key_name", &WalletPublicKey::key_name, primary_key ()),
-                make_column ("wallet_name", &WalletPublicKey::wallet_name)
-            ),
-
-            make_table ("redeemables",
-                make_column ("id", &Redeemable::prevout, primary_key ()),
-                make_column ("expected_input_script_size", &Redeemable::expected_input_script_size),
-                make_column ("input_script_so_far", &Redeemable::input_script_so_far)
-            ),
-
-            make_table ("redeem_keys",
-                make_column ("prevout", &RedeemKey::prevout, primary_key ()),
-                make_column ("key", &RedeemKey::key)
+            make_table ("sequences",
+                make_column ("id", &AddressSequence::id, primary_key ().autoincrement ()),
+                make_column ("wallet_name", &AddressSequence::wallet_name),
+                make_column ("name", &AddressSequence::name),
+                make_column ("next", &AddressSequence::next),
+                make_column ("derivation_function", &AddressSequence::derivation_function),
+                make_column ("key_name", &AddressSequence::key_name)
             ),
 
             make_table ("events",
@@ -828,8 +858,7 @@ namespace Cosmos::SQLite {
         void remove (const Bitcoin::TXID &hash) final override {
             auto rows = storage.select (
                 columns (&Transaction::tx, &Transaction::status),
-                where (is_equal (&Transaction::hash, hash)),
-                                        limit (1));
+                where (is_equal (&Transaction::hash, hash)), limit (1));
             if (rows.empty ()) return;
 
             const auto &entry = rows.front ();
@@ -850,35 +879,31 @@ namespace Cosmos::SQLite {
 
         }
 
+        bool make_wallet (const std::string &name) final override;
+/*
+        bool make_wallet (const std::string &name) final override {
+            try {
+                storage.insert (sqlite_orm::into<Wallet> (), &Wallet::name, name);
+            } catch (const std::system_error &e) {
+                return false;
+            }
+
+            return true;
+        }*/
+
+        list<std::string> get_wallet_names () final override {
+            list<std::string> names;
+            for (const auto &name : storage.select (&Wallet::name)) names <<= name;
+            return names;
+        }
+
+        void set_key (const std::string &key_name, const key_expression &k) final override;
+        void to_private (const std::string &key_name, const key_expression &k) final override;
+
         maybe<double> get_price (monetary_unit, const Bitcoin::timestamp &t) final override;
         void set_price (monetary_unit, const Bitcoin::timestamp &t, double) final override;
 
-        struct readable_wallet : database::readable_wallet {
-
-            const Cosmos::keychain *keys () final override;
-            const Cosmos::pubkeys *pubkeys () final override;
-            const Cosmos::addresses *addresses () final override;
-            const Cosmos::account *account () final override;
-
-            const Cosmos::history *load_history () final override;
-
-            const Cosmos::payments *payments () final override;
-        };
-
-        struct writable_wallet : database::writable_wallet {
-
-            Cosmos::history *history () final override;
-
-            void set_keys (const Cosmos::keychain &) final override;
-            void set_pubkeys (const Cosmos::pubkeys &) final override;
-            void set_account (const Cosmos::account &) final override;
-            void set_addresses (const Cosmos::addresses &) final override;
-
-            void set_wallet (const Cosmos::wallet &) final override;
-            void set_payments (const Cosmos::payments &) final override;
-        };
-
-        ptr<database::readable_wallet> get_wallet (const std::string &name) final override;
+        ptr<database::readable> get_wallet (const std::string &name) final override;
 
     };
 

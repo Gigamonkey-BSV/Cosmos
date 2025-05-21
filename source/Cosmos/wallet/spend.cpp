@@ -1,20 +1,9 @@
-#include <Cosmos/wallet/wallet.hpp>
+#include <Cosmos/wallet/spend.hpp>
 
 namespace Cosmos {
 
-    Bitcoin::secret find_secret (keychain k, pubkeys p, derivation d) {
-        // first we check in pubkeys for the parent key.
-        if (const auto *v = p.contains (d.Parent); bool (v))
-        // if it is there, we expand the derivation to include the parent's derivation.
-            d = derivation {v->Parent, v->Path + d.Path};
-        // otherwise we check in private keys for the parent.
-        if (const auto *v = k.contains (d.Parent); bool (v))
-            return Bitcoin::secret (HD::BIP_32::secret {*v}.derive (d.Path));
-        return Bitcoin::secret {};
-    }
-
-    spend::spent spend::operator () (redeem r,
-        keychain k, wallet w,
+    spend::spent spend::operator () (
+        account acc, key_source addresses,
         list<Bitcoin::output> to,
         satoshis_per_byte fees,
         uint32 lock) const {
@@ -28,33 +17,38 @@ namespace Cosmos {
                 return val + o.Value;
             }, Bitcoin::satoshi {0}, to);
 
-        Bitcoin::satoshi value_available = w.Account.value ();
+        Bitcoin::satoshi value_available = acc.value ();
 
         // do we have enough funds to spend everything we want to spend?
-        if (value_available < value_to_spend) throw exception {3} << "insufficient funds: " << value_available << " < " << value_to_spend;
+        // It is possible that we would have more than value_to_spend
+        // but then not enough for fees.
+        if (value_available < value_to_spend)
+            throw exception {} << "insufficient funds: " << value_available << " < " << value_to_spend;
 
-        list<G::redeemer> inputs;
-        account_diff diff;
+        list<nosig::input> inputs;
+        map<Bitcoin::index, Bitcoin::outpoint> remove;
 
         // select funds to be spent and organize them into redeemers and keep
         // track of outputs that will be removed from the wallet.
         Bitcoin::index input_index = 0;
-        for (const auto &[op, re] : Select (w.Account, value_to_spend, fees, Random)) {
-            inputs <<= G::redeemer {
+        for (const auto &[op, re] : Select (acc, value_to_spend, fees, Random)) {
+            inputs <<= nosig::input {
                 for_each ([&k, w] (const derivation &x) -> G::sigop {
                     Bitcoin::secret sec = find_secret (k, w.Pubkeys, x);
                     if (!sec.valid ()) throw exception {} << "could not find secret key for " << x;
                     return G::sigop {sec};
-                }, re.Derivation),
+                }, re.Keys),
                 Bitcoin::prevout {op, re.Prevout},
                 re.ExpectedScriptSize,
                 Bitcoin::input::Finalized,
                 re.UnlockScriptSoFar};
-            diff.Remove = diff.Remove.insert (input_index++, op);
+            remove = remove.insert (input_index++, op);
         }
 
+        map<Bitcoin::index, redeemable> insert;
+
         // transform selected into inputs
-        G::redeemable_transaction design_before_change {1, inputs, to, lock};
+        nosig::transaction design_before_change {1, inputs, to, lock};
 
         // how much do we need to make in change?
         satoshis_per_byte fee_rate_before_change {design_before_change.fee (), design_before_change.expected_size ()};

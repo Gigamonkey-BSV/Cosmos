@@ -5,7 +5,6 @@
 #include <data/crypto/random.hpp>
 #include <data/io/arg_parser.hpp>
 
-#include <Cosmos/wallet/wallet.hpp>
 #include <Cosmos/wallet/split.hpp>
 #include <Cosmos/database/json/price_data.hpp>
 #include <Cosmos/database/json/txdb.hpp>
@@ -40,14 +39,15 @@ namespace Cosmos {
         const Cosmos::price_data *price_data () const;
 
         const Cosmos::history *history () const;
-        const Cosmos::addresses *addresses () const;
+        //const Cosmos::addresses *addresses () const;
         const Cosmos::payments *payments () const;
 
+        const Cosmos::account *account () const;
+/*
         const Cosmos::keychain *keys () const;
         const Cosmos::pubkeys *pubkeys () const;
-        const Cosmos::account *account () const;
 
-        const maybe<Cosmos::wallet> wallet () const;
+        const maybe<Cosmos::wallet> wallet () const;*/
 
         Interface () {}
 
@@ -62,22 +62,22 @@ namespace Cosmos {
         template <typename X> X update (function<X (writable w)> f);
 
         // We use this to change the database.
-        struct writable {
+        struct writable : database::writable {
 
             Cosmos::local_TXDB *local_txdb ();
             Cosmos::cached_remote_TXDB *txdb ();
             SPV::database *spvdb ();
             Cosmos::price_data *price_data ();
 
-            Cosmos::history *history ();
+            void set_key (const std::string &key_name, const key_expression &k) final override;
+            void to_private (const std::string &key_name, const key_expression &k) final override;
+            void set_key_source (const std::string &name, const key_source &k) final override;
 
-            void set_keys (const Cosmos::keychain &);
-            void set_pubkeys (const Cosmos::pubkeys &);
-            void set_account (const Cosmos::account &);
-            void set_addresses (const Cosmos::addresses &);
+            Cosmos::history *history () final override;
 
-            void set_wallet (const Cosmos::wallet &);
-            void set_payments (const Cosmos::payments &);
+            void set_account (const Cosmos::account &) final override;
+
+            void set_payments (const Cosmos::payments &) final override;
 
             // broadcast a series of transactions with account diffs
             // to update in the wallet. Optionally, an SPV::proof::map
@@ -117,39 +117,39 @@ namespace Cosmos {
 
 
         ptr<network> Net {nullptr};
-        ptr<Cosmos::keychain> Keys {nullptr};
-        ptr<Cosmos::pubkeys> Pubkeys {nullptr};
+        //ptr<Cosmos::keychain> Keys {nullptr};
+        //ptr<Cosmos::pubkeys> Pubkeys {nullptr};
         ptr<Cosmos::local_TXDB> LocalTXDB {nullptr};
         ptr<Cosmos::cached_remote_TXDB> TXDB {nullptr};
         ptr<Cosmos::local_price_data> LocalPriceData {nullptr};
         ptr<Cosmos::cached_remote_price_data> PriceData {nullptr};
         ptr<Cosmos::history> Events {nullptr};
         ptr<Cosmos::account> Account {nullptr};
-        ptr<Cosmos::addresses> Addresses {nullptr};
+        //ptr<Cosmos::addresses> Addresses {nullptr};
         ptr<Cosmos::payments> Payments {nullptr};
 
         // if this is set to true, then everything will be
         // saved to disk on destruction of the Interface.
         bool Written {false};
 
-        Cosmos::keychain *get_keys ();
-        Cosmos::pubkeys *get_pubkeys ();
+        //Cosmos::keychain *get_keys ();
+        //Cosmos::pubkeys *get_pubkeys ();
         Cosmos::cached_remote_TXDB *get_txdb ();
         Cosmos::local_TXDB *get_local_txdb ();
         Cosmos::account *get_account ();
         Cosmos::price_data *get_price_data ();
         Cosmos::history *get_history ();
-        Cosmos::addresses *get_addresses ();
+        //Cosmos::addresses *get_addresses ();
         Cosmos::payments *get_payments ();
 
-        maybe<Cosmos::wallet> get_wallet ();
+        //maybe<Cosmos::wallet> get_wallet ();
 
         friend struct writable;
     };
 
-    void display_value (const wallet &w);
+    void display_value (const account &w);
 
-    pubkeys generate_new_xpub (const pubkeys &p);
+    //pubkeys generate_new_xpub (const pubkeys &p);
 
     void update_pending_transactions (Interface::writable);
 
@@ -175,7 +175,7 @@ namespace Cosmos {
         return Name;
     }
 
-    void inline display_value (const wallet &w) {
+    void inline display_value (const account &w) {
         std::cout << w.value () << std::endl;
     }
 
@@ -208,14 +208,14 @@ namespace Cosmos {
     const local_TXDB inline *Interface::local_txdb () const {
         return const_cast<Interface *> (this)->get_local_txdb ();
     }
-
+/*
     const keychain inline *Interface::keys () const {
         return const_cast<Interface *> (this)->get_keys ();
     }
 
     const pubkeys inline *Interface::pubkeys () const {
         return const_cast<Interface *> (this)->get_pubkeys ();
-    }
+    }*/
 
     const cached_remote_TXDB inline *Interface::txdb () const {
         return const_cast<Interface *> (this)->get_txdb ();
@@ -224,18 +224,18 @@ namespace Cosmos {
     const account inline *Interface::account () const {
         return const_cast<Interface *> (this)->get_account ();
     }
-
+/*
     const addresses inline *Interface::addresses () const {
         return const_cast<Interface *> (this)->get_addresses ();
-    }
+    }*/
 
     const price_data inline *Interface::price_data () const {
         return const_cast<Interface *> (this)->get_price_data ();
     }
-
+/*
     const maybe<wallet> inline Interface::wallet () const {
         return const_cast<Interface *> (this)->get_wallet ();
-    }
+    }*/
 
     const history inline *Interface::history () const {
         return const_cast<Interface *> (this)->get_history ();
@@ -244,7 +244,7 @@ namespace Cosmos {
     const payments inline *Interface::payments () const {
         return const_cast<Interface *> (this)->get_payments ();
     }
-
+/*
     void inline Interface::writable::set_keys (const Cosmos::keychain &kk) {
         if (I.Keys) *I.Keys = kk;
         else I.Keys = std::make_shared<Cosmos::keychain> (kk);
@@ -253,11 +253,6 @@ namespace Cosmos {
     void inline Interface::writable::set_pubkeys (const Cosmos::pubkeys &pk) {
         if (I.Pubkeys) *I.Pubkeys = pk;
         else I.Pubkeys = std::make_shared<Cosmos::pubkeys> (pk);
-    }
-
-    void inline Interface::writable::set_account (const Cosmos::account &a) {
-        if (I.Account) *I.Account = a;
-        else I.Account = std::make_shared<Cosmos::account> (a);
     }
 
     void inline Interface::writable::set_addresses (const Cosmos::addresses &a) {
@@ -269,6 +264,11 @@ namespace Cosmos {
         set_account (ww.Account);
         set_pubkeys (ww.Pubkeys);
         set_addresses (ww.Addresses);
+    }*/
+
+    void inline Interface::writable::set_account (const Cosmos::account &a) {
+        if (I.Account) *I.Account = a;
+        else I.Account = std::make_shared<Cosmos::account> (a);
     }
 
     void inline Interface::writable::set_payments (const Cosmos::payments &pk) {

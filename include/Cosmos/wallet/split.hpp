@@ -3,7 +3,7 @@
 
 #include <gigamonkey/timechain.hpp>
 #include <data/crypto/random.hpp>
-#include <Cosmos/wallet/wallet.hpp>
+#include <Cosmos/wallet/spend.hpp>
 #include <data/math/probability/triangular_distribution.hpp>
 #include <Cosmos/options.hpp>
 
@@ -23,25 +23,18 @@ namespace Cosmos {
 
         // the user provides the outputs to split and this function does the rest.
         spend::spent operator () (
-            redeem, data::crypto::random &,
-            keychain, wallet,
+            data::crypto::random &, account,
             list<entry<Bitcoin::outpoint, redeemable>> selected,
             double fee_rate) const;
-
-        // produce an unsigned transaction that can be signed later.
-        spend::spent_unsigned operator () (
-            redeem, data::crypto::random &, wallet,
-            list<entry<Bitcoin::outpoint, redeemable>> selected,
-            double fee_rate) const;
-
+/*
         struct result {
             list<std::pair<extended_transaction, account_diff>> Transactions;
             uint32 Last;
         };
 
         // this function handles everything other than updating the addresses.
-        result operator () (redeem, data::crypto::random &, keychain, pubkeys,
-            address_sequence, list<entry<Bitcoin::outpoint, redeemable>> selected, double fee_rate) const;
+        result operator () (data::crypto::random &, keychain, pubkeys,
+            address_sequence, list<entry<Bitcoin::outpoint, redeemable>> selected, double fee_rate) const;*/
 
         struct result_outputs {
             // list of new outputs; these are not shuffled so be sure to do that if you use these in a tx.
@@ -50,7 +43,7 @@ namespace Cosmos {
         };
 
         // construct only the outputs.
-        result_outputs operator () (data::crypto::random &r, address_sequence key,
+        result_outputs operator () (data::crypto::random &r, address_source key,
             Bitcoin::satoshi value, double fee_rate) const;
 
         struct log_triangular_distribution {
@@ -80,7 +73,7 @@ namespace Cosmos {
         Bitcoin::satoshi MinimumCreateValue {options::DefaultMinChangeValue};
 
         // construct a set of change outputs.
-        change operator () (address_sequence x, Bitcoin::satoshi sats, satoshis_per_byte fees, data::crypto::random &rand) const;
+        change operator () (address_source x, Bitcoin::satoshi sats, satoshis_per_byte fees, data::crypto::random &rand) const;
         using split::operator ();
 
         split_change_parameters (
@@ -94,12 +87,12 @@ namespace Cosmos {
         split_change_parameters (const options &o) :
             split_change_parameters {o.MinChangeValue, o.MinSatsPerOutput, o.MaxSatsPerOutput, o.MeanSatsPerOutput} {}
     };
-
-    spend::spent inline split::operator () (redeem ree, data::crypto::random &rand, keychain k, wallet w,
+/*
+    spend::spent inline split::operator () (data::crypto::random &rand, account acc,
         list<entry<Bitcoin::outpoint, redeemable>> selected, double fee_rate) const {
-        result rr = (*this) (ree, rand, k, w.Pubkeys, w.Addresses.change (), selected, fee_rate);
+        result rr = (*this) (rand, k, w.Pubkeys, w.Addresses.change (), selected, fee_rate);
         return spend::spent {rr.Transactions, w.Addresses.update (w.Addresses.Change, rr.Last)};
-    }
+    }*/
 
     template <std::uniform_random_bit_generator engine>
     double inline split::log_triangular_distribution::operator () (engine &e) const {

@@ -19,11 +19,12 @@ namespace Cosmos {
     };
 
     void generate_wallet::operator () (Interface::writable u) {
-        const auto w = u.get ().wallet ();
-        if (!bool (w)) throw exception {} << "could not read wallet.";
+        //const auto w = u.get ().wallet ();
+        //if (!bool (w)) throw exception {} << "could not read wallet.";
 
-        if (UseBIP_39) std::cout << "We will generate a new BIP 39 wallet for you." << std::endl;
-        else std::cout << "We will generate a new BIP 44 wallet for you." << std::endl;
+        if (UseBIP_39) std::cout << "We will generate a new BIP 39 wallet." << std::endl;
+        else std::cout << "We will generate a new BIP 44 wallet." << std::endl;
+
         std::cout << "We will pre-generate " << Accounts << " accounts in this wallet." << std::endl;
         std::cout << "Coin type is " << CoinType << std::endl;
         std::cout << "Type random characters to use as entropy for generating this wallet. "
@@ -41,8 +42,7 @@ namespace Cosmos {
             std::string words = HD::BIP_39::generate (bits);
 
             std::cout << "your words are\n\n\t" << words << "\n\nRemember, these words can be used to generate "
-                "all your keys, but at scale that is not enough to restore your funds. You need to keep the transactions"
-                " into your wallet along with Merkle proofs as well." << std::endl;
+                "all your keys." << std::endl;
 
             // TODO use passphrase option.
             master = HD::BIP_32::secret::from_seed (HD::BIP_39::read (words));
@@ -53,13 +53,10 @@ namespace Cosmos {
             std::copy (bits.begin () + 32, bits.end (), master.ChainCode.begin ());
         }
 
-        HD::BIP_32::pubkey master_pubkey = master.to_public ();
-        keychain keys = keychain {}.insert (pubkey {master_pubkey}, master);
-
-        pubkeys pub {};
-        addresses addrs {{}, "receive_0", "change_0"};
+        u.set_key ("Master", master);
 
         for (int account = 0; account < Accounts; account++) {
+
             list<uint32> path {
                 HD::BIP_44::purpose,
                 HD::BIP_32::harden (CoinType),
@@ -69,18 +66,18 @@ namespace Cosmos {
 
             std::cout << "\tmaster pubkey for account " << account << " is " << account_master_pubkey << std::endl;
 
-            pub = pub.insert (account_master_pubkey, derivation {master_pubkey, path});
+            data::string account_key_name = data::string::write ("Account", account);
 
-            std::string receive_name = std::string {"receive_"} + std::to_string (account);
-            std::string change_name = std::string {"change_"} + std::to_string (account);
+            u.set_key (account_key_name, account_master_pubkey);
 
-            addrs.Sequences = addrs.Sequences.insert (receive_name, address_sequence {account_master_pubkey, {HD::BIP_44::receive_index}});
-            addrs.Sequences = addrs.Sequences.insert (change_name, address_sequence {account_master_pubkey, {HD::BIP_44::change_index}});
+            u.to_private (account_key_name, data::string::write ("Master/`", HD::BIP_44::purpose, "/`", CoinType, "/`", account));
+
+            u.set_key_source (data::string::write ("Receive", account),
+                key_source {0, data::string::write ("@key index -> key/", HD::BIP_44::receive_index, "/index")});
+
+            u.set_key_source (data::string::write ("Change", account),
+                key_source {0, data::string::write ("@key index -> key/", HD::BIP_44::change_index, "/index")});
         }
-
-        u.set_keys (keys);
-        u.set_pubkeys (pub);
-        u.set_addresses (addrs);
     }
 }
 

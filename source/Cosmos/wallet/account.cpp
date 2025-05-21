@@ -20,34 +20,41 @@ namespace Cosmos {
 
         {
             int index = 0;
-            deriv.resize (Derivation.size ());
-            for (const derivation &d : Derivation) deriv[index++] = JSON (d);
+            deriv.resize (Keys.size ());
+            for (const key_expression &d : Keys) deriv[index++] = Diophant::write (d);
         }
 
         JSON::object_t j;
-        j["derivation"] = deriv;
+        j["keys"] = deriv;
         if (UnlockScriptSoFar.size () != 0) j["script_code"] = encoding::hex::write (UnlockScriptSoFar);
         j["expected_size"] = ExpectedScriptSize;
         j["prevout"] = write (Prevout);
         return j;
     }
 
+    // throw if failure.
+    key_expression read_derivation (const JSON &);
+
     redeemable::redeemable (const JSON &j) : signing {} {
 
         this->ExpectedScriptSize = uint32 (j["expected_size"]);
 
         Prevout = read_output (j["prevout"]);
-        const JSON &p = j["derivation"];
 
-        if (!p.is_array ()) throw exception {} << "invalid redeemable format";
+        // this is an old format. Derivation was a key and a bip32 path.
+        if (j.contains ("derivation")) {
 
-        auto bd = p.begin ();
+            const JSON &p = j["derivation"];
 
-        while (bd != p.end ()) {
-            auto dd = derivation {*bd};
-            if (!dd.valid ()) throw exception {} << "invalid derivation";
-            Derivation <<= dd;
-            bd++;
+            if (!p.is_array ()) throw exception {} << "invalid redeemable format";
+
+            for (const JSON &bd : p) Keys <<= read_derivation (bd);
+        } else if (j.contains ("keys")) {
+            const JSON &p = j["keys"];
+
+            if (!p.is_array ()) throw exception {} << "invalid redeemable format";
+
+            for (const JSON &k : p) Keys <<= key_expression (std::string (k));
         }
 
         if (auto xx = j.find ("script_code"); xx != j.end ()) {

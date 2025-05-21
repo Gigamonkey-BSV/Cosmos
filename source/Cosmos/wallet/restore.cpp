@@ -3,14 +3,15 @@
 
 namespace Cosmos {
 
-    restore::restored restore::operator () (
-        TXDB &txdb,
-        address_sequence m) {
+    restore::restored restore::operator () (TXDB &txdb, key_sequence m, int32 start) {
 
         if (CheckSubKeys) throw exception {} << "TODO: option CheckSubKeys enabled but not implemented.";
 
-        address_sequence last = m;
-        uint32 last_used = 0;
+        key_sequence last = m;
+
+        int32 next_index = start;
+        int32 i = next_index;
+        int32 since_last_used = 0;
 
         events v {};
         std::map<Bitcoin::TXID, map<Bitcoin::index, redeemable>> a {};
@@ -23,12 +24,12 @@ namespace Cosmos {
 
         while (true) {
             // generate next address
-            entry<Bitcoin::address, signing> next = pay_to_address_signing (m.last ());
+            entry<Bitcoin::address, signing> next = pay_to_address_signing (m.secret (i));
             const Bitcoin::address &new_addr = next.Key;
 
-            std::cout << "  recovering address " << m.Last << ": " << new_addr << std::endl;
+            std::cout << "  recovering address " << new_addr << std::endl;
 
-            m = m.next ();
+            i++;
 
             // get all txs relating to this address.
             // TODO there is a potential problem here because we assume
@@ -38,14 +39,14 @@ namespace Cosmos {
             std::cout << "  found " << ev.size () << " events for address " << new_addr << std::endl;
 
             if (ev.size () == 0) {
-                if (last_used == MaxLookAhead) break;
+                if (since_last_used == MaxLookAhead) break;
 
-                last_used++;
+                since_last_used++;
                 continue;
             }
 
-            last_used = 0;
-            last = m;
+            since_last_used = 0;
+            next_index = i;
 
             v = v + ev;
 
@@ -86,7 +87,7 @@ namespace Cosmos {
         list<account_diff> diffs;
         for (const auto &[txid, ins] : a) diffs <<= account_diff {txid, ins, {}};
 
-        return restored {v, diffs, last.Last};
+        return restored {v, diffs, next_index};
     }
 
 }

@@ -1,11 +1,39 @@
 #ifndef COSMOS_WALLET_ACCOUNT
 #define COSMOS_WALLET_ACCOUNT
 
-#include <data/math/infinite.hpp>
-#include <Cosmos/wallet/keys/redeemer.hpp>
+#include <Cosmos/wallet/keys.hpp>
 #include <Cosmos/database/txdb.hpp>
 
+#include <gigamonkey/script/pattern/pay_to_address.hpp>
+#include <gigamonkey/script/pattern/pay_to_pubkey.hpp>
+
 namespace Cosmos {
+
+    using pay_to_address = Gigamonkey::pay_to_address;
+    using pay_to_pubkey = Gigamonkey::pay_to_pubkey;
+
+    entry<Bitcoin::address, signing> inline pay_to_address_signing (const key_expression &d);
+
+    entry<Bitcoin::pubkey, signing> inline pay_to_pubkey_signing (const key_expression &d);
+
+    // information to redeem an output in the utxo set.
+    struct redeemable : signing {
+
+        // the output to be redeemeed.
+        Bitcoin::output Prevout;
+
+        redeemable (): signing {}, Prevout {} {}
+        redeemable (const Bitcoin::output &p, list<key_expression> d, uint64 ez, const bytes &script_code = {}) :
+        signing {d, ez, script_code}, Prevout {p} {}
+        redeemable (const Bitcoin::output &p, const signing &x) : signing {x}, Prevout {p} {}
+
+        explicit operator JSON () const;
+        redeemable (const JSON &);
+    };
+
+    std::ostream &operator << (std::ostream &o, const redeemable &r);
+
+    size_t estimated_size (const redeemable &);
 
     // the effect of a single transaction on an account.
     struct account_diff {
@@ -31,7 +59,7 @@ namespace Cosmos {
         explicit operator JSON () const;
         Bitcoin::satoshi value () const {
             Bitcoin::satoshi v {0};
-            for (const auto &[key, value] : *this) v += value.Prevout.Value;
+            for (const auto &[_, value] : *this) v += value.Prevout.Value;
             return v;
         }
 
@@ -56,6 +84,20 @@ namespace Cosmos {
         }
 
     };
+/*
+    entry<Bitcoin::address, signing> inline pay_to_address_signing (const key_expression &d) {
+        return {d.derive ().address ().encode (),
+            signing {{derivation {d.Parent, d.Path}}, pay_to_address::redeem_expected_size ()}};
+    }
+
+    entry<Bitcoin::pubkey, signing> inline pay_to_pubkey_signing (const key_expression &d) {
+        return {Bitcoin::pubkey {d.derive ().Pubkey},
+            signing {{derivation {d.Parent, d.Path}}, pay_to_pubkey::redeem_expected_size ()}};
+    }*/
+
+    std::ostream inline &operator << (std::ostream &o, const redeemable &r) {
+        return o << "redeemable {" << r.Prevout << ", keys: " << r.Keys << "}";
+    }
 
 }
 

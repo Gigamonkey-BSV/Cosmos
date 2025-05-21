@@ -6,7 +6,7 @@ if (${CMAKE_VERSION} VERSION_LESS 3.12)
 endif ()
 
 if (PROJECT_SOURCE_DIR STREQUAL PROJECT_BINARY_DIR)
-  message(FATAL_ERROR "In-source builds are not allowed")
+  message (FATAL_ERROR "In-source builds are not allowed")
 endif ()
 
 set (CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_LIST_DIR}/cmake" CACHE STRING "Modules for CMake" FORCE)
@@ -85,7 +85,10 @@ find_package (data CONFIG REQUIRED)
 
 find_package (gigamonkey CONFIG REQUIRED)
 
-add_library (cosmos_lib STATIC
+find_package (diophant CONFIG REQUIRED)
+
+add_library (
+    cosmos_lib STATIC
     source/Cosmos/database/write.cpp
     source/Cosmos/database/price_data.cpp
     source/Cosmos/database/txdb.cpp
@@ -95,32 +98,52 @@ add_library (cosmos_lib STATIC
     source/Cosmos/network/whatsonchain.cpp
     source/Cosmos/network.cpp
     source/Cosmos/files.cpp
-    source/Cosmos/wallet/keys/derivation.cpp
-    source/Cosmos/wallet/keys/sequence.cpp
-    source/Cosmos/wallet/keys/pubkeys.cpp
-    source/Cosmos/wallet/keys/secret.cpp
+
     source/Cosmos/wallet/account.cpp
     source/Cosmos/wallet/restore.cpp
     source/Cosmos/wallet/select.cpp
     source/Cosmos/wallet/change.cpp
-    source/Cosmos/wallet/wallet.cpp
-    source/Cosmos/wallet/split.cpp
+    #source/Cosmos/wallet/sign.cpp
+    #source/Cosmos/wallet/spend.cpp
+    #source/Cosmos/wallet/split.cpp
     source/Cosmos/history.cpp
     source/Cosmos/tax.cpp
     source/Cosmos/boost/miner_options.cpp
-    source/Cosmos/pay.cpp
+    #source/Cosmos/pay.cpp
 )
 
 target_include_directories (cosmos_lib PUBLIC include)
 
-target_link_libraries (cosmos_lib PUBLIC nlohmann_json argh gigamonkey Data::data)
+target_link_libraries (cosmos_lib PUBLIC nlohmann_json argh diophant gigamonkey Data::data)
 
 target_compile_features (cosmos_lib PUBLIC cxx_std_23)
 set_target_properties (cosmos_lib PROPERTIES CXX_EXTENSIONS OFF)
 
-add_executable (CosmosWallet
+add_executable (
+    CosmosWalletServer
+    source/Cosmos/database/SQLite.cpp
+    source/Server.cpp
+)
+
+target_link_libraries (
+    CosmosWalletServer PUBLIC
+    SQLite::SQLite3
+    cosmos_lib
+)
+
+target_include_directories (
+    CosmosWalletServer PUBLIC
+    ${CMAKE_BINARY_DIR}/_deps/sqliteorm-src/include
+    include
+)
+
+target_compile_features (CosmosWalletServer PUBLIC cxx_std_20)
+set_target_properties (CosmosWalletServer PROPERTIES CXX_EXTENSIONS OFF)
+
+add_executable (
+    CosmosWallet
     source/random.cpp
-    source/interface.cpp
+    #source/interface.cpp
     source/generate.cpp
     source/restore.cpp
     source/request.cpp
@@ -130,34 +153,18 @@ add_executable (CosmosWallet
     source/Cosmos.cpp
 )
 
-add_executable (CosmosWalletServer
-    source/Cosmos/database/SQLite.cpp
-    source/Server.cpp
-)
-
-target_link_libraries (CosmosWallet PUBLIC
+target_link_libraries (
+    CosmosWallet PUBLIC
     cosmos_lib
 )
 
-target_link_libraries (CosmosWalletServer PUBLIC
-    SQLite::SQLite3
-    cosmos_lib
-)
-
-target_include_directories (CosmosWallet PUBLIC
-    include
-)
-
-target_include_directories (CosmosWalletServer PUBLIC
-    ${CMAKE_BINARY_DIR}/_deps/sqliteorm-src/include
+target_include_directories (
+    CosmosWallet PUBLIC
     include
 )
 
 target_compile_features (CosmosWallet PUBLIC cxx_std_20)
 set_target_properties (CosmosWallet PROPERTIES CXX_EXTENSIONS OFF)
-
-target_compile_features (CosmosWalletServer PUBLIC cxx_std_20)
-set_target_properties (CosmosWalletServer PROPERTIES CXX_EXTENSIONS OFF)
 
 # add_definitions ("-DHAS_BOOST")
 
@@ -172,4 +179,15 @@ set_target_properties (CosmosWalletServer PROPERTIES CXX_EXTENSIONS OFF)
 
 install (DIRECTORY include/ DESTINATION include)
 install (TARGETS cosmos_lib)
+
+# Default to Debug if no build type is specified
+if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set (CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
+endif ()
+
+# Optional: Show message
+message (STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+
+set (CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
+set (CMAKE_C_FLAGS_RELEASE "-O3 -DNDEBUG")
 

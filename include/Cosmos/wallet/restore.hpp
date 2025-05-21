@@ -1,7 +1,7 @@
 #ifndef COSMOS_WALLET_RESTORE
 #define COSMOS_WALLET_RESTORE
 
-#include <Cosmos/wallet/wallet.hpp>
+#include <Cosmos/history.hpp>
 
 namespace Cosmos {
 
@@ -16,10 +16,10 @@ namespace Cosmos {
             list<account_diff> Account;
 
             // last key used (+1)
-            uint32 Last;
+            int32 Last;
         };
 
-        restored operator () (TXDB &, address_sequence pubkey);
+        restored operator () (TXDB &, key_sequence, int32 start = 0);
 
     };
 
