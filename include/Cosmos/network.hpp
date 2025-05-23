@@ -59,8 +59,11 @@ namespace Cosmos {
     std::ostream &operator << (std::ostream &, broadcast_result);
 
     enum monetary_unit {
+        UNKNOWN_MONETARY_UNIT,
         USD
     };
+
+    std::ostream &operator << (std::ostream &, monetary_unit);
 
     struct network {
         net::asio::io_context IO;

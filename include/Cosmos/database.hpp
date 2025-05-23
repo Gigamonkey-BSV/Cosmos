@@ -4,6 +4,7 @@
 #include <Cosmos/database/txdb.hpp>
 #include <Cosmos/database/price_data.hpp>
 #include <Cosmos/history.hpp>
+#include <Cosmos/options.hpp>
 //#include <Cosmos/wallet/wallet.hpp>
 
 namespace Cosmos {
@@ -38,6 +39,8 @@ namespace Cosmos {
 
             virtual const Cosmos::payments *payments () = 0;
 
+            virtual maybe<secp256k1::signature> sign (const Bitcoin::incomplete::transaction &tx, const key_expression &k) = 0;
+
             // if this function returns normally, any changes
             // to the database will be saved. If an exception
             // is thrown, the database will remain unchanged
@@ -59,6 +62,7 @@ namespace Cosmos {
             virtual void set_account (const Cosmos::account &) = 0;
 
             virtual void set_payments (const Cosmos::payments &) = 0;
+
         };
 
     };

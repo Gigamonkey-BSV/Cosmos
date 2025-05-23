@@ -15,6 +15,7 @@
 using arg_parser = data::io::arg_parser;
 
 namespace Cosmos {
+    using filepath = std::filesystem::path;
 
     // kind of a dumb name but I don't know what else to call it right now.
     // Interface is the connection to both the database and the outside world.
@@ -22,14 +23,14 @@ namespace Cosmos {
 
         maybe<std::string> &wallet_name ();
 
-        maybe<std::string> &txdb_filepath ();
-        maybe<std::string> &price_data_filepath ();
-        maybe<std::string> &keychain_filepath ();
-        maybe<std::string> &pubkeys_filepath ();
-        maybe<std::string> &addresses_filepath ();
-        maybe<std::string> &account_filepath ();
-        maybe<std::string> &events_filepath ();
-        maybe<std::string> &payments_filepath ();
+        maybe<filepath> &txdb_filepath ();
+        maybe<filepath> &price_data_filepath ();
+        maybe<filepath> &keychain_filepath ();
+        maybe<filepath> &pubkeys_filepath ();
+        maybe<filepath> &addresses_filepath ();
+        maybe<filepath> &account_filepath ();
+        maybe<filepath> &events_filepath ();
+        maybe<filepath> &payments_filepath ();
 
         network *net ();
 
@@ -39,15 +40,9 @@ namespace Cosmos {
         const Cosmos::price_data *price_data () const;
 
         const Cosmos::history *history () const;
-        //const Cosmos::addresses *addresses () const;
         const Cosmos::payments *payments () const;
 
         const Cosmos::account *account () const;
-/*
-        const Cosmos::keychain *keys () const;
-        const Cosmos::pubkeys *pubkeys () const;
-
-        const maybe<Cosmos::wallet> wallet () const;*/
 
         Interface () {}
 
@@ -86,7 +81,7 @@ namespace Cosmos {
             broadcast_tree_result broadcast (list<std::pair<Bitcoin::transaction, account_diff>>);
 
             // make a transaction with a bunch of default options already set
-            spend::spent make_tx (list<Bitcoin::output> o, const options & = {});
+            spend::spent make_tx (list<Bitcoin::output> send_to, const spend_options & = {});
 
             const Cosmos::Interface &get () {
                 return I;
@@ -106,50 +101,40 @@ namespace Cosmos {
     private:
 
         maybe<std::string> Name {};
-        maybe<std::string> KeychainFilepath {};
-        maybe<std::string> PubkeychainFilepath {};
-        maybe<std::string> TXDBFilepath {};
-        maybe<std::string> AccountFilepath {};
-        maybe<std::string> AddressesFilepath {};
-        maybe<std::string> PriceDataFilepath {};
-        maybe<std::string> HistoryFilepath {};
-        maybe<std::string> PaymentsFilepath {};
+        maybe<filepath> KeychainFilepath {};
+        maybe<filepath> PubkeychainFilepath {};
+        maybe<filepath> TXDBFilepath {};
+        maybe<filepath> AccountFilepath {};
+        maybe<filepath> AddressesFilepath {};
+        maybe<filepath> PriceDataFilepath {};
+        maybe<filepath> HistoryFilepath {};
+        maybe<filepath> PaymentsFilepath {};
 
 
         ptr<network> Net {nullptr};
-        //ptr<Cosmos::keychain> Keys {nullptr};
-        //ptr<Cosmos::pubkeys> Pubkeys {nullptr};
         ptr<Cosmos::local_TXDB> LocalTXDB {nullptr};
         ptr<Cosmos::cached_remote_TXDB> TXDB {nullptr};
         ptr<Cosmos::local_price_data> LocalPriceData {nullptr};
         ptr<Cosmos::cached_remote_price_data> PriceData {nullptr};
         ptr<Cosmos::history> Events {nullptr};
         ptr<Cosmos::account> Account {nullptr};
-        //ptr<Cosmos::addresses> Addresses {nullptr};
         ptr<Cosmos::payments> Payments {nullptr};
 
         // if this is set to true, then everything will be
         // saved to disk on destruction of the Interface.
         bool Written {false};
 
-        //Cosmos::keychain *get_keys ();
-        //Cosmos::pubkeys *get_pubkeys ();
         Cosmos::cached_remote_TXDB *get_txdb ();
         Cosmos::local_TXDB *get_local_txdb ();
         Cosmos::account *get_account ();
         Cosmos::price_data *get_price_data ();
         Cosmos::history *get_history ();
-        //Cosmos::addresses *get_addresses ();
         Cosmos::payments *get_payments ();
-
-        //maybe<Cosmos::wallet> get_wallet ();
 
         friend struct writable;
     };
 
     void display_value (const account &w);
-
-    //pubkeys generate_new_xpub (const pubkeys &p);
 
     void update_pending_transactions (Interface::writable);
 
@@ -160,7 +145,7 @@ namespace Cosmos {
     void read_account_and_txdb_options (Interface &, const arg_parser &p);
     void read_random_options (const arg_parser &p);
 
-    options read_tx_options (Interface &, const arg_parser &p, bool online = true);
+    spend_options read_tx_options (network &, const arg_parser &p, bool online = true);
 
     void read_wallet_options (Interface &e, const arg_parser &p);
     void read_watch_wallet_options (Interface &e, const arg_parser &p);
@@ -208,14 +193,6 @@ namespace Cosmos {
     const local_TXDB inline *Interface::local_txdb () const {
         return const_cast<Interface *> (this)->get_local_txdb ();
     }
-/*
-    const keychain inline *Interface::keys () const {
-        return const_cast<Interface *> (this)->get_keys ();
-    }
-
-    const pubkeys inline *Interface::pubkeys () const {
-        return const_cast<Interface *> (this)->get_pubkeys ();
-    }*/
 
     const cached_remote_TXDB inline *Interface::txdb () const {
         return const_cast<Interface *> (this)->get_txdb ();
@@ -224,18 +201,10 @@ namespace Cosmos {
     const account inline *Interface::account () const {
         return const_cast<Interface *> (this)->get_account ();
     }
-/*
-    const addresses inline *Interface::addresses () const {
-        return const_cast<Interface *> (this)->get_addresses ();
-    }*/
 
     const price_data inline *Interface::price_data () const {
         return const_cast<Interface *> (this)->get_price_data ();
     }
-/*
-    const maybe<wallet> inline Interface::wallet () const {
-        return const_cast<Interface *> (this)->get_wallet ();
-    }*/
 
     const history inline *Interface::history () const {
         return const_cast<Interface *> (this)->get_history ();
@@ -244,27 +213,6 @@ namespace Cosmos {
     const payments inline *Interface::payments () const {
         return const_cast<Interface *> (this)->get_payments ();
     }
-/*
-    void inline Interface::writable::set_keys (const Cosmos::keychain &kk) {
-        if (I.Keys) *I.Keys = kk;
-        else I.Keys = std::make_shared<Cosmos::keychain> (kk);
-    }
-
-    void inline Interface::writable::set_pubkeys (const Cosmos::pubkeys &pk) {
-        if (I.Pubkeys) *I.Pubkeys = pk;
-        else I.Pubkeys = std::make_shared<Cosmos::pubkeys> (pk);
-    }
-
-    void inline Interface::writable::set_addresses (const Cosmos::addresses &a) {
-        if (I.Addresses) *I.Addresses = a;
-        else I.Addresses = std::make_shared<Cosmos::addresses> (a);
-    }
-
-    void inline Interface::writable::set_wallet (const Cosmos::wallet &ww) {
-        set_account (ww.Account);
-        set_pubkeys (ww.Pubkeys);
-        set_addresses (ww.Addresses);
-    }*/
 
     void inline Interface::writable::set_account (const Cosmos::account &a) {
         if (I.Account) *I.Account = a;

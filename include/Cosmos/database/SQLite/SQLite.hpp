@@ -4,10 +4,14 @@
 #include <Cosmos/database.hpp>
 #include <Cosmos/database/json/txdb.hpp>
 
+namespace Cosmos {
+    using filepath = std::filesystem::path;
+}
+
 namespace Cosmos::SQLite {
 
-    ptr<database> load (const std::string &fzf);
-    ptr<database> load_and_update (const std::string &fzf, const JSON_local_TXDB *);
+    ptr<database> load (const data::maybe<filepath> &fzf);
+    ptr<database> load_and_update (const data::maybe<filepath> &fzf, const JSON_local_TXDB *);
 
 }
 

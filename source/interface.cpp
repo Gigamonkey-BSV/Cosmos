@@ -9,9 +9,9 @@
 
 namespace Cosmos {
 
-    options read_tx_options (Interface &e, const arg_parser &p, bool online) {
+    spend_options read_tx_options (network &n, const arg_parser &p, bool online) {
 
-        options o {};
+        spend_options o {};
 
         maybe<double> max_sats_per_output;
         maybe<double> min_sats_per_output;
@@ -32,7 +32,7 @@ namespace Cosmos {
 
         std::cout << "Checking network health" << std::endl;
         if (online) {
-            auto health_response = synced (&ARC::client::health, e.net ()->TAAL);
+            auto health_response = synced (&ARC::client::health, n.TAAL);
             std::cout << "Get TAAL health: " << health_response << std::endl;
             if (bool (health_response)) {
                 auto health = health_response.health ();
@@ -41,7 +41,7 @@ namespace Cosmos {
             }
 
             satoshis_per_byte network_fee_rate;
-            auto policy_response = synced (&ARC::client::policy, e.net ()->TAAL);
+            auto policy_response = synced (&ARC::client::policy, n.TAAL);
             std::cout << "Get TAAL policy: " << policy_response << std::endl;
             if (bool (policy_response) && !bool (sats_per_byte)) {
                 *sats_per_byte = policy_response.policy ().mining_fee ();
@@ -57,23 +57,22 @@ namespace Cosmos {
 
     }
 
-    spend::spent Interface::writable::make_tx (list<Bitcoin::output> o, const options &opts) {
-        auto *k = I.keys ();
-        maybe<Cosmos::wallet> w = I.wallet ();
+    spend::spent Interface::writable::make_tx (list<Bitcoin::output> send_to, const spend_options &opts) {
+        auto acc = I.account ();
 
-        if (!bool (k) || !bool (w)) throw exception {} << "could not load wallet";
+        if (!bool (acc)) throw exception {} << "could not load wallet";
 
         // remove all pending payments from the account so that we don't
         // accidentally invalidate them with this payment.
         auto *p = I.payments ();
         if (!bool (p)) throw exception {} << "could not load payments";
-        Cosmos::account pruned_account = w->Account;
+        Cosmos::account pruned_account = *acc;
         for (const auto &[_, offer] : p->Proposals) for (const auto diff : offer.Diff) pruned_account <<= diff;
 
         return spend {
             select_down {4, 5000, .5, 5},
             split_change_parameters {opts}, *get_casual_random ()}
-            (Gigamonkey::redeem_p2pkh_and_p2pk, *k, Cosmos::wallet {w->Pubkeys, w->Addresses, pruned_account}, o);
+            (redeem_p2pkh_and_p2pk, *acc, opts.FeeRate);
     }
 
     void update_pending_transactions (Interface::writable u) {
@@ -195,7 +194,7 @@ namespace Cosmos {
         // no options set up for random yet.
     }
 
-    maybe<std::string> &Interface::keychain_filepath () {
+    maybe<filepath> &Interface::keychain_filepath () {
         if (!bool (KeychainFilepath) && bool (Name)) {
             std::stringstream ss;
             ss << *Name << ".keychain.json";
@@ -205,7 +204,7 @@ namespace Cosmos {
         return KeychainFilepath;
     }
 
-    maybe<std::string> &Interface::pubkeys_filepath () {
+    maybe<filepath> &Interface::pubkeys_filepath () {
         if (!bool (PubkeychainFilepath) && bool (Name)) {
             std::stringstream ss;
             ss << *Name << ".pubkeys.json";
@@ -215,7 +214,7 @@ namespace Cosmos {
         return PubkeychainFilepath;
     }
 
-    maybe<std::string> &Interface::txdb_filepath () {
+    maybe<filepath> &Interface::txdb_filepath () {
         if (!bool (TXDBFilepath) && bool (Name)) {
             std::stringstream ss;
             ss << "txdb.json";
@@ -225,7 +224,7 @@ namespace Cosmos {
         return TXDBFilepath;
     }
 
-    maybe<std::string> &Interface::account_filepath () {
+    maybe<filepath> &Interface::account_filepath () {
         if (!bool (AccountFilepath) && bool (Name)) {
             std::stringstream ss;
             ss << *Name << ".account.json";
@@ -235,7 +234,7 @@ namespace Cosmos {
         return AccountFilepath;
     }
 
-    maybe<std::string> &Interface::addresses_filepath () {
+    maybe<filepath> &Interface::addresses_filepath () {
         if (!bool (AddressesFilepath) && bool (Name)) {
             std::stringstream ss;
             ss << *Name << ".addresses.json";
@@ -245,7 +244,7 @@ namespace Cosmos {
         return AddressesFilepath;
     }
 
-    maybe<std::string> &Interface::price_data_filepath () {
+    maybe<filepath> &Interface::price_data_filepath () {
         if (!bool (PriceDataFilepath) && bool (Name)) {
             std::stringstream ss;
             ss << "price_data.json";
@@ -255,7 +254,7 @@ namespace Cosmos {
         return PriceDataFilepath;
     }
 
-    maybe<std::string> &Interface::events_filepath () {
+    maybe<filepath> &Interface::events_filepath () {
         if (!bool (HistoryFilepath) && bool (Name)) {
             std::stringstream ss;
             ss << *Name << ".history.json";
@@ -335,34 +334,6 @@ namespace Cosmos {
         }
 
         return Addresses.get ();
-    }
-
-    pubkeys *Interface::get_pubkeys () {
-
-        if (!bool (Pubkeys)) {
-            auto pf = pubkeys_filepath ();
-            if (bool (pf)) {
-                auto [json, files] = Files.load (*pf);
-                Files = files;
-                Pubkeys = std::make_shared<Cosmos::pubkeys> (json);
-            }
-        }
-
-        return Pubkeys.get ();
-    }
-
-    keychain *Interface::get_keys () {
-
-        if (!bool (Keys)) {
-            auto kf = keychain_filepath ();
-            if (bool (kf)) {
-                auto [json, files] = Files.load (*kf);
-                Files = files;
-                Keys = std::make_shared<keychain> (json);
-            }
-        }
-
-        return Keys.get ();
     }
 
     price_data *Interface::get_price_data () {

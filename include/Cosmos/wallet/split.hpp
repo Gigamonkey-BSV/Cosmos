@@ -12,14 +12,14 @@ namespace Cosmos {
     // Given a general goal of splitting a wallet into many tiny outputs,
     // this type provides several possible steps in such a process.
     struct split {
-        Bitcoin::satoshi MinSatsPerOutput {options::DefaultMinSatsPerOutput};
-        Bitcoin::satoshi MaxSatsPerOutput {options::DefaultMaxSatsPerOutput};
-        double MeanSatsPerOutput {options::DefaultMeanSatsPerOutput};
+        Bitcoin::satoshi MinSatsPerOutput {spend_options::DefaultMinSatsPerOutput};
+        Bitcoin::satoshi MaxSatsPerOutput {spend_options::DefaultMaxSatsPerOutput};
+        double MeanSatsPerOutput {spend_options::DefaultMeanSatsPerOutput};
 
         split (
-            Bitcoin::satoshi min_sats_per_output = options::DefaultMinSatsPerOutput,
-            Bitcoin::satoshi max_sats_per_output = options::DefaultMaxSatsPerOutput,
-            double mean_sats_per_output = options::DefaultMeanSatsPerOutput);
+            Bitcoin::satoshi min_sats_per_output = spend_options::DefaultMinSatsPerOutput,
+            Bitcoin::satoshi max_sats_per_output = spend_options::DefaultMaxSatsPerOutput,
+            double mean_sats_per_output = spend_options::DefaultMeanSatsPerOutput);
 
         // the user provides the outputs to split and this function does the rest.
         spend::spent operator () (
@@ -70,21 +70,21 @@ namespace Cosmos {
     // use the same function that we use to split coins for generating change outputs.
     struct split_change_parameters : split {
         // the minimum value of a change output. Below this value, no output will be created.
-        Bitcoin::satoshi MinimumCreateValue {options::DefaultMinChangeValue};
+        Bitcoin::satoshi MinimumCreateValue {spend_options::DefaultMinChangeValue};
 
         // construct a set of change outputs.
         change operator () (address_source x, Bitcoin::satoshi sats, satoshis_per_byte fees, data::crypto::random &rand) const;
         using split::operator ();
 
         split_change_parameters (
-            Bitcoin::satoshi min_change_value = options::DefaultMinChangeValue,
-            Bitcoin::satoshi min_sats_per_output = options::DefaultMinSatsPerOutput,
-            Bitcoin::satoshi max_sats_per_output = options::DefaultMaxSatsPerOutput,
-            double mean_sats_per_output = options::DefaultMeanSatsPerOutput) :
+            Bitcoin::satoshi min_change_value = spend_options::DefaultMinChangeValue,
+            Bitcoin::satoshi min_sats_per_output = spend_options::DefaultMinSatsPerOutput,
+            Bitcoin::satoshi max_sats_per_output = spend_options::DefaultMaxSatsPerOutput,
+            double mean_sats_per_output = spend_options::DefaultMeanSatsPerOutput) :
             split {min_sats_per_output, max_sats_per_output, mean_sats_per_output},
             MinimumCreateValue {min_change_value} {}
 
-        split_change_parameters (const options &o) :
+        split_change_parameters (const spend_options &o) :
             split_change_parameters {o.MinChangeValue, o.MinSatsPerOutput, o.MaxSatsPerOutput, o.MeanSatsPerOutput} {}
     };
 /*

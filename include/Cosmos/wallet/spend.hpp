@@ -9,6 +9,14 @@
 
 namespace Cosmos {
 
+    using redeem = data::function<nosig::script (
+        const Bitcoin::output &,
+        const Bitcoin::sighash::document &,
+        list<nosig::sigop>, const bytes &script_code)>;
+
+    // default redeem function.
+    nosig::script redeem_p2pkh_and_p2pk (const Bitcoin::output &, list<nosig::sigop>, const bytes &script_code);
+
     struct spend {
         select Select;
         make_change Change;
@@ -34,7 +42,7 @@ namespace Cosmos {
         };
 
         spent operator () (
-            account, key_source addresses,
+            redeem, account, key_source addresses,
             // payee's outputs
             list<Bitcoin::output> to,
             satoshis_per_byte fees = {1, 100},

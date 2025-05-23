@@ -1,27 +1,40 @@
 
+#include <charconv>
+
+#include <cstdlib>  // for std::getenv
+#include <laserpants/dotenv/dotenv.h>
+
+#include <sv/random.h>
+
 #include <data/io/arg_parser.hpp>
 #include <data/io/error.hpp>
 #include <data/async.hpp>
 #include <data/net/URL.hpp>
 #include <data/net/JSON.hpp>
 #include <data/net/HTTP_server.hpp>
-#include <Cosmos/database.hpp>
 
-//#include <laserpants/dotenv/dotenv.h>
-#include <cstdlib>  // for std::getenv
+#include <Cosmos/database.hpp>
+#include <Cosmos/random.hpp>
+#include <Cosmos/options.hpp>
+
+#include <Cosmos/database/SQLite/SQLite.hpp>
 
 using namespace data;
 namespace Bitcoin = Gigamonkey::Bitcoin;
 
+using filepath = Cosmos::filepath;
+
 struct options : io::arg_parser {
     options (io::arg_parser &&ap) : io::arg_parser {ap} {}
+
+    maybe<filepath> env () const;
 
     struct JSON_DB_options {
         std::string Path; // should be a directory
     };
 
     struct SQLite_options {
-        maybe<std::string> Path; // missing for in-memory
+        maybe<filepath> Path {}; // missing for in-memory
     };
 
     struct MongoDB_options {
@@ -32,9 +45,9 @@ struct options : io::arg_parser {
 
     either<JSON_DB_options, SQLite_options, MongoDB_options> db_options () const;
 
-    bool is_local () const;
-    uint16 port_number () const;
+    net::IP::TCP::endpoint endpoint () const;
     uint32 threads () const;
+    bool offline ();
 };
 
 using error = io::error;
@@ -93,35 +106,62 @@ void signal_handler (int signal) {
     }
 }
 
-ptr<Cosmos::database> load_DB (options);
+ptr<Cosmos::database> load_DB (const options &o);
 
 struct instruction : JSON {};
 
 struct processor {
-    ptr<Cosmos::database> DB;
+    Cosmos::spend_options SpendOptions;
+
+    processor (const options &o);
+
     awaitable<net::HTTP::response> operator () (const net::HTTP::request &);
-    processor (ptr<Cosmos::database> db): DB {db} {}
+
+    ptr<crypto::fixed_entropy> Entropy {nullptr};
+    ptr<crypto::NIST::DRBG> SecureRandom {nullptr};
+    ptr<crypto::linear_combination_random> CasualRandom {nullptr};
+
     awaitable<bool> add_entropy (const instruction &);
+
+    ptr<Cosmos::database> DB;
     awaitable<bool> make_wallet (const instruction &);
     awaitable<bool> add_key (const instruction &);
     awaitable<bool> to_private (const instruction &);
+
     awaitable<Bitcoin::satoshi> value (const instruction &);
+
+    struct wallet_info {
+        Bitcoin::satoshi Value;
+        uint32 Outputs;
+        Bitcoin::satoshi MaxOutput;
+
+        operator JSON () const;
+    };
+
+    awaitable<wallet_info> details (const instruction &);
+
+    map<Bitcoin::outpoint, Bitcoin::output> account (const instruction &);
+
+    tuple<Bitcoin::TXID, wallet_info> spend (const instruction &);
+
 };
 
 void run (const options &program_options) {
-    if (!program_options.is_local ())
-        throw exception {} << "This program is not ready to be connected to the Internet.";
+    auto envpath = program_options.env ();
+    if (bool (envpath)) dotenv::init (envpath->c_str ());
+    else dotenv::init ();
+
+    net::IP::TCP::endpoint endpoint = program_options.endpoint ();
+    if (endpoint.address () != net::IP::address {"127.0.0.1"})
+        throw exception {} << "This program is not ready to be connected to the Internet: localhost is required";
 
     Server = std::make_shared<net::HTTP::server> (IO.get_executor (),
-        net::IP::TCP::endpoint {
-            net::IP::address {"127.0.0.1"},
-            program_options.port_number ()},
-        processor {load_DB (program_options)});
+        endpoint,
+        processor {program_options});
 
     uint32 num_threads = program_options.threads ();
 
     if (num_threads < 1) throw exception {} << "We cannot run with zero threads.";
-    if (num_threads > 1) throw exception {} << "Only one thread allowed for now.";
 
     co_spawn (IO,
         [&] () -> awaitable<void> {
@@ -163,6 +203,7 @@ enum class method {
     GENERATE,       // generate a wallet
     RESTORE,        // restore a wallet
     VALUE,          // the value in the wallet.
+    DETAILS,
     SPEND,          // check pending txs for having been mined. (depricated)
     REQUEST,        // request a payment
     ACCEPT,         // accept a payment
@@ -185,28 +226,95 @@ struct command : net::HTTP::request {
     JSON operator [] (const char *) const;
 };
 
-net::HTTP::response error_response ();
-net::HTTP::response help_response (const command &comm);
+net::HTTP::response error_response (unsigned int);
+net::HTTP::response help_response (const instruction &);
 net::HTTP::response version_response ();
 net::HTTP::response shutdown_response ();
-net::HTTP::response boolean_response (method, bool);
+net::HTTP::response boolean_response (bool);
 net::HTTP::response value_response (Bitcoin::satoshi);
+net::HTTP::response JSON_response (const JSON &);
 
 awaitable<net::HTTP::response> processor::operator () (const net::HTTP::request &req) {
     command comm {req};
-    if (!comm.valid ()) co_return error_response ();
+    if (!comm.valid ()) co_return error_response (404);
     switch (comm.method ()) {
         case (method::VERSION): co_return version_response ();
-        case (method::HELP): co_return help_response (comm);
+        case (method::HELP): co_return help_response (comm.instruction ());
         case (method::SHUTDOWN): {
             Shutdown = true;
             co_return shutdown_response ();
         }
-        case (method::ADD_ENTROPY): co_return boolean_response (method::ADD_ENTROPY, co_await add_entropy (comm.instruction ()));
-        case (method::MAKE_WALLET): co_return boolean_response (method::MAKE_WALLET, co_await make_wallet (comm.instruction ()));
-        case (method::ADD_KEY): co_return boolean_response (method::ADD_KEY, co_await add_key (comm.instruction ()));
-        case (method::TO_PRIVATE): co_return boolean_response (method::TO_PRIVATE, co_await to_private (comm.instruction ()));
+        case (method::ADD_ENTROPY): co_return boolean_response (co_await add_entropy (comm.instruction ()));
+        case (method::MAKE_WALLET): co_return boolean_response (co_await make_wallet (comm.instruction ()));
+        case (method::ADD_KEY): co_return boolean_response (co_await add_key (comm.instruction ()));
+        case (method::TO_PRIVATE): co_return boolean_response (co_await to_private (comm.instruction ()));
         case (method::VALUE): co_return value_response (co_await value (comm.instruction ()));
-        default: co_return error_response ();
+        case (method::DETAILS): co_return JSON_response (co_await details (comm.instruction ()));
+        case (method::SPEND):
+        case (method::REQUEST):
+        case (method::ACCEPT):
+        case (method::PAY):
+        case (method::SIGN):
+        case (method::IMPORT):
+        case (method::BOOST):
+        case (method::SPLIT):
+        case (method::TAXES):
+        case (method::ENCRYPT_KEY):
+        case (method::DECRYPT_KEY): co_return error_response (501);
+        default: co_return error_response (400);
     }
 }
+
+ptr<Cosmos::database> load_DB (const options &o) {
+    auto db_opts = o.db_options ();
+    if (!db_opts.is<options::SQLite_options> ()) throw exception {} << "Only SQLite is supported";
+
+    return Cosmos::SQLite::load (db_opts.get<options::SQLite_options> ().Path);
+}
+
+maybe<filepath> options::env () const {
+    maybe<filepath> env_path;
+    this->get ("env", env_path);
+    return env_path;
+}
+
+net::IP::TCP::endpoint options::endpoint () const {
+    maybe<net::IP::TCP::endpoint> endpoint;
+    this->get ("endpoint", endpoint);
+    if (bool (endpoint)) return *endpoint;
+
+    const char* val = std::getenv ("COSMOS_ENDPOINT");
+
+    if (bool (val)) return net::IP::TCP::endpoint {val};
+
+    return net::IP::TCP::endpoint {"127.0.0.1:3456"};
+}
+
+uint32 options::threads () const {
+    maybe<uint32> threads;
+    this->get ("threads", threads);
+    if (bool (threads)) return *threads;
+
+    threads = 1;
+    const char* val = std::getenv ("COSMOS_THREADS");
+
+    if (bool (val)) {
+        auto [_, ec] = std::from_chars (val, val + std::strlen (val), *threads);
+        if (ec == std::errc ()) return *threads;
+        else throw exception {} << "could not parse threads " << val;
+    }
+
+    return *threads;
+}
+
+either<options::JSON_DB_options, options::SQLite_options, options::MongoDB_options> options::db_options () const {
+    SQLite_options sqlite;
+    this->get ("sqlite_path", sqlite.Path);
+    if (bool (sqlite.Path)) return sqlite;
+
+    const char *val = std::getenv ("COSMOS_SQLITE_PATH");
+    if (bool (val)) sqlite.Path = filepath {val};
+
+    return sqlite;
+}
+

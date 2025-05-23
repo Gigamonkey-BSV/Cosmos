@@ -26,7 +26,7 @@ find_package (Boost 1.86 COMPONENTS thread chrono log_setup log REQUIRED)
 
 add_definitions ("-DHAS_BOOST")
 
-find_package(SQLite3 REQUIRED)
+find_package (SQLite3 REQUIRED)
 # sudo apt install libsqlite3-dev sqlite3
 
 find_package (OpenSSL REQUIRED Crypto SSL)
@@ -103,7 +103,7 @@ add_library (
     source/Cosmos/wallet/restore.cpp
     source/Cosmos/wallet/select.cpp
     source/Cosmos/wallet/change.cpp
-    #source/Cosmos/wallet/sign.cpp
+    source/Cosmos/wallet/sign.cpp
     #source/Cosmos/wallet/spend.cpp
     #source/Cosmos/wallet/split.cpp
     source/Cosmos/history.cpp
@@ -121,8 +121,22 @@ set_target_properties (cosmos_lib PROPERTIES CXX_EXTENSIONS OFF)
 
 add_executable (
     CosmosWalletServer
+    source/random.cpp
     source/Cosmos/database/SQLite.cpp
     source/Server.cpp
+)
+
+add_executable (
+    CosmosWallet
+    source/random.cpp
+    source/interface.cpp
+    source/generate.cpp
+    source/restore.cpp
+    source/request.cpp
+    source/accept.cpp
+    source/split.cpp
+    source/import.cpp
+    source/Cosmos.cpp
 )
 
 target_link_libraries (
@@ -139,19 +153,6 @@ target_include_directories (
 
 target_compile_features (CosmosWalletServer PUBLIC cxx_std_20)
 set_target_properties (CosmosWalletServer PROPERTIES CXX_EXTENSIONS OFF)
-
-add_executable (
-    CosmosWallet
-    source/random.cpp
-    #source/interface.cpp
-    source/generate.cpp
-    source/restore.cpp
-    source/request.cpp
-    source/accept.cpp
-    source/split.cpp
-    source/import.cpp
-    source/Cosmos.cpp
-)
 
 target_link_libraries (
     CosmosWallet PUBLIC

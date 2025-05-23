@@ -341,14 +341,6 @@ namespace Cosmos::SQLite {
         std::string wallet_name;
     };
 
-    // a key that belongs to a wallet.
-    struct WalletKey {
-        int id;
-        std::string wallet_name;
-        std::string name; //typically 'master' or 'account0'
-        std::string key_name;
-    };
-
     struct AddressSequence {
         int id;
 
@@ -381,7 +373,7 @@ namespace Cosmos::SQLite {
     struct Price {
         int id;
         std::string unit;
-        uint32_t timestamp;
+        int64_t timestamp;
         double price;
     };
 
@@ -476,13 +468,6 @@ namespace Cosmos::SQLite {
             make_table ("wallet_outputs",
                 make_column ("output", &WalletOutput::outpoint, primary_key ()),
                 make_column ("wallet_name", &WalletOutput::wallet_name)
-            ),
-
-            make_table ("wallet_keys",
-                make_column ("id", &WalletKey::id, primary_key ().autoincrement ()),
-                make_column ("wallet_name", &WalletKey::wallet_name),
-                make_column ("name", &WalletKey::name),
-                make_column ("key_name", &WalletKey::key_name)
             ),
 
             make_table ("sequences",
@@ -879,17 +864,38 @@ namespace Cosmos::SQLite {
 
         }
 
-        bool make_wallet (const std::string &name) final override;
-/*
+        constexpr static const uint32 half_day_seconds = 60 * 60 * 24 / 2 + 1;
+
+        maybe<double> get_price (monetary_unit, const Bitcoin::timestamp &t) final override {
+            auto rows = storage.select (
+                columns (&Price::unit, &Price::timestamp, &Price::price),
+                order_by (sqlite_orm::abs (c (&Price::timestamp) - int64_t (t.Value))),
+                limit (1));
+
+            if (rows.empty ()) return {};
+
+            const auto &entry = rows.front ();
+
+            if (data::abs (std::get<1> (entry) - int64_t (t.Value)) > half_day_seconds) return {};
+
+            else return {std::get<2> (entry)};
+        }
+
+        void set_price (monetary_unit u, const Bitcoin::timestamp &t, double price) final override {
+            std::stringstream mu;
+            mu << u;
+            storage.insert (Price {-1, mu.str (), t.Value, price});
+        }
+
         bool make_wallet (const std::string &name) final override {
             try {
-                storage.insert (sqlite_orm::into<Wallet> (), &Wallet::name, name);
+                storage.insert (Wallet {-1, name});
             } catch (const std::system_error &e) {
                 return false;
             }
 
             return true;
-        }*/
+        }
 
         list<std::string> get_wallet_names () final override {
             list<std::string> names;
@@ -897,18 +903,55 @@ namespace Cosmos::SQLite {
             return names;
         }
 
-        void set_key (const std::string &key_name, const key_expression &k) final override;
-        void to_private (const std::string &key_name, const key_expression &k) final override;
+        void set_key (const std::string &key_name, const key_expression &k) final override {
+            storage.insert (
+                sqlite_orm::into<Secret> (),
+                columns (&Secret::name, &Secret::key),
+                values (key_name, std::string (k)));
+        }
 
-        maybe<double> get_price (monetary_unit, const Bitcoin::timestamp &t) final override;
-        void set_price (monetary_unit, const Bitcoin::timestamp &t, double) final override;
+        void to_private (const std::string &key_name, const key_expression &k) final override {
+            storage.insert (
+                sqlite_orm::into<Pubkey> (),
+                columns (&Pubkey::name, &Pubkey::key),
+                values (key_name, std::string (k)));
+        }
+
+        struct readable : database::readable {
+
+            const Cosmos::account *account () final override;
+
+            const Cosmos::history *load_history () final override;
+
+            const Cosmos::payments *payments () final override;
+
+            maybe<secp256k1::signature> sign (const Bitcoin::incomplete::transaction &tx, const key_expression &k) final override;
+        };
+
+        struct writable : database::writable {
+
+            // key can be any standard key format (in quotes) or a derivation from another key.
+            void set_key (const std::string &key_name, const key_expression &k) final override;
+            void to_private (const std::string &key_name, const key_expression &k) final override;
+            void set_key_source (const std::string &name, const key_source &k) final override;
+
+            // Do we need this?
+            Cosmos::history *history () final override;
+
+            void set_account (const Cosmos::account &) final override;
+
+            void set_payments (const Cosmos::payments &) final override;
+        };
 
         ptr<database::readable> get_wallet (const std::string &name) final override;
 
     };
 
-    ptr<database> load (const std::string &fzf) {
-        return std::static_pointer_cast<database> (std::make_shared<db> (fzf));
+    ptr<database> load (const data::maybe<filepath> &fzf) {
+        std::string path;
+        if (!bool (fzf)) path = ":memory:";
+        else path = *fzf;
+        return std::static_pointer_cast<database> (std::make_shared<db> (path));
     }
 
 }
