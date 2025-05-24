@@ -8,6 +8,13 @@
 std::mutex Mutex;
 
 namespace Cosmos {
+
+    std::ostream &operator << (std::ostream &o, monetary_unit u) {
+        switch (u) {
+            case (USD): return o << "USD";
+            default: return o << "(invalid unit)";
+        }
+    }
 /*
     broadcast_error network::broadcast (const bytes &tx) {
         std::lock_guard<std::mutex> lock (Mutex);

@@ -123,20 +123,22 @@ add_executable (
     CosmosWalletServer
     source/random.cpp
     source/Cosmos/database/SQLite.cpp
+    source/Cosmos.cpp
     source/Server.cpp
 )
 
 add_executable (
     CosmosWallet
     source/random.cpp
-    source/interface.cpp
+    #source/interface.cpp
     source/generate.cpp
-    source/restore.cpp
-    source/request.cpp
-    source/accept.cpp
+    #source/restore.cpp
+    #source/request.cpp
+    #source/accept.cpp
     source/split.cpp
     source/import.cpp
     source/Cosmos.cpp
+    source/Client.cpp
 )
 
 target_link_libraries (

@@ -6,8 +6,6 @@
 
 #include <sv/random.h>
 
-#include <data/io/arg_parser.hpp>
-#include <data/io/error.hpp>
 #include <data/async.hpp>
 #include <data/net/URL.hpp>
 #include <data/net/JSON.hpp>
@@ -19,10 +17,9 @@
 
 #include <Cosmos/database/SQLite/SQLite.hpp>
 
-using namespace data;
-namespace Bitcoin = Gigamonkey::Bitcoin;
+#include "Cosmos.hpp"
 
-using filepath = Cosmos::filepath;
+namespace Bitcoin = Gigamonkey::Bitcoin;
 
 struct options : io::arg_parser {
     options (io::arg_parser &&ap) : io::arg_parser {ap} {}
@@ -47,10 +44,10 @@ struct options : io::arg_parser {
 
     net::IP::TCP::endpoint endpoint () const;
     uint32 threads () const;
-    bool offline ();
-};
+    bool offline () const;
 
-using error = io::error;
+    Cosmos::spend_options spend_options () const;
+};
 
 void run (const options &);
 
@@ -61,6 +58,8 @@ requires std::regular_invocable<fun, args...>
 error catch_all (fun f, args... a) {
     try {
         std::invoke (std::forward<fun> (f), std::forward<args> (a)...);
+    } catch (const method::unimplemented &x) {
+        return error {7, x.what ()};
     } catch (const net::HTTP::exception &x) {
         return error {6, x.what ()};
     } catch (const JSON::exception &x) {
@@ -108,8 +107,6 @@ void signal_handler (int signal) {
 
 ptr<Cosmos::database> load_DB (const options &o);
 
-struct instruction : JSON {};
-
 struct processor {
     Cosmos::spend_options SpendOptions;
 
@@ -121,14 +118,15 @@ struct processor {
     ptr<crypto::NIST::DRBG> SecureRandom {nullptr};
     ptr<crypto::linear_combination_random> CasualRandom {nullptr};
 
-    awaitable<bool> add_entropy (const instruction &);
+    void add_entropy (const bytes &);
 
     ptr<Cosmos::database> DB;
-    awaitable<bool> make_wallet (const instruction &);
-    awaitable<bool> add_key (const instruction &);
-    awaitable<bool> to_private (const instruction &);
 
-    awaitable<Bitcoin::satoshi> value (const instruction &);
+    struct make_wallet_options {};
+
+    bool make_wallet (const make_wallet_options &);
+
+    awaitable<Bitcoin::satoshi> value (const UTF8 &wallet_name);
 
     struct wallet_info {
         Bitcoin::satoshi Value;
@@ -138,11 +136,11 @@ struct processor {
         operator JSON () const;
     };
 
-    awaitable<wallet_info> details (const instruction &);
-
+    awaitable<wallet_info> details (const UTF8 &wallet_name);
+/*
     map<Bitcoin::outpoint, Bitcoin::output> account (const instruction &);
 
-    tuple<Bitcoin::TXID, wallet_info> spend (const instruction &);
+    tuple<Bitcoin::TXID, wallet_info> spend (const instruction &);*/
 
 };
 
@@ -191,78 +189,96 @@ void run (const options &program_options) {
     for (int i = 0; i < num_threads; i++) threads[i].join ();
 }
 
-enum class method {
-    UNSET,
-    HELP,           // print help messages
-    VERSION,        // print a version message
-    SHUTDOWN,
-    ADD_ENTROPY,    // add entropy to the random number generator.
-    MAKE_WALLET,
-    ADD_KEY,
-    TO_PRIVATE,
-    GENERATE,       // generate a wallet
-    RESTORE,        // restore a wallet
-    VALUE,          // the value in the wallet.
-    DETAILS,
-    SPEND,          // check pending txs for having been mined. (depricated)
-    REQUEST,        // request a payment
-    ACCEPT,         // accept a payment
-    PAY,            // make a payment.
-    SIGN,           // sign an unsigned transaction
-    IMPORT,         // import a utxo with private key
-    BOOST,          // boost some content
-    SPLIT,          // split your wallet into tiny pieces for privacy.
-    TAXES,          // calculate income and capital gain for a given year.
-    ENCRYPT_KEY,
-    DECRYPT_KEY
-};
-
-struct command : net::HTTP::request {
-    command (const net::HTTP::request &);
-    bool valid () const;
-    ::method method () const;
-    ::instruction instruction () const;
-    JSON operator [] (const uint32) const;
-    JSON operator [] (const char *) const;
-};
-
-net::HTTP::response error_response (unsigned int);
-net::HTTP::response help_response (const instruction &);
+net::HTTP::response HTML_JS_UI_response ();
+net::HTTP::response error_response (unsigned int status, meth m, const std::string & = "");
+net::HTTP::response help_response (meth = UNSET);
 net::HTTP::response version_response ();
-net::HTTP::response shutdown_response ();
+net::HTTP::response ok_response ();
 net::HTTP::response boolean_response (bool);
 net::HTTP::response value_response (Bitcoin::satoshi);
 net::HTTP::response JSON_response (const JSON &);
 
 awaitable<net::HTTP::response> processor::operator () (const net::HTTP::request &req) {
-    command comm {req};
-    if (!comm.valid ()) co_return error_response (404);
-    switch (comm.method ()) {
-        case (method::VERSION): co_return version_response ();
-        case (method::HELP): co_return help_response (comm.instruction ());
-        case (method::SHUTDOWN): {
-            Shutdown = true;
-            co_return shutdown_response ();
-        }
-        case (method::ADD_ENTROPY): co_return boolean_response (co_await add_entropy (comm.instruction ()));
-        case (method::MAKE_WALLET): co_return boolean_response (co_await make_wallet (comm.instruction ()));
-        case (method::ADD_KEY): co_return boolean_response (co_await add_key (comm.instruction ()));
-        case (method::TO_PRIVATE): co_return boolean_response (co_await to_private (comm.instruction ()));
-        case (method::VALUE): co_return value_response (co_await value (comm.instruction ()));
-        case (method::DETAILS): co_return JSON_response (co_await details (comm.instruction ()));
-        case (method::SPEND):
-        case (method::REQUEST):
-        case (method::ACCEPT):
-        case (method::PAY):
-        case (method::SIGN):
-        case (method::IMPORT):
-        case (method::BOOST):
-        case (method::SPLIT):
-        case (method::TAXES):
-        case (method::ENCRYPT_KEY):
-        case (method::DECRYPT_KEY): co_return error_response (501);
-        default: co_return error_response (400);
+    list<UTF8> path = req.Target.path ().read ('/');
+
+    if (path.size () == 0) co_return HTML_JS_UI_response ();
+
+    meth m = read_method (path[0]);
+
+    if (m == UNSET) co_return error_response (400, m, std::string {"Unknown method "} + path[0]);
+
+    if (m == VERSION) {
+        if (req.Method != net::HTTP::method::get) co_return error_response (405, m, std::string {"use get"});
+        co_return version_response ();
     }
+
+    if (m == HELP) {
+        if (req.Method != net::HTTP::method::get) co_return error_response (405, m, std::string {"use get"});
+        if (path.size () == 1) co_return help_response ();
+        else {
+            meth help_with_method = read_method (path[1]);
+            if (help_with_method == UNSET)
+                co_return error_response (400, HELP, std::string {"Unknown method"} + path[1]);
+            co_return help_response (help_with_method);
+        }
+    }
+
+    if (m == SHUTDOWN) {
+        if (req.Method != net::HTTP::method::put) co_return error_response (405, m, std::string {"use put"});
+        Shutdown = true;
+        co_return ok_response ();
+    }
+
+    if (m == ADD_ENTROPY) {
+        if (req.Method != net::HTTP::method::post) co_return error_response (405, m, std::string {"use post"});
+        maybe<net::HTTP::content> content_type = req.content_type ();
+        if (!bool (content_type) || *content_type != net::HTTP::content::type::application_octet_stream)
+            co_return error_response (400, m, "expected content-type:application/octet-stream");
+
+        add_entropy (req.Body);
+
+        co_return ok_response ();
+    }
+
+    if (path.size () == 1) co_return error_response (405, m, std::string {"use put"});
+
+    const UTF8 &name = path[1];
+
+    if (m == MAKE_WALLET) co_return error_response (501, m);
+
+    if (m == ADD_KEY) co_return error_response (501, m);
+
+    if (m == TO_PRIVATE) co_return error_response (501, m);
+
+    if (m == ENCRYPT_KEY) co_return error_response (501, m);
+
+    if (m == DECRYPT_KEY) co_return error_response (501, m);
+
+    if (m == VALUE) co_return error_response (501, m);
+
+    if (m == DETAILS) co_return error_response (501, m);
+
+    if (m == SPEND) co_return error_response (501, m);
+
+    if (m == IMPORT) co_return error_response (501, m);
+
+    if (m == RESTORE) co_return error_response (501, m);
+
+    if (m == BOOST) co_return error_response (501, m);
+
+    if (m == SPLIT) co_return error_response (501, m);
+
+    if (m == TAXES) co_return error_response (501, m);
+
+    co_return error_response (501, m);
+}
+
+processor::processor (const options &o) {
+    SpendOptions = o.spend_options ();
+    DB = load_DB (o);
+
+    // TODO set up random numbers and entropy.
+
 }
 
 ptr<Cosmos::database> load_DB (const options &o) {
@@ -316,5 +332,25 @@ either<options::JSON_DB_options, options::SQLite_options, options::MongoDB_optio
     if (bool (val)) sqlite.Path = filepath {val};
 
     return sqlite;
+}
+
+net::HTTP::response error_response (unsigned int status, meth m, const std::string &) {
+    throw method::unimplemented {"error_response"};
+}
+
+net::HTTP::response HTML_JS_UI_response () {
+    throw method::unimplemented {"HTML UI"};
+}
+
+net::HTTP::response help_response (meth) {
+    throw method::unimplemented {"help response"};
+}
+
+net::HTTP::response ok_response () {
+    throw method::unimplemented {"ok_response"};
+}
+
+net::HTTP::response version_response () {
+    throw method::unimplemented {"version_response"};
 }
 

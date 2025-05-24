@@ -20,139 +20,6 @@
 #include "Cosmos.hpp"
 #include "interface.hpp"
 
-int main (int arg_count, char **arg_values) {
-
-    auto err = run (arg_parser {arg_count, arg_values});
-
-    if (err.Message) {
-        if (err.Code) std::cout << "Error: ";
-        std::cout << static_cast<std::string> (*err.Message) << std::endl;
-    } else if (err.Code) std::cout << "Error: unknown." << std::endl;
-
-    return err.Code;
-}
-
-error run (const io::arg_parser &p) {
-
-    try {
-
-        if (p.has ("version")) version ();
-
-        else if (p.has ("help")) help ();
-
-        else {
-
-            method cmd = read_method (p);
-
-            switch (cmd) {
-                case method::VERSION: {
-                    version ();
-                    break;
-                }
-
-                case method::HELP: {
-                    help (read_method (p, 2));
-                    break;
-                }
-
-                case method::GENERATE: {
-                    command_generate (p);
-                    break;
-                }
-
-                case method::VALUE: {
-                    command_value (p);
-                    break;
-                }
-
-                case method::RESTORE: {
-                    command_restore (p);
-                    break;
-                }
-
-                case method::UPDATE: {
-                    command_update (p);
-                    break;
-                }
-
-                case method::REQUEST: {
-                    command_request (p);
-                    break;
-                }
-
-                case method::ACCEPT: {
-                    command_accept (p);
-                    break;
-                }
-
-                case method::PAY: {
-                    command_pay (p);
-                    break;
-                }
-
-                case method::SIGN: {
-                    command_sign (p);
-                    break;
-                }
-
-                case method::SEND: {
-                    command_send (p);
-                    break;
-                }
-
-                case method::IMPORT: {
-                    command_import (p);
-                    break;
-                }
-
-                case method::SPLIT: {
-                    command_split (p);
-                    break;
-                }
-
-                case method::BOOST: {
-                    command_boost (p);
-                    break;
-                }
-
-                case method::TAXES: {
-                    command_taxes (p);
-                    break;
-                }
-
-                case method::ENCRYPT_PRIVATE_KEYS: {
-                    command_encrypt_private_keys (p);
-                    break;
-                }
-
-                case method::DECRYPT_PRIVATE_KEYS: {
-                    command_decrypt_private_keys (p);
-                    break;
-                }
-
-                default: {
-                    std::cout << "Error: could not read user's command." << std::endl;
-                    help ();
-                }
-            }
-        }
-
-    } catch (const net::HTTP::exception &x) {
-        std::cout << "Problem with http: " << std::endl;
-        std::cout << "\trequest: " << x.Request << std::endl;
-        std::cout << "\tresponse: " << x.Response << std::endl;
-        return error {1, std::string {x.what ()}};
-    } catch (const data::exception &x) {
-        return error {x.Code, std::string {x.what ()}};
-    } catch (const std::exception &x) {
-        return error {1, std::string {x.what ()}};
-    } catch (...) {
-        return error {1};
-    }
-
-    return {};
-}
-
 std::string regex_replace (const std::string &x, const std::regex &r, const std::string &n) {
     std::stringstream ss;
     std::regex_replace (std::ostreambuf_iterator<char> (ss), x.begin (), x.end (), r, n);
@@ -163,42 +30,50 @@ std::string sanitize (const std::string &in) {
     return regex_replace (data::to_lower (in), std::regex {"_|-"}, "");
 }
 
-method read_method (const arg_parser &p, uint32 index) {
-    maybe<std::string> m;
+meth read_method (const arg_parser &p, uint32 index) {
+    maybe<UTF8> m;
     p.get (index, m);
-    if (!bool (m)) return method::UNSET;
+    if (!bool (m)) return UNSET;
 
-    std::transform (m->begin (), m->end (), m->begin (),
+    return read_method (*m);
+}
+
+meth read_method (const UTF8 &p) {
+    UTF8 m = p;
+    std::transform (m.begin (), m.end (), m.begin (),
         [] (unsigned char c) {
             return std::tolower (c);
         });
 
-    if (*m == "help") return method::HELP;
-    if (*m == "version") return method::VERSION;
-    if (*m == "generate") return method::GENERATE;
-    if (*m == "restore") return method::RESTORE;
-    if (*m == "value") return method::VALUE;
-    if (*m == "update") return method::UPDATE;
-    if (*m == "request") return method::REQUEST;
-    if (*m == "accept") return method::ACCEPT;
-    if (*m == "pay") return method::PAY;
-    if (*m == "sign") return method::SIGN;
-    if (*m == "import") return method::IMPORT;
-    if (*m == "send") return method::SEND;
-    if (*m == "boost") return method::BOOST;
-    if (*m == "split") return method::SPLIT;
-    if (*m == "taxes") return method::TAXES;
-    if (*m == "encrypt_private_keys") return method::ENCRYPT_PRIVATE_KEYS;
-    if (*m == "decrypt_private_keys") return method::DECRYPT_PRIVATE_KEYS;
+    if (m == "help") return HELP;
+    if (m == "version") return VERSION;
+    if (m == "generate") return GENERATE;
+    if (m == "restore") return RESTORE;
+    if (m == "value") return VALUE;
+    if (m == "update") return UPDATE;
+    if (m == "request") return REQUEST;
+    if (m == "accept") return ACCEPT;
+    if (m == "pay") return PAY;
+    if (m == "sign") return SIGN;
+    if (m == "import") return IMPORT;
+    if (m == "send") return SPEND;
+    if (m == "boost") return BOOST;
+    if (m == "split") return SPLIT;
+    if (m == "taxes") return TAXES;
+    if (m == "encrypt_private_keys") return ENCRYPT_KEY;
+    if (m == "decrypt_private_keys") return DECRYPT_KEY;
 
-    return method::UNSET;
+    return UNSET;
 }
 
-void help (method meth) {
+std::ostream &version (std::ostream &o) {
+    return o << "Cosmos Wallet version 0.0.2 alpha";
+}
+
+std::ostream &help (std::ostream &o, meth meth) {
     switch (meth) {
-        default : {
-            version ();
-            std::cout << "input should be <method> <args>... where method is "
+        default :
+            return version (o) << "\n" << "input should be <method> <args>... where method is "
                 "\n\tgenerate   -- create a new wallet."
                 "\n\tupdate     -- get Merkle proofs for txs that were pending last time the program ran."
                 "\n\tvalue      -- print the total value in the wallet."
@@ -211,10 +86,9 @@ void help (method meth) {
                 "\n\tboost      -- boost content."
                 "\n\tsplit      -- split an output into many pieces"
                 "\n\trestore    -- restore a wallet from words, a key, or many other options."
-                "\nuse help \"method\" for information on a specific method"<< std::endl;
-        } break;
-        case method::GENERATE : {
-            std::cout << "Generate a new wallet in terms of 24 words (BIP 39) or as an extended private key."
+                "\nuse help \"method\" for information on a specific method";
+        case GENERATE :
+            return o << "Generate a new wallet in terms of 24 words (BIP 39) or as an extended private key."
                 "\narguments for method generate:"
                 "\n\t(--name=)<wallet name>"
                 "\n\t(--words) (use BIP 39)"
@@ -223,22 +97,19 @@ void help (method meth) {
                 // TODO: as in method restore, a string should be accepted here which
                 // could have "bitcoin" "bitcoin_cash" or "bitcoinSV" as its values,
                 // ignoring case, spaces, and '_'.
-                "\n\t(--coin_type=<uint32> (=0)) (value of BIP 44 coin_type)" << std::endl;
-        } break;
-        case method::VALUE : {
-            std::cout << "Print the value in a wallet. No parameters." << std::endl;
-        } break;
-        case method::REQUEST : {
-            std::cout << "Generate a new payment request."
+                "\n\t(--coin_type=<uint32> (=0)) (value of BIP 44 coin_type)";
+        case VALUE :
+            return o << "Print the value in a wallet. No parameters.";
+        case REQUEST :
+            return o << "Generate a new payment request."
                 "\narguments for method request:"
                 "\n\t(--name=)<wallet name>"
                 "\n\t(--payment_type=\"pubkey\"|\"address\"|\"xpub\") (= \"address\")"
                 "\n\t(--expires=<number of minutes before expiration>)"
                 "\n\t(--memo=\"<explanation of the nature of the payment>\")"
-                "\n\t(--amount=<expected amount of payment>)" << std::endl;
-        } break;
-        case method::PAY : {
-            std::cout << "Respond to a payment request by creating a payment."
+                "\n\t(--amount=<expected amount of payment>)";
+        case PAY :
+            return o << "Respond to a payment request by creating a payment."
                 "\narguments for method pay:"
                 "\n\t(--name=)<wallet name>"
                 "\n\t(--request=)<payment request>"
@@ -246,39 +117,34 @@ void help (method meth) {
                 "\n\t(--amount=<amount to pay>)"
                 "\n\t(--memo=<what is the payment about>)"
                 "\n\t(--output=<output in hex>)"
-                "\n\t(--min_sats_per_output=<float>) (= " << Cosmos::options::DefaultMinSatsPerOutput << ")"
-                "\n\t(--max_sats_per_output=<float>) (= " << Cosmos::options::DefaultMaxSatsPerOutput << ")"
-                "\n\t(--mean_sats_per_output=<float>) (= " << Cosmos::options::DefaultMeanSatsPerOutput << ") "  << std::endl;
-        } break;
-        case method::ACCEPT : {
-            std::cout << "Accept a payment."
+                "\n\t(--min_sats_per_output=<float>) (= " << Cosmos::spend_options::DefaultMinSatsPerOutput << ")"
+                "\n\t(--max_sats_per_output=<float>) (= " << Cosmos::spend_options::DefaultMaxSatsPerOutput << ")"
+                "\n\t(--mean_sats_per_output=<float>) (= " << Cosmos::spend_options::DefaultMeanSatsPerOutput << ") ";
+        case ACCEPT :
+            return o << "Accept a payment."
                 "\narguments for method accept:"
-                "\n\t(--payment=)<payment tx in BEEF or SPV envelope>"<< std::endl;
-        } break;
-        case method::SIGN : {
-            std::cout << "arguments for method sign not yet available." << std::endl;
-        } break;
-        case method::IMPORT : {
-            std::cout << "arguments for method import not yet available." << std::endl;
-        } break;
-        case method::SEND : {
-            std::cout << "This method is DEPRICATED" << std::endl;
-        } break;
-        case method::BOOST : {
-            std::cout << "arguments for method boost not yet available." << std::endl;
-        } break;
-        case method::SPLIT : {
-            std::cout << "Split outputs in your wallet into many tiny outputs with small values over a triangular distribution. "
+                "\n\t(--payment=)<payment tx in BEEF or SPV envelope>";
+        case SIGN :
+            return o << "arguments for method sign not yet available.";
+        case IMPORT :
+            return o << "arguments for method import not yet available.";
+        case SEND :
+            return o << "This method is DEPRICATED";
+        case SPEND :
+            return o << "Spend coins";
+        case BOOST :
+            return o << "arguments for method boost not yet available.";
+        case SPLIT :
+            return o << "Split outputs in your wallet into many tiny outputs with small values over a triangular distribution. "
                 "\narguments for method split:"
                 "\n\t(--name=)<wallet name>"
                 "\n\t(--address=)<address | xpub | script hash>"
                 "\n\t(--max_look_ahead=)<integer> (= 10) ; (only used if parameter 'address' is provided as an xpub"
-                "\n\t(--min_sats_per_output=<float>) (= " << Cosmos::options::DefaultMinSatsPerOutput << ")"
-                "\n\t(--max_sats_per_output=<float>) (= " << Cosmos::options::DefaultMaxSatsPerOutput << ")"
-                "\n\t(--mean_sats_per_output=<float>) (= " << Cosmos::options::DefaultMeanSatsPerOutput << ") " << std::endl;
-        } break;
-        case method::RESTORE : {
-            std::cout << "arguments for method restore:"
+                "\n\t(--min_sats_per_output=<float>) (= " << Cosmos::spend_options::DefaultMinSatsPerOutput << ")"
+                "\n\t(--max_sats_per_output=<float>) (= " << Cosmos::spend_options::DefaultMaxSatsPerOutput << ")"
+                "\n\t(--mean_sats_per_output=<float>) (= " << Cosmos::spend_options::DefaultMeanSatsPerOutput << ") ";
+        case RESTORE :
+            o << "arguments for method restore:"
                 "\n\t(--name=)<wallet name>"
                 "\n\t(--key=)<xpub | xpriv>"
                 "\n\t(--max_look_ahead=)<integer> (= 10)"
@@ -286,36 +152,13 @@ void help (method meth) {
                 "\n\t(--key_type=\"HD_sequence\"|\"BIP44_account\"|\"BIP44_master\") (= \"HD_sequence\")"
                 "\n\t(--coin_type=\"Bitcoin\"|\"BitcoinCash\"|\"BitcoinSV\"|<integer>)"
                 "\n\t(--wallet_type=\"RelayX\"|\"ElectrumSV\"|\"SimplyCash\"|\"CentBee\"|<string>)"
-                "\n\t(--entropy=<string>)" << std::endl;
-        } break;
-        case method::ENCRYPT_PRIVATE_KEYS: {
-            std::cout << "Encrypt the private key file so that it can only be accessed with a password. No parameters." << std::endl;
-        } break;
-        case method::DECRYPT_PRIVATE_KEYS : {
-            std::cout << "Decrypt the private key file again. No parameters." << std::endl;
-        }
+                "\n\t(--entropy=<string>)";
+        case ENCRYPT_KEY:
+            o << "Encrypt the private key file so that it can only be accessed with a password. No parameters.";
+        case DECRYPT_KEY :
+            return o << "Decrypt the private key file again. No parameters.";
     }
 
-}
-
-void version () {
-    std::cout << "Cosmos Wallet version 0.0.1 alpha" << std::endl;
-}
-
-void command_value (const arg_parser &p) {
-    Cosmos::Interface e {};
-    Cosmos::read_account_and_txdb_options (e, p);
-    //e.update<void> (Cosmos::update_pending_transactions);
-    auto w = e.wallet ();
-    if (!bool (w)) throw exception {} << "could not read wallet";
-    return Cosmos::display_value (*w);
-}
-
-// find all pending transactions and check if merkle proofs are available.
-void command_update (const arg_parser &p) {
-    Cosmos::Interface e {};
-    Cosmos::read_account_and_txdb_options (e, p);
-    e.update<void> (Cosmos::update_pending_transactions);
 }
 
 maybe<std::string> de_escape (string_view input) {
@@ -335,6 +178,22 @@ maybe<std::string> de_escape (string_view input) {
     }
 
     return {decoded.str ()};
+}
+/*
+void command_value (const arg_parser &p) {
+    Cosmos::Interface e {};
+    Cosmos::read_account_and_txdb_options (e, p);
+    //e.update<void> (Cosmos::update_pending_transactions);
+    auto w = e.wallet ();
+    if (!bool (w)) throw exception {} << "could not read wallet";
+    return Cosmos::display_value (*w);
+}
+
+// find all pending transactions and check if merkle proofs are available.
+void command_update (const arg_parser &p) {
+    Cosmos::Interface e {};
+    Cosmos::read_account_and_txdb_options (e, p);
+    e.update<void> (Cosmos::update_pending_transactions);
 }
 
 // TODO get fee rate from network.
@@ -618,5 +477,5 @@ void command_decrypt_private_keys (const arg_parser &p) {
 
     e.Files.replace_part (*keychain_filepath, maybe<crypto::symmetric_key<32>> {});
 
-}
+}*/
 

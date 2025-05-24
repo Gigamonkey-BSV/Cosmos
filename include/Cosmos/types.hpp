@@ -7,6 +7,8 @@
 #include <Gigamonkey.hpp>
 #include <gigamonkey/script/pattern/pay_to_address.hpp>
 
+#include <data/io/unimplemented.hpp>
+
 namespace Cosmos {
     using namespace data;
     namespace Bitcoin = Gigamonkey::Bitcoin;
@@ -16,6 +18,7 @@ namespace Cosmos {
     using digest256 = Gigamonkey::digest256;
     using digest160 = Gigamonkey::digest160;
     using pay_to_address = Gigamonkey::pay_to_address;
+    using filepath = std::filesystem::path;
 
     // 1580790300
     const Bitcoin::timestamp &genesis_update_time ();

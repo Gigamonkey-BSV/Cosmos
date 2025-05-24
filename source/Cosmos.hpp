@@ -9,33 +9,57 @@ using namespace data;
 
 using arg_parser = io::arg_parser;
 using error = io::error;
+using filepath = Cosmos::filepath;
 
-error run (const arg_parser &);
-
-enum class method {
+enum meth {
     UNSET,
-    HELP,     // print help messages
-    VERSION,  // print a version message
-    GENERATE, // generate a wallet
-    RESTORE,  // restore a wallet
-    VALUE,    // the value in the wallet.
-    UPDATE,   // check pending txs for having been mined.
-    REQUEST,  // request a payment
-    ACCEPT,   // accept a payment
-    PAY,      // make a payment.
-    SIGN,     // sign an unsigned transaction
-    IMPORT,   // import a utxo with private key
-    SEND,     // (depricated) send bitcoin to an address.
-    BOOST,    // boost some content
-    SPLIT,    // split your wallet into tiny pieces for privacy.
-    TAXES,    // calculate income and capital gain for a given year.
-    ENCRYPT_PRIVATE_KEYS,
-    DECRYPT_PRIVATE_KEYS
+    HELP,           // print help messages
+    VERSION,        // print a version message
+    SHUTDOWN,
+    ADD_ENTROPY,    // add entropy to the random number generator.
+    MAKE_WALLET,
+    ADD_KEY,
+    TO_PRIVATE,
+    GENERATE,       // generate a wallet
+    RESTORE,        // restore a wallet
+    UPDATE,         // depricated: check if txs in pending have been mined.
+    VALUE,          // the value in the wallet.
+    DETAILS,
+    SEND,           // (depricated)
+    SPEND,          // check pending txs for having been mined. (depricated)
+    REQUEST,        // request a payment
+    ACCEPT,         // accept a payment
+    PAY,            // make a payment.
+    SIGN,           // sign an unsigned transaction
+    IMPORT,         // import a utxo with private key
+    BOOST,          // boost some content
+    SPLIT,          // split your wallet into tiny pieces for privacy.
+    TAXES,          // calculate income and capital gain for a given year.
+    ENCRYPT_KEY,
+    DECRYPT_KEY
 };
 
-void version ();
+meth read_method (const UTF8 &);
 
-void help (method meth = method::UNSET);
+std::ostream &version (std::ostream &);
+
+std::ostream &help (std::ostream &, meth m = UNSET);
+
+net::HTTP::request request_generate (const arg_parser &);
+net::HTTP::request request_update (const arg_parser &);
+net::HTTP::request request_restore (const arg_parser &);
+net::HTTP::request request_value (const arg_parser &);
+net::HTTP::request request_request (const arg_parser &);
+net::HTTP::request request_accept (const arg_parser &);
+net::HTTP::request request_pay (const arg_parser &);
+net::HTTP::request request_sign (const arg_parser &);
+net::HTTP::request request_spend (const arg_parser &);
+net::HTTP::request request_import (const arg_parser &);
+net::HTTP::request request_boost (const arg_parser &);
+net::HTTP::request request_split (const arg_parser &);
+net::HTTP::request request_taxes (const arg_parser &);
+net::HTTP::request request_encrypt_private_keys (const arg_parser &);
+net::HTTP::request request_decrypt_private_keys (const arg_parser &);
 
 void command_generate (const arg_parser &); // offline
 void command_update (const arg_parser &);
@@ -55,7 +79,7 @@ void command_decrypt_private_keys (const arg_parser &);    // offline
 
 // TODO offline methods function without an internet connection.
 
-method read_method (const io::arg_parser &, uint32 index = 1);
+meth read_method (const io::arg_parser &, uint32 index = 1);
 
 std::string sanitize (const std::string &in);
 

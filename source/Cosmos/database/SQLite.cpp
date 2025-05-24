@@ -943,7 +943,9 @@ namespace Cosmos::SQLite {
             void set_payments (const Cosmos::payments &) final override;
         };
 
-        ptr<database::readable> get_wallet (const std::string &name) final override;
+        ptr<database::readable> get_wallet (const std::string &name) final override {
+            throw method::unimplemented {"SQLite::get_wallet"};
+        }
 
     };
 
