@@ -50,7 +50,7 @@ error run (const io::arg_parser &p) {
 
         else {
 
-            metd cmd = read_method (p);
+            meth cmd = read_method (p);
 
             switch (cmd) {
                 case VERSION: {

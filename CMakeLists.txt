@@ -135,8 +135,8 @@ add_executable (
     #source/restore.cpp
     #source/request.cpp
     #source/accept.cpp
-    source/split.cpp
-    source/import.cpp
+    #source/split.cpp
+    #source/import.cpp
     source/Cosmos.cpp
     source/Client.cpp
 )

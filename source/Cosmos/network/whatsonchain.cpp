@@ -27,7 +27,7 @@ namespace Cosmos {
         if (response.Status != 200 || (bool (response.content_type ()) && *response.content_type () == "text/plain"))
             co_return false;
 
-        if (response.Body == "") co_return false;
+        if (data::string (response.Body) == "") co_return false;
 
         co_return true;
     }
@@ -93,7 +93,7 @@ namespace Cosmos {
         auto response = co_await API (request);
 
         if (response.Status != net::HTTP::status::ok)
-            throw net::HTTP::exception {request, response, string {"response status is not ok. body is: "} + response.Body};
+            throw net::HTTP::exception {request, response, string {"response status is not ok. body is: "} + string {response.Body}};
         /*
         if (response.Headers[networking::HTTP::header::content_type] != "application/JSON")
             throw networking::HTTP::exception{request, response, "response header content_type does not indicate application/JSON"};
@@ -179,7 +179,7 @@ namespace Cosmos {
         if (response.Status != net::HTTP::status::ok)
             throw net::HTTP::exception {request, response, "response status is not ok"};
 
-        maybe<bytes> tx = encoding::hex::read (response.Body);
+        maybe<bytes> tx = encoding::hex::read (string (response.Body));
 
         if (!bool (tx)) co_return bytes {};
         co_return *tx;

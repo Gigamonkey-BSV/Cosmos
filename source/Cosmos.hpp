@@ -41,6 +41,8 @@ enum meth {
 
 meth read_method (const UTF8 &);
 
+std::ostream &operator << (std::ostream &, meth);
+
 std::ostream &version (std::ostream &);
 
 std::ostream &help (std::ostream &, meth m = UNSET);

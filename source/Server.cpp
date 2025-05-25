@@ -108,15 +108,14 @@ void signal_handler (int signal) {
 ptr<Cosmos::database> load_DB (const options &o);
 
 struct processor {
+    crypto::random *get_secure_random ();
+    crypto::random *get_casual_random ();
+
     Cosmos::spend_options SpendOptions;
 
     processor (const options &o);
 
     awaitable<net::HTTP::response> operator () (const net::HTTP::request &);
-
-    ptr<crypto::fixed_entropy> Entropy {nullptr};
-    ptr<crypto::NIST::DRBG> SecureRandom {nullptr};
-    ptr<crypto::linear_combination_random> CasualRandom {nullptr};
 
     void add_entropy (const bytes &);
 
@@ -141,6 +140,11 @@ struct processor {
     map<Bitcoin::outpoint, Bitcoin::output> account (const instruction &);
 
     tuple<Bitcoin::TXID, wallet_info> spend (const instruction &);*/
+
+private:
+    ptr<crypto::fixed_entropy> Entropy {nullptr};
+    ptr<crypto::NIST::DRBG> SecureRandom {nullptr};
+    ptr<crypto::linear_combination_random> CasualRandom {nullptr};
 
 };
 
@@ -190,13 +194,23 @@ void run (const options &program_options) {
 }
 
 net::HTTP::response HTML_JS_UI_response ();
-net::HTTP::response error_response (unsigned int status, meth m, const std::string & = "");
 net::HTTP::response help_response (meth = UNSET);
 net::HTTP::response version_response ();
 net::HTTP::response ok_response ();
 net::HTTP::response boolean_response (bool);
 net::HTTP::response value_response (Bitcoin::satoshi);
 net::HTTP::response JSON_response (const JSON &);
+
+enum class problem {
+    unknown_method,
+    invalid_method,
+    invalid_type,
+    unimplemented
+};
+
+std::ostream &operator << (std::ostream &, problem);
+
+net::HTTP::response error_response (unsigned int status, meth m, problem, const std::string & = "");
 
 awaitable<net::HTTP::response> processor::operator () (const net::HTTP::request &req) {
     list<UTF8> path = req.Target.path ().read ('/');
@@ -205,79 +219,79 @@ awaitable<net::HTTP::response> processor::operator () (const net::HTTP::request 
 
     meth m = read_method (path[0]);
 
-    if (m == UNSET) co_return error_response (400, m, std::string {"Unknown method "} + path[0]);
+    if (m == UNSET) co_return error_response (400, m, problem::unknown_method, path[0]);
 
     if (m == VERSION) {
-        if (req.Method != net::HTTP::method::get) co_return error_response (405, m, std::string {"use get"});
+        if (req.Method != net::HTTP::method::get) co_return error_response (405, m, problem::invalid_method, "use get");
         co_return version_response ();
     }
 
     if (m == HELP) {
-        if (req.Method != net::HTTP::method::get) co_return error_response (405, m, std::string {"use get"});
+        if (req.Method != net::HTTP::method::get) co_return error_response (405, m, problem::invalid_method, "use get");
         if (path.size () == 1) co_return help_response ();
         else {
             meth help_with_method = read_method (path[1]);
             if (help_with_method == UNSET)
-                co_return error_response (400, HELP, std::string {"Unknown method"} + path[1]);
+                co_return error_response (400, HELP, problem::unknown_method, path[1]);
             co_return help_response (help_with_method);
         }
     }
 
     if (m == SHUTDOWN) {
-        if (req.Method != net::HTTP::method::put) co_return error_response (405, m, std::string {"use put"});
+        if (req.Method != net::HTTP::method::put) co_return error_response (405, m, problem::invalid_method, "use put");
         Shutdown = true;
         co_return ok_response ();
     }
 
     if (m == ADD_ENTROPY) {
-        if (req.Method != net::HTTP::method::post) co_return error_response (405, m, std::string {"use post"});
+        if (req.Method != net::HTTP::method::post) co_return error_response (405, m, problem::invalid_method, "use post");
         maybe<net::HTTP::content> content_type = req.content_type ();
         if (!bool (content_type) || *content_type != net::HTTP::content::type::application_octet_stream)
-            co_return error_response (400, m, "expected content-type:application/octet-stream");
+            co_return error_response (400, m, problem::invalid_type, "expected content-type:application/octet-stream");
 
         add_entropy (req.Body);
 
         co_return ok_response ();
     }
 
-    if (path.size () == 1) co_return error_response (405, m, std::string {"use put"});
+    if (path.size () == 1) co_return error_response (405, m, problem::invalid_method, "use put");
 
     const UTF8 &name = path[1];
 
-    if (m == MAKE_WALLET) co_return error_response (501, m);
+    if (m == MAKE_WALLET) co_return error_response (501, m, problem::unimplemented);
 
-    if (m == ADD_KEY) co_return error_response (501, m);
+    if (m == ADD_KEY) co_return error_response (501, m, problem::unimplemented);
 
-    if (m == TO_PRIVATE) co_return error_response (501, m);
+    if (m == TO_PRIVATE) co_return error_response (501, m, problem::unimplemented);
 
-    if (m == ENCRYPT_KEY) co_return error_response (501, m);
+    if (m == ENCRYPT_KEY) co_return error_response (501, m, problem::unimplemented);
 
-    if (m == DECRYPT_KEY) co_return error_response (501, m);
+    if (m == DECRYPT_KEY) co_return error_response (501, m, problem::unimplemented);
 
-    if (m == VALUE) co_return error_response (501, m);
+    if (m == VALUE) co_return error_response (501, m, problem::unimplemented);
 
-    if (m == DETAILS) co_return error_response (501, m);
+    if (m == DETAILS) co_return error_response (501, m, problem::unimplemented);
 
-    if (m == SPEND) co_return error_response (501, m);
+    if (m == SPEND) co_return error_response (501, m, problem::unimplemented);
 
-    if (m == IMPORT) co_return error_response (501, m);
+    if (m == IMPORT) co_return error_response (501, m, problem::unimplemented);
 
-    if (m == RESTORE) co_return error_response (501, m);
+    if (m == RESTORE) co_return error_response (501, m, problem::unimplemented);
 
-    if (m == BOOST) co_return error_response (501, m);
+    if (m == BOOST) co_return error_response (501, m, problem::unimplemented);
 
-    if (m == SPLIT) co_return error_response (501, m);
+    if (m == SPLIT) co_return error_response (501, m, problem::unimplemented);
 
-    if (m == TAXES) co_return error_response (501, m);
+    if (m == TAXES) co_return error_response (501, m, problem::unimplemented);
 
-    co_return error_response (501, m);
+    co_return error_response (501, m, problem::unimplemented);
 }
 
 processor::processor (const options &o) {
     SpendOptions = o.spend_options ();
     DB = load_DB (o);
 
-    // TODO set up random numbers and entropy.
+    Entropy = std::make_shared<crypto::fixed_entropy> (bytes_view {});
 
 }
 
@@ -334,23 +348,57 @@ either<options::JSON_DB_options, options::SQLite_options, options::MongoDB_optio
     return sqlite;
 }
 
-net::HTTP::response error_response (unsigned int status, meth m, const std::string &) {
-    throw method::unimplemented {"error_response"};
+void processor::add_entropy (const bytes &b) {
+    Entropy->Entropy = b;
+    Entropy->Position = 0;
+}
+
+Cosmos::spend_options options::spend_options () const {
+    return Cosmos::spend_options {};
+}
+
+net::HTTP::response ok_response () {
+    return net::HTTP::response (204);
+}
+
+net::HTTP::response help_response (meth m) {
+    std::stringstream ss;
+    help (ss, m);
+    return net::HTTP::response (200, {{"content-type", "text/plain"}}, bytes (data::string (ss.str ())));
+}
+
+net::HTTP::response version_response () {
+    std::stringstream ss;
+    version (ss);
+    return net::HTTP::response (200, {{"content-type", "text/plain"}}, bytes (data::string (ss.str ())));
+}
+
+net::HTTP::response error_response (unsigned int status, meth m, problem tt, const std::string &detail) {
+    std::stringstream meth_string;
+    meth_string << m;
+    std::stringstream problem_type;
+    problem_type << tt;
+
+    return net::HTTP::response (status,
+        {{"content-type", "application/problem+json"}},
+        JSON {
+            {"method", meth_string.str ()},
+            {"status", status},
+            {"title", problem_type.str ()},
+            {"detail", detail}});
+}
+
+std::ostream &operator << (std::ostream &o, problem p) {
+    switch (p) {
+        case problem::unknown_method: return o << "unknown method";
+        case problem::invalid_method: return o << "invalid method";
+        case problem::invalid_type: return o << "invalid content-type";
+        case problem::unimplemented: return o << "unimplemented method";
+        default: throw data::exception {} << "invalid problem...";
+    }
 }
 
 net::HTTP::response HTML_JS_UI_response () {
     throw method::unimplemented {"HTML UI"};
-}
-
-net::HTTP::response help_response (meth) {
-    throw method::unimplemented {"help response"};
-}
-
-net::HTTP::response ok_response () {
-    throw method::unimplemented {"ok_response"};
-}
-
-net::HTTP::response version_response () {
-    throw method::unimplemented {"version_response"};
 }
 

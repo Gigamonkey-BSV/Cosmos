@@ -83,6 +83,22 @@ namespace Cosmos {
         }
     };
 
+    inline key_expression::key_expression (const Bitcoin::secret &x) {
+        *this = expression {data::string::write ("secret \"", x, "\"")};
+    }
+
+    inline key_expression::key_expression (const Bitcoin::pubkey &p) {
+        *this = expression {data::string::write (p)};
+    }
+
+    inline key_expression::key_expression (const HD::BIP_32::secret &x) {
+        *this = expression {data::string::write ("HD.secret \"", x.write (), "\"")};
+    }
+
+    inline key_expression::key_expression (const HD::BIP_32::pubkey &p) {
+        *this = expression {data::string::write ("HD.pubkey \"", p.write (), "\"")};
+    }
+
 }
 
 #endif
