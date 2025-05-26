@@ -17,6 +17,7 @@ enum meth {
     VERSION,        // print a version message
     SHUTDOWN,
     ADD_ENTROPY,    // add entropy to the random number generator.
+    LIST_WALLETS,
     MAKE_WALLET,
     ADD_KEY,
     TO_PRIVATE,
