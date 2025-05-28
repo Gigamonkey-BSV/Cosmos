@@ -47,6 +47,7 @@ meth read_method (const UTF8 &p) {
 
     if (m == "help") return HELP;
     if (m == "version") return VERSION;
+    if (m == "shutdown") return SHUTDOWN;
     if (m == "generate") return GENERATE;
     if (m == "restore") return RESTORE;
     if (m == "value") return VALUE;

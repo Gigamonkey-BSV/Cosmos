@@ -97,11 +97,13 @@ boost::asio::io_context IO;
 ptr<net::HTTP::server> Server;
 
 std::atomic<bool> Shutdown {false};
+std::vector<std::atomic<bool>> ThreadShutdown;
 
 void shutdown () {
     if (Shutdown) return;
-    std::cout << "\nTime to shut down the program!" << std::endl;
+    std::cout << "\nShut down!" << std::endl;
     Shutdown = true;
+    for (std::atomic<bool> &u : ThreadShutdown) u = true;
     if (Server != nullptr) Server->close ();
 }
 
@@ -176,7 +178,9 @@ void run (const options &program_options) {
         throw exception {} << "This program is not ready to be connected to the Internet: localhost is required";
 
     uint32 num_threads = program_options.threads ();
-    if (num_threads < 1) throw exception {} << "We cannot run with zero threads.";
+    if (num_threads < 1) throw exception {} << "We cannot run with zero threads. There is already one thread running to read this number.";
+    if (num_threads > 1) throw exception {} << "We do not do multithreaded yet";
+    uint32 extra_threads = num_threads - 1;
 
     std::cout << "loading server on " << endpoint << std::endl;
     Server = std::make_shared<net::HTTP::server>
@@ -192,13 +196,16 @@ void run (const options &program_options) {
     std::mutex exception_mutex;
 
     std::vector<std::thread> threads {};
-    for (int i = 0; i < num_threads - 1; i++)
+    for (int i = 0; i < extra_threads; i++)
         threads.emplace_back ([&]() {
+            int index = i;
             try {
-                while (!Shutdown) {
+                while (!ThreadShutdown[index]) {
                     if (stored_exception) shutdown ();
                     IO.run ();
                 }
+
+                shutdown ();
             } catch (...) {
                 std::lock_guard<std::mutex> lock (exception_mutex);
                 if (!stored_exception) {
@@ -212,7 +219,7 @@ void run (const options &program_options) {
         IO.run ();
     }
 
-    for (int i = 0; i < num_threads; i++) threads[i].join ();
+    for (int i = 0; i < extra_threads; i++) threads[i].join ();
 
     if (stored_exception) std::rethrow_exception (stored_exception);
 
@@ -242,6 +249,7 @@ net::HTTP::response error_response (unsigned int status, meth m, problem, const 
 
 awaitable<net::HTTP::response> processor::operator () (const net::HTTP::request &req) {
 
+    std::cout << "Responding to request " << req << std::endl;
     list<UTF8> path = req.Target.path ().read ('/');
 
     if (path.size () == 0) co_return HTML_JS_UI_response ();
@@ -435,7 +443,6 @@ net::HTTP::response version_response () {
     std::stringstream ss;
     version (ss);
     auto res = net::HTTP::response (200, {{"content-type", "text/plain"}}, bytes (data::string (ss.str ())));
-    std::cout << " generated version response" << std::endl;
     return res;
 }
 
@@ -444,8 +451,6 @@ net::HTTP::response error_response (unsigned int status, meth m, problem tt, con
     meth_string << m;
     std::stringstream problem_type;
     problem_type << tt;
-
-    throw exception {} << "this is the only way to shut down the program";
 
     JSON err {
         {"method", meth_string.str ()},
@@ -506,44 +511,171 @@ R"--(<!DOCTYPE html>
   </style>
 </head>
 <body>
-  <h1>Node Control Panel</h1>
+  <h1>Cosmos Wallet</h1>
+
+  <h2>Basic Functions</h2>
 
   <details>
-    <summary>/version</summary>
-    <button onclick="callApi('POST', 'version')">Get Version</button>
+    <summary>version</summary>
+    <form id="form-version">
+      <button type="button" onclick="callApi('GET', 'version')">Get Version</button>
+    </form>
     <pre id="output-version"></pre>
   </details>
 
   <details>
-    <summary>/help</summary>
-    <button onclick="callApi('GET', 'help')">Get Help</button>
+    <summary>help</summary>
+    <form id="form-help">
+      <label><input type="radio" name="method" value="shutdown" onclick="toggleRadio(this)">shutdown</label>
+      <br>
+      <label><input type="radio" name="method" value="add_entropy" onclick="toggleRadio(this)">add_entropy</label>
+      <br>
+      <label><input type="radio" name="method" value="add_key" onclick="toggleRadio(this)">add_key</label>
+      <br>
+      <label><input type="radio" name="method" value="to_private" onclick="toggleRadio(this)">to_private</label>
+      <br>
+      <label><input type="radio" name="method" value="list_wallets" onclick="toggleRadio(this)">list_wallets</label>
+      <br>
+      <label><input type="radio" name="method" value="make_wallet" onclick="toggleRadio(this)">make_wallet</label>
+      <br>
+      <label><input type="radio" name="method" value="value" onclick="toggleRadio(this)">value</label>
+      <br>
+      <label><input type="radio" name="method" value="details" onclick="toggleRadio(this)">details</label>
+      <br>
+      <button type="button" onclick="callApi('GET', 'help')">Get Help</button>
+    </form>
     <pre id="output-help"></pre>
   </details>
 
   <details>
-    <summary>/shutdown</summary>
-    <button onclick="callApi('PUT', 'shutdown')">Shutdown</button>
+    <summary>shutdown</summary>
+    <form id="form-shutdown">
+      <button type="button" onclick="callApi('PUT', 'shutdown')">Shutdown</button>
+    </form>
     <pre id="output-shutdown"></pre>
   </details>
 
   <details>
-    <summary>/add_entropy</summary>
-    <button onclick="callApi('POST', 'add_entropy')">Add Entropy</button>
+    <summary>add_entropy</summary>
+    <form id="form-add_entropy">
+      <input name="value" type="text">
+      <br>
+      <button type="button" onclick="callApi('POST', 'add_entropy')">Add Entropy</button>
+    </form>
     <pre id="output-add_entropy"></pre>
   </details>
 
+  <h2>Keys</h2>
+
   <details>
-    <summary>/list_wallets</summary>
-    <button onclick="callApi('GET', 'list_wallets')">List Wallets</button>
+    <summary>add_key</summary>
+    <form id="form-add_key">
+      <b>key name: </b><input name="key-name" type="text">
+      <br>
+      <label><input type="radio" name="choice" value="expression" onclick="toggleRadio(this)">
+        <input name="value" type="text">
+      </label>
+      <br>
+      <label><input type="radio" name="choice" value="random-secp256k1" onclick="toggleRadio(this)">random secp256k1</label>
+      <br>
+      <label><input type="radio" name="choice" value="random-xpriv" onclick="toggleRadio(this)">random xpub</label>
+      <br>
+      <button type="button" onclick="callApi('POST', 'add_key')">Add Key</button>
+    </form>
+    <pre id="output-add_key"></pre>
+  </details>
+
+  <details>
+    <summary>to_private</summary>
+    <form id="form-to_private">
+      <b>key name: </b><input name="key-name" type="text">
+      <br>
+      <b>value of private key: </b> <input name="value" type="text">
+      <br>
+      <button type="button" onclick="callApi('POST', 'add_key')">To Private</button>
+    </form>
+    <pre id="output-to_private"></pre>
+  </details>
+
+  <h2>Wallets</h2>
+
+  <details>
+    <summary>make_wallet</summary>
+    <form id="form-make_wallet">
+      <b>wallet name: </b><input name="wallet-name" type="text">
+      <br>
+      <button type="button" onclick="callApi('POST', 'make_wallet')">Make Wallet</button>
+    </form>
+    <pre id="output-make_wallet"></pre>
+  </details>
+
+  <details>
+    <summary>list_wallets</summary>
+    <form id="form-list_wallets">
+      <button type="button" onclick="callApi('GET', 'list_wallets')">List Wallets</button>
+    </form>
     <pre id="output-list_wallets"></pre>
   </details>
 
+  <details>
+    <summary>details</summary>
+    <form id="form-details">
+      <b>wallet name: </b><input name="wallet-name" type="text">
+      <br>
+      <button type="button" onclick="callApi('POST', 'details')">Details</button>
+    </form>
+    <pre id="output-details"></pre>
+  </details>
+
+  <details>
+    <summary>value</summary>
+    <form id="form-value">
+      <b>wallet name: </b><input name="wallet-name" type="text">
+      <br>
+      <label><input type="radio" name="choice" value="BSV" onclick="toggleRadio(this)">BSV sats</label>
+      <br>
+      <button type="button" onclick="callApi('POST', 'value')">Value</button>
+    </form>
+    <pre id="output-value"></pre>
+  </details>
+
   <script>
+    let lastChecked = {};
+
+    function toggleRadio(radio) {
+      const group = radio.name;
+
+      if (lastChecked[group] === radio) {
+          radio.checked = false;
+          lastChecked[group] = null;
+      } else {
+          lastChecked[group] = radio;
+      }
+    }
+
     async function callApi(http_method, endpoint) {
+
+      const form = document.getElementById (`form-${endpoint}`);
+      const formData = new FormData(form);
+      let url = `/${endpoint}`;
+
+      let options = {
+          method: http_method,
+          headers: {}
+      };
+
+      if (http_method === 'GET') {
+        // Convert formData to URL query parameters
+        const params = new URLSearchParams(formData).toString();
+        url += `?${params}`;
+      } else if (http_method === 'POST') {
+        // Send form data as URL-encoded body
+        options.body = new URLSearchParams(formData);
+        options.headers['Content-Type'] = 'application/x-www-form-urlencoded';
+      }
+
       try {
-        const res = await fetch(`/${endpoint}`, {
-          method: http_method
-        });
+        const res = await fetch(url, options);
         const text = await res.text();
         document.getElementById(`output-${endpoint}`).textContent = text;
       } catch (err) {
@@ -555,7 +687,6 @@ R"--(<!DOCTYPE html>
 </html>
 )--";
 
-    std::cout << "trying to return UI response" << std::endl;
     return net::HTTP::response (200,
         {{"content-type", "text/html"}},
         bytes (ui));
@@ -573,6 +704,7 @@ net::HTTP::response favicon () {
         0x22, 0x8B, 0x22, 0x8B, 0x22, 0x8B, 0x22, 0x8B, 0x22, 0x8B, 0x22, 0x8B, 0x22, 0x8B, 0x22, 0x8B,
         0x22, 0x8B, 0x22, 0x8B, 0x22, 0x8B, 0x22, 0x8B, 0x00, 0x00, 0x00, 0x00
     };
+
     return net::HTTP::response (200,
         {{"content-type", "image/x-icon"}},
         favicon_ico);
