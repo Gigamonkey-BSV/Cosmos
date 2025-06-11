@@ -48,8 +48,14 @@ meth read_method (const UTF8 &p) {
     if (m == "help") return HELP;
     if (m == "version") return VERSION;
     if (m == "shutdown") return SHUTDOWN;
+    if (m == "add_entropy") return ADD_ENTROPY;
+    if (m == "add_key") return ADD_KEY;
+    if (m == "to_private") return TO_PRIVATE;
+    if (m == "make_wallet") return MAKE_WALLET;
+    if (m == "list_wallets") return LIST_WALLETS;
     if (m == "generate") return GENERATE;
     if (m == "restore") return RESTORE;
+    if (m == "details") return DETAILS;
     if (m == "value") return VALUE;
     if (m == "update") return UPDATE;
     if (m == "request") return REQUEST;

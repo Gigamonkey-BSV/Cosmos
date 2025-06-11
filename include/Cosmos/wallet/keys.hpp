@@ -7,8 +7,10 @@
 #include <Diophant/expression.hpp>
 
 namespace Cosmos {
+    namespace secp256k1 = Gigamonkey::secp256k1;
     namespace Bitcoin = Gigamonkey::Bitcoin;
     namespace HD = Gigamonkey::HD;
+    namespace encoding = data::encoding;
     using digest160 = Gigamonkey::digest160;
 
     using expression = const Diophant::expression;
@@ -26,6 +28,8 @@ namespace Cosmos {
 
     struct key_expression : expression {
         using expression::expression;
+        key_expression (const secp256k1::secret &);
+        key_expression (const secp256k1::pubkey &);
         key_expression (const Bitcoin::secret &);
         key_expression (const Bitcoin::pubkey &);
         key_expression (const HD::BIP_32::secret &);
@@ -84,7 +88,7 @@ namespace Cosmos {
     };
 
     inline key_expression::key_expression (const Bitcoin::secret &x) {
-        *this = expression {data::string::write ("secret \"", x, "\"")};
+        *this = expression {data::string::write ("WIF ", x.encode ())};
     }
 
     inline key_expression::key_expression (const Bitcoin::pubkey &p) {
@@ -92,11 +96,19 @@ namespace Cosmos {
     }
 
     inline key_expression::key_expression (const HD::BIP_32::secret &x) {
-        *this = expression {data::string::write ("HD.secret \"", x.write (), "\"")};
+        *this = expression {data::string::write ("HD_secret ", x.write ())};
     }
 
     inline key_expression::key_expression (const HD::BIP_32::pubkey &p) {
-        *this = expression {data::string::write ("HD.pubkey \"", p.write (), "\"")};
+        *this = expression {data::string::write ("HD_pubkey ", p.write ())};
+    }
+
+    inline key_expression::key_expression (const secp256k1::secret &x) {
+        *this = expression {data::string::write ("secret ", std::dec, x)};
+    }
+
+    inline key_expression::key_expression (const secp256k1::pubkey &p) {
+        *this = expression {encoding::hex::write (p)};
     }
 
 }

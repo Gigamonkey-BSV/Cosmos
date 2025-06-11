@@ -32,7 +32,7 @@ namespace Cosmos {
 
                 pay_to_address p2a {out.Script};
                 if (p2a.valid ())
-                    this->add_address (Bitcoin::address {Bitcoin::address {Bitcoin::address::main, p2a.Address}}, script_hash);
+                    this->add_address (Bitcoin::address {Bitcoin::net::Main, p2a.Address}, script_hash);
 
                 i++;
             }

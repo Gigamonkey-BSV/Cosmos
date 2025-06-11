@@ -11,14 +11,13 @@ namespace Cosmos {
 
     struct database : local_TXDB, local_price_data {
 
-        // key can be any standard key format (in quotes) or a derivation from another key.
-        virtual void set_key (const std::string &key_name, const key_expression &k) = 0;
+        virtual bool set_key (const std::string &key_name, const key_expression &k) = 0;
 
         // set the private key for a given public key.
-        virtual void to_private (const std::string &key_name, const key_expression &k) = 0;
+        virtual bool to_private (const std::string &key_name, const key_expression &k) = 0;
 
         virtual bool make_wallet (const std::string &name) = 0;
-        virtual data::list<std::string> get_wallet_names () = 0;
+        virtual data::list<std::string> list_wallet_names () = 0;
 
         void setup_BIP_44_wallet (const std::string &wallet_name, const HD::BIP_32::secret &master);
 

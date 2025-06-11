@@ -17,15 +17,22 @@
 
 #include <Cosmos/database/SQLite/SQLite.hpp>
 
+#include <Diophant/grammar.hpp>
+#include <Diophant/symbol.hpp>
+
 #include "Cosmos.hpp"
 
 namespace Bitcoin = Gigamonkey::Bitcoin;
+namespace secp256k1 = Gigamonkey::secp256k1;
+namespace HD = Gigamonkey::HD;
 
 struct options : io::arg_parser {
     options (io::arg_parser &&ap) : io::arg_parser {ap} {}
 
     maybe<filepath> env () const;
 
+    // depricated. We changed things too much to be
+    // able to use the old JSON database anymore.
     struct JSON_DB_options {
         std::string Path; // should be a directory
     };
@@ -114,16 +121,17 @@ void signal_handler (int signal) {
 ptr<Cosmos::database> load_DB (const options &o);
 
 struct processor {
-    crypto::random *get_secure_random ();
-    crypto::random *get_casual_random ();
-
-    Cosmos::spend_options SpendOptions;
 
     processor (const options &o);
 
     awaitable<net::HTTP::response> operator () (const net::HTTP::request &);
 
     void add_entropy (const bytes &);
+
+    crypto::random &get_secure_random ();
+    crypto::random &get_casual_random ();
+
+    Cosmos::spend_options SpendOptions;
 
     ptr<Cosmos::database> DB;
 
@@ -226,26 +234,71 @@ void run (const options &program_options) {
     IO.stop ();
 }
 
-net::HTTP::response HTML_JS_UI_response ();
-net::HTTP::response help_response (meth = UNSET);
-net::HTTP::response version_response ();
-net::HTTP::response ok_response ();
-net::HTTP::response boolean_response (bool);
-net::HTTP::response value_response (Bitcoin::satoshi);
-net::HTTP::response JSON_response (const JSON &);
-net::HTTP::response favicon ();
-
 enum class problem {
     unknown_method,
     invalid_method,
-    invalid_type,
+    invalid_content_type,
     need_entropy,
+    invalid_name,
+    invalid_query,
+    invalid_expression,
+    failed,
     unimplemented
 };
 
 std::ostream &operator << (std::ostream &, problem);
 
 net::HTTP::response error_response (unsigned int status, meth m, problem, const std::string & = "");
+
+net::HTTP::response favicon ();
+net::HTTP::response HTML_JS_UI_response ();
+net::HTTP::response help_response (meth = UNSET);
+net::HTTP::response version_response ();
+
+net::HTTP::response ok_response () {
+    return net::HTTP::response (204);
+}
+
+net::HTTP::response JSON_response (const JSON &j) {
+    return net::HTTP::response (200, {{"content-type", "application/json"}}, bytes (data::string (j.dump ())));
+}
+
+net::HTTP::response boolean_response (bool b) {
+    return JSON_response (b);
+}
+
+namespace tao_pegtl_grammar {
+    struct whole_symbol : seq<symbol_lit, eof> {};
+
+    Diophant::symbol read_symbol (const data::string &input) {
+        tao::pegtl::memory_input<> in {input, "symbol"};
+
+        try {
+            if (!tao::pegtl::parse<whole_symbol> (in))
+                return {};
+        } catch (tao::pegtl::parse_error &err) {
+            return {};
+        }
+
+        return Diophant::symbol {input};
+    }
+}
+
+net::HTTP::response process_wallet_method (
+    processor &p, net::HTTP::method http_method, meth m,
+    Diophant::symbol wallet_name,
+    map<UTF8, UTF8> query,
+    const UTF8 &fragment,
+    const maybe<net::HTTP::content> &content,
+    const data::bytes &body);
+
+net::HTTP::response process_method (
+    processor &,
+    net::HTTP::method, meth,
+    map<UTF8, UTF8> query,
+    const UTF8 &fragment,
+    const maybe<net::HTTP::content> &,
+    const data::bytes &);
 
 awaitable<net::HTTP::response> processor::operator () (const net::HTTP::request &req) {
 
@@ -266,12 +319,16 @@ awaitable<net::HTTP::response> processor::operator () (const net::HTTP::request 
     if (m == UNSET) co_return error_response (400, m, problem::unknown_method, path[0]);
 
     if (m == VERSION) {
-        if (req.Method != net::HTTP::method::get) co_return error_response (405, m, problem::invalid_method, "use get");
+        if (req.Method != net::HTTP::method::get)
+            co_return error_response (405, m, problem::invalid_method, "use get");
+
         co_return version_response ();
     }
 
     if (m == HELP) {
-        if (req.Method != net::HTTP::method::get) co_return error_response (405, m, problem::invalid_method, "use get");
+        if (req.Method != net::HTTP::method::get)
+            co_return error_response (405, m, problem::invalid_method, "use get");
+
         if (path.size () == 1) co_return help_response ();
         else {
             meth help_with_method = read_method (path[1]);
@@ -282,59 +339,238 @@ awaitable<net::HTTP::response> processor::operator () (const net::HTTP::request 
     }
 
     if (m == SHUTDOWN) {
-        if (req.Method != net::HTTP::method::put) co_return error_response (405, m, problem::invalid_method, "use put");
+        if (req.Method != net::HTTP::method::put)
+            co_return error_response (405, m, problem::invalid_method, "use put");
+
         Shutdown = true;
         co_return ok_response ();
     }
 
     if (m == ADD_ENTROPY) {
-        if (req.Method != net::HTTP::method::post) co_return error_response (405, m, problem::invalid_method, "use post");
+        if (req.Method != net::HTTP::method::post)
+            co_return error_response (405, m, problem::invalid_method, "use post");
+
         maybe<net::HTTP::content> content_type = req.content_type ();
         if (!bool (content_type) || *content_type != net::HTTP::content::type::application_octet_stream)
-            co_return error_response (400, m, problem::invalid_type, "expected content-type:application/octet-stream");
+            co_return error_response (400, m, problem::invalid_content_type, "expected content-type:application/octet-stream");
 
         add_entropy (req.Body);
 
         co_return ok_response ();
     }
 
-    if (path.size () == 1) co_return error_response (405, m, problem::invalid_method, "use put");
+    if (m == LIST_WALLETS) {
+        JSON::array_t names;
+        for (const std::string &name : DB->list_wallet_names ())
+            names.push_back (name);
 
-    const UTF8 &name = path[1];
+        co_return JSON_response (names);
+    }
 
-    if (m == MAKE_WALLET) co_return error_response (501, m, problem::unimplemented);
+    map<UTF8, UTF8> query;
+    maybe<dispatch<UTF8, UTF8>> qm = req.Target.query_map ();
+    if (bool (qm)) {
+        map<UTF8, list<UTF8>> q = data::dispatch_to_map (*qm);
+        for (const auto &[k, v] : q) if (v.size () != 1) co_return error_response (400, m, problem::invalid_name, "duplicate query parameters");
+        else query = query.insert (k, v[0]);
+    }
 
-    if (m == VALUE) co_return error_response (501, m, problem::unimplemented);
-
-    if (m == DETAILS) co_return error_response (501, m, problem::unimplemented);
-
-    if (m == RESTORE) co_return error_response (501, m, problem::unimplemented);
-
-    if (m == TAXES) co_return error_response (501, m, problem::unimplemented);
-
-    if (m == IMPORT) co_return error_response (501, m, problem::unimplemented);
+    UTF8 fragment {};
+    maybe<UTF8> fm = req.Target.fragment ();
+    if (bool (fm)) fragment = *fm;
 
     try {
 
-        if (m == ADD_KEY) co_return error_response (501, m, problem::unimplemented);
+        if (path.size () < 2) co_return process_method (*this, req.Method, m, query, fragment, req.content_type (), req.Body);
 
-        if (m == TO_PRIVATE) co_return error_response (501, m, problem::unimplemented);
+        // make sure the wallet name is a valid string.
+        Diophant::symbol wallet_name = tao_pegtl_grammar::read_symbol (path[1]);
+        if (wallet_name == "") co_return error_response (400, m, problem::invalid_name, "name argument must be alpha alnum+");
 
-        if (m == SPEND) co_return error_response (501, m, problem::unimplemented);
+        co_return process_wallet_method (*this, req.Method, m, wallet_name, query, fragment, req.content_type (), req.Body);
 
-        if (m == ENCRYPT_KEY) co_return error_response (501, m, problem::unimplemented);
-
-        if (m == DECRYPT_KEY) co_return error_response (501, m, problem::unimplemented);
-
-        if (m == BOOST) co_return error_response (501, m, problem::unimplemented);
-
-        if (m == SPLIT) co_return error_response (501, m, problem::unimplemented);
-
-        co_return error_response (501, m, problem::unimplemented);
-
-    } catch (crypto::entropy::fail) {
+    } catch (const crypto::entropy::fail &) {
         co_return error_response (500, m, problem::need_entropy);
+    } catch (const Diophant::parse_error &) {
+        co_return error_response (400, m, problem::invalid_expression);
     }
+}
+
+net::HTTP::response value_response (Bitcoin::satoshi);
+
+net::HTTP::response process_method (
+    processor &p, net::HTTP::method http_method, meth m,
+    map<UTF8, UTF8> query,
+    const UTF8 &fragment,
+    const maybe<net::HTTP::content> &content_type,
+    const data::bytes &body) {
+
+    if (m == ADD_KEY) {
+        if (http_method != net::HTTP::method::post)
+            return error_response (405, m, problem::invalid_method, "use post");
+
+        enum class key_type {
+            unset,
+            secp256k1,
+            WIF,
+            HD
+        } KeyType {key_type::unset};
+
+        enum class generation_method {
+            random,
+            expression
+        } Method {generation_method::expression};
+
+        const UTF8 *key_type = query.contains ("type");
+        if (bool (key_type)) {
+            std::string key_type_san = sanitize (*key_type);
+            if (key_type_san == "secp256k1") KeyType = key_type::secp256k1;
+            else if (key_type_san == "wif") KeyType = key_type::WIF;
+            else if (key_type_san == "hd") KeyType = key_type::HD;
+            else return error_response (400, m, problem::invalid_query, "invalid parameter 'type'");
+        }
+
+        const UTF8 *method_val = query.contains ("method");
+        if (bool (method_val)) {
+            std::string method_san = sanitize (*method_val);
+            if (method_san == "random") Method = generation_method::random;
+            else if (method_san == "expression") Method = generation_method::expression;
+            else return error_response (400, m, problem::invalid_query, "invalid parameter 'type'");
+        }
+
+        const UTF8 *key_name_param = query.contains ("name");
+        if (!bool (key_name_param))
+            return error_response (400, m, problem::invalid_query, "required parameter 'name' not present");
+
+        Diophant::symbol key_name = tao_pegtl_grammar::read_symbol (*key_name_param);
+
+        // make sure the name is a valid symbol name
+        if (key_name == "") return error_response (400, m, problem::invalid_name, "name argument must be alpha alnum+");
+
+        Bitcoin::net net = Bitcoin::net::Main;
+        const UTF8 *net_type_param = query.contains ("net");
+        if (bool (key_name_param)) {
+            std::string net_type_san = sanitize (*net_type_param);
+            if (net_type_san == "main") net = Bitcoin::net::Main;
+            else if (net_type_san == "test") net = Bitcoin::net::Test;
+            else return error_response (400, m, problem::invalid_query, "invalid parameter 'net'");
+        }
+
+        bool compressed = true;
+        const UTF8 *compressed_param = query.contains ("compressed");
+        if (bool (compressed_param)) {
+            std::string compressed_san = sanitize (*compressed_param);
+            if (compressed_san == "true") compressed = true;
+            else if (compressed_san == "false") compressed = false;
+            else return error_response (400, m, problem::invalid_query, "invalid parameter 'compressed'");
+        }
+
+        Cosmos::key_expression key_expr;
+
+        if (Method == generation_method::expression) {
+            if (KeyType != key_type::unset)
+                return error_response (400, m, problem::invalid_query, "key type will be inferred from the expression provided");
+
+            if (!bool (content_type) || *content_type != net::HTTP::content::type::text_plain)
+                return error_response (400, m, problem::invalid_content_type, "expected content-type:text/plain");
+
+            key_expr = Cosmos::key_expression {data::string (body)};
+
+        } else {
+            if (KeyType != key_type::unset)
+                return error_response (400, m, problem::invalid_query, "need a key type to tell us what to generate");
+
+            if (bool (content_type))
+                return error_response (400, m, problem::invalid_query, "no body when we generate random keys");
+
+            crypto::random &random = p.get_secure_random ();
+            secp256k1::secret key;
+            random >> key.Value;
+
+            switch (KeyType) {
+                case (key_type::WIF): {
+                    key_expr = Cosmos::key_expression {Bitcoin::secret {net, key, compressed}};
+                } break;
+                case (key_type::HD): {
+                    HD::chain_code x;
+                    x.resize (32);
+                    random >> x;
+                    key_expr = Cosmos::key_expression (HD::BIP_32::secret {key, x, net});
+                } break;
+                default: {
+                    key_expr = Cosmos::key_expression {key};
+                }
+            }
+        }
+
+        if (p.DB->set_key (key_name, key_expr)) return ok_response ();
+        return error_response (500, m, problem::failed, "could not create key");
+
+    }
+
+    if (m == TO_PRIVATE) {
+        if (!bool (content_type) || *content_type != net::HTTP::content::type::text_plain)
+            return error_response (400, m, problem::invalid_content_type, "expected content-type:text/plain");
+
+        const UTF8 *key_name_param = query.contains ("name");
+        if (!bool (key_name_param))
+            return error_response (400, m, problem::invalid_query, "required parameter 'name' not present");
+
+        Diophant::symbol key_name = tao_pegtl_grammar::read_symbol (*key_name_param);
+
+        Cosmos::key_expression key_expr {data::string (body)};
+
+        if (p.DB->to_private (key_name, key_expr)) return ok_response ();
+        return error_response (500, m, problem::failed, "could not set private key");
+    }
+
+    return error_response (500, m, problem::invalid_name, "wallet method called without wallet name");
+}
+
+net::HTTP::response process_wallet_method (
+    processor &p, net::HTTP::method http_method, meth m,
+    Diophant::symbol wallet_name,
+    map<UTF8, UTF8> query,
+    const UTF8 &fragment,
+    const maybe<net::HTTP::content> &content,
+    const data::bytes &body) {
+
+    // make sure the wallet name is a valid string.
+    if (wallet_name == "") return error_response (400, m, problem::invalid_name, "name argument must be alpha alnum+");
+
+    if (m == MAKE_WALLET) {
+        bool created = p.DB->make_wallet (wallet_name);
+        if (created) return ok_response ();
+        else return error_response (500, m, problem::failed, "could not create wallet");
+    }
+
+    if (m == ADD_SEQUENCE) return error_response (501, m, problem::unimplemented);
+
+    if (m == GENERATE) return error_response (501, m, problem::unimplemented);
+
+    return error_response (501, m, problem::unimplemented);
+
+    if (m == VALUE) return error_response (501, m, problem::unimplemented);
+
+    if (m == DETAILS) return error_response (501, m, problem::unimplemented);
+
+    if (m == IMPORT) return error_response (501, m, problem::unimplemented);
+
+    if (m == RESTORE) return error_response (501, m, problem::unimplemented);
+
+    if (m == SPEND) return error_response (501, m, problem::unimplemented);
+
+    if (m == ENCRYPT_KEY) return error_response (501, m, problem::unimplemented);
+
+    if (m == DECRYPT_KEY) return error_response (501, m, problem::unimplemented);
+
+    if (m == BOOST) return error_response (501, m, problem::unimplemented);
+
+    if (m == SPLIT) return error_response (501, m, problem::unimplemented);
+
+    if (m == TAXES) return error_response (501, m, problem::unimplemented);
+
+    return error_response (501, m, problem::unimplemented);
 }
 
 processor::processor (const options &o) {
@@ -420,17 +656,47 @@ either<options::JSON_DB_options, options::SQLite_options, options::MongoDB_optio
     return sqlite;
 }
 
+crypto::random &processor::get_secure_random () {
+
+    if (!SecureRandom) {
+
+        if (!Entropy) throw data::crypto::entropy::fail {};
+
+        SecureRandom = std::make_shared<crypto::NIST::DRBG> (crypto::NIST::DRBG::Hash, *Entropy, std::numeric_limits<uint32>::max ());
+    }
+
+    return *SecureRandom.get ();
+
+}
+
+crypto::random &processor::get_casual_random () {
+
+    if (!CasualRandom) {
+        if (!SecureRandom) get_secure_random ();
+
+        Satoshi::RandomInit ();
+        uint64 seed;
+        Satoshi::GetStrongRandBytes ((byte *) &seed, 8);
+
+        CasualRandom = std::make_shared<crypto::linear_combination_random> (256,
+            std::static_pointer_cast<crypto::random> (std::make_shared<crypto::std_random<std::default_random_engine>> (seed)),
+            std::static_pointer_cast<crypto::random> (SecureRandom));
+    }
+
+    return *CasualRandom.get ();
+
+}
+
 void processor::add_entropy (const bytes &b) {
-    Entropy->Entropy = b;
-    Entropy->Position = 0;
+    if (!Entropy) Entropy = std::make_shared<crypto::fixed_entropy> (b);
+    else {
+      Entropy->Entropy = b;
+      Entropy->Position = 0;
+    }
 }
 
 Cosmos::spend_options options::spend_options () const {
     return Cosmos::spend_options {};
-}
-
-net::HTTP::response ok_response () {
-    return net::HTTP::response (204);
 }
 
 net::HTTP::response help_response (meth m) {
@@ -466,8 +732,9 @@ std::ostream &operator << (std::ostream &o, problem p) {
     switch (p) {
         case problem::unknown_method: return o << "unknown method";
         case problem::invalid_method: return o << "invalid method";
-        case problem::invalid_type: return o << "invalid content-type";
+        case problem::invalid_content_type: return o << "invalid content-type";
         case problem::need_entropy: return o << "need entropy: please call add_entropy";
+        case problem::invalid_name: return o << "name argument required. Should be alpha alnum+";
         case problem::unimplemented: return o << "unimplemented method";
         default: throw data::exception {} << "invalid problem...";
     }
@@ -590,9 +857,9 @@ R"--(<!DOCTYPE html>
     <form id="form-to_private">
       <b>key name: </b><input name="key-name" type="text">
       <br>
-      <b>value of private key: </b> <input name="value" type="text">
+      <b>value of private key: </b><input name="value" type="text">
       <br>
-      <button type="button" onclick="callApi('POST', 'add_key')">To Private</button>
+      <button type="button" onclick="callApi('POST', 'to_private')">To Private</button>
     </form>
     <pre id="output-to_private"></pre>
   </details>
@@ -632,7 +899,7 @@ R"--(<!DOCTYPE html>
     <form id="form-value">
       <b>wallet name: </b><input name="wallet-name" type="text">
       <br>
-      <label><input type="radio" name="choice" value="BSV" onclick="toggleRadio(this)">BSV sats</label>
+      <label><input type="radio" name="choice" value="BSV" onclick="toggleRadio(this)" checked>BSV sats</label>
       <br>
       <button type="button" onclick="callApi('POST', 'value')">Value</button>
     </form>

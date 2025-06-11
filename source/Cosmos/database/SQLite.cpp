@@ -897,24 +897,38 @@ namespace Cosmos::SQLite {
             return true;
         }
 
-        list<std::string> get_wallet_names () final override {
+        list<std::string> list_wallet_names () final override {
             list<std::string> names;
             for (const auto &name : storage.select (&Wallet::name)) names <<= name;
             return names;
         }
 
-        void set_key (const std::string &key_name, const key_expression &k) final override {
-            storage.insert (
-                sqlite_orm::into<Secret> (),
-                columns (&Secret::name, &Secret::key),
-                values (key_name, std::string (k)));
+        // TODO ensure that the key is not already there.
+        bool set_key (const std::string &key_name, const key_expression &k) final override {
+
+            try {
+                storage.insert (
+                    sqlite_orm::into<Secret> (),
+                    columns (&Secret::name, &Secret::key),
+                    values (key_name, std::string (k)));
+            } catch (const std::system_error &e) {
+                return false;
+            }
+
+            return true;
         }
 
-        void to_private (const std::string &key_name, const key_expression &k) final override {
-            storage.insert (
-                sqlite_orm::into<Pubkey> (),
-                columns (&Pubkey::name, &Pubkey::key),
-                values (key_name, std::string (k)));
+        bool to_private (const std::string &key_name, const key_expression &k) final override {
+            try {
+                storage.insert (
+                    sqlite_orm::into<Pubkey> (),
+                    columns (&Pubkey::name, &Pubkey::key),
+                    values (key_name, std::string (k)));
+            } catch (const std::system_error &e) {
+                return false;
+            }
+
+            return true;
         }
 
         struct readable : database::readable {

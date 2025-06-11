@@ -21,13 +21,15 @@ enum meth {
     MAKE_WALLET,
     ADD_KEY,
     TO_PRIVATE,
+    ADD_SEQUENCE,
     GENERATE,       // generate a wallet
     RESTORE,        // restore a wallet
     UPDATE,         // depricated: check if txs in pending have been mined.
     VALUE,          // the value in the wallet.
     DETAILS,
     SEND,           // (depricated)
-    SPEND,          // check pending txs for having been mined. (depricated)
+    SPEND,          //
+    SPEND_ALL,      // spend all funds.
     REQUEST,        // request a payment
     ACCEPT,         // accept a payment
     PAY,            // make a payment.
