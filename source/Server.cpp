@@ -1023,9 +1023,14 @@ R"--(<!DOCTYPE html>
     </p>
     <form id="form-add_key_sequence">
       <b>wallet name: </b><input name="wallet-name" type="text">
+      <br>
       <b>sequence name: </b><input name="sequence-name" type="text">
+      <br>
       <b>key name: </b><input name="key-name" type="text">
+      <br>
       <b>key expression: </b><input name="expression" type="text">
+      <br>
+      <button type="button" onclick="callApi('POST', 'add_key_sequence')">Add Key Sequence</button>
     </form>
     <pre id="output-add_key_sequence"></pre>
   </details>
@@ -1037,6 +1042,16 @@ R"--(<!DOCTYPE html>
     </p>
     <form id="form-generate">
       <b>Use mnemonic: </b><input name="use_mnemonic" type="checkbox">
+      <br>
+      <label><input type="radio" name="wallet_type" value="bip_44" onclick="toggleRadio(this)">
+        bip 44
+      </label>
+      <br>
+      <label><input type="radio" name="wallet_type" value="experimental" onclick="toggleRadio(this)">
+        experimental
+      </label>
+      <br>
+      <button type="button" onclick="callApi('POST', 'generate')">Generate</button>
     </form>
     <pre id="output-generate"></pre>
   </details>
