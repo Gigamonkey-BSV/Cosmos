@@ -66,7 +66,6 @@ namespace Cosmos {
 
             void set_key (const std::string &key_name, const key_expression &k) final override;
             void to_private (const std::string &key_name, const key_expression &k) final override;
-            void set_key_source (const std::string &name, const key_source &k) final override;
 
             Cosmos::history *history () final override;
 

@@ -5,23 +5,41 @@
 #include <Cosmos/database/price_data.hpp>
 #include <Cosmos/history.hpp>
 #include <Cosmos/options.hpp>
-//#include <Cosmos/wallet/wallet.hpp>
 
 namespace Cosmos {
 
+    struct database;
+
+    void setup_BIP_44_wallet (const HD::BIP_32::secret &master, list<uint32> accounts = {1});
+
     struct database : local_TXDB, local_price_data {
+
+        virtual bool make_wallet (const std::string &name) = 0;
+        virtual data::list<std::string> list_wallet_names () = 0;
 
         virtual bool set_key (const std::string &key_name, const key_expression &k) = 0;
 
         // set the private key for a given public key.
         virtual bool to_private (const std::string &key_name, const key_expression &k) = 0;
 
-        virtual bool make_wallet (const std::string &name) = 0;
-        virtual data::list<std::string> list_wallet_names () = 0;
+        virtual key_expression get_key (const std::string &key_name) = 0;
 
-        void setup_BIP_44_wallet (const std::string &wallet_name, const HD::BIP_32::secret &master);
+        // set the private key for a given public key.
+        virtual key_expression get_private (const std::string &key_name) = 0;
 
-        void setup_BIP_44_account (const std::string &wallet_name, const HD::BIP_32::pubkey &account_master, uint32 account = 0);
+        struct derivation {
+            key_derivation Derivation;
+            std::string KeyName;
+            uint32 Index;
+            derivation (const key_derivation &d, const std::string key_name, uint32 index = 0):
+                Derivation {d}, KeyName {key_name}, Index {index} {}
+        };
+
+        virtual bool set_derivation (const std::string &wallet_name, const std::string &deriv_name, const derivation &) = 0;
+
+        virtual list<derivation> get_wallet_derivations (const std::string &wallet_name) = 0;
+
+        virtual Cosmos::account get_wallet_account (const std::string &wallet_name) = 0;
 
         struct readable;
 
@@ -31,6 +49,8 @@ namespace Cosmos {
         struct writable;
 
         struct readable {
+
+            virtual list<derivation> derivations () = 0;
 
             virtual const Cosmos::account *account () = 0;
 
@@ -53,7 +73,7 @@ namespace Cosmos {
             // key can be any standard key format (in quotes) or a derivation from another key.
             virtual void set_key (const std::string &key_name, const key_expression &k) = 0;
             virtual void to_private (const std::string &key_name, const key_expression &k) = 0;
-            virtual void set_key_source (const std::string &name, const key_source &k) = 0;
+            virtual bool set_derivation (const std::string &name, const derivation &) = 0;
 
             // Do we need this?
             virtual Cosmos::history *history () = 0;

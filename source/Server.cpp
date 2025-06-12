@@ -396,7 +396,9 @@ awaitable<net::HTTP::response> processor::operator () (const net::HTTP::request 
     }
 }
 
-net::HTTP::response value_response (Bitcoin::satoshi);
+net::HTTP::response value_response (Bitcoin::satoshi x) {
+    return JSON_response (JSON (int64 (x)));
+}
 
 net::HTTP::response process_method (
     processor &p, net::HTTP::method http_method, meth m,
@@ -509,6 +511,9 @@ net::HTTP::response process_method (
     }
 
     if (m == TO_PRIVATE) {
+        if (http_method != net::HTTP::method::post)
+            return error_response (405, m, problem::invalid_method, "use post");
+
         if (!bool (content_type) || *content_type != net::HTTP::content::type::text_plain)
             return error_response (400, m, problem::invalid_content_type, "expected content-type:text/plain");
 
@@ -527,6 +532,29 @@ net::HTTP::response process_method (
     return error_response (500, m, problem::invalid_name, "wallet method called without wallet name");
 }
 
+bool parse_uint32 (const std::string &str, uint32_t &result) {
+    try {
+        size_t idx = 0;
+        unsigned long val = std::stoul (str, &idx, 10);  // base 10
+
+        if (idx != str.size ()) {
+            return false;  // Extra characters after number
+        }
+
+        if (val > std::numeric_limits<uint32_t>::max()) {
+            return false;  // Out of range for uint32_t
+        }
+
+        result = static_cast<uint32_t> (val);
+        return true;
+
+    } catch (const std::invalid_argument &) {
+        return false;  // Not a number
+    } catch (const std::out_of_range &) {
+        return false;  // Too large for unsigned long
+    }
+}
+
 net::HTTP::response process_wallet_method (
     processor &p, net::HTTP::method http_method, meth m,
     Diophant::symbol wallet_name,
@@ -539,36 +567,127 @@ net::HTTP::response process_wallet_method (
     if (wallet_name == "") return error_response (400, m, problem::invalid_name, "name argument must be alpha alnum+");
 
     if (m == MAKE_WALLET) {
+        if (http_method != net::HTTP::method::post)
+            return error_response (405, m, problem::invalid_method, "use post");
+
         bool created = p.DB->make_wallet (wallet_name);
         if (created) return ok_response ();
         else return error_response (500, m, problem::failed, "could not create wallet");
     }
 
-    if (m == ADD_SEQUENCE) return error_response (501, m, problem::unimplemented);
+    if (m == ADD_KEY_SEQUENCE) {
+        if (http_method != net::HTTP::method::post)
+            return error_response (405, m, problem::invalid_method, "use post");
 
-    if (m == GENERATE) return error_response (501, m, problem::unimplemented);
+        const UTF8 *key_name_param = query.contains ("key_name");
+        if (!bool (key_name_param))
+            return error_response (400, m, problem::invalid_query, "required parameter 'key_name' not present");
+
+        Diophant::symbol key_name = tao_pegtl_grammar::read_symbol (*key_name_param);
+
+        // make sure the name is a valid symbol name
+        if (key_name == "") return error_response (400, m, problem::invalid_name, "key_name parameter must be alpha alnum+");
+
+        const UTF8 *name_param = query.contains ("name");
+        if (!bool (name_param))
+            return error_response (400, m, problem::invalid_query, "required parameter 'name' not present");
+
+        Diophant::symbol name = tao_pegtl_grammar::read_symbol (*name_param);
+
+        // make sure the name is a valid symbol name
+        if (name == "") return error_response (400, m, problem::invalid_name, "name parameter must be alpha alnum+");
+
+        uint32 index = 0;
+        const UTF8 *index_param = query.contains ("index");
+        if (bool (index_param)) {
+            if (!parse_uint32 (*index_param, index))
+                return error_response (400, m, problem::invalid_name, "invalid parameter 'index'");
+        }
+
+        Cosmos::key_derivation key_deriv {data::string (body)};
+
+        if (p.DB->set_derivation (wallet_name, name, Cosmos::database::derivation {key_deriv, key_name, index})) return ok_response ();
+        return error_response (500, m, problem::failed, "could not set wallet derivation");
+    }
+
+    if (m == VALUE) {
+        if (http_method != net::HTTP::method::get)
+            return error_response (405, m, problem::invalid_method, "use get");
+
+        return value_response (p.DB->get_wallet_account (wallet_name).value ());
+    }
+
+    if (m == DETAILS) {
+        if (http_method != net::HTTP::method::get)
+            return error_response (405, m, problem::invalid_method, "use get");
+
+        return JSON_response (p.DB->get_wallet_account (wallet_name).details ());
+    }
+
+    if (m == GENERATE) {
+        if (http_method != net::HTTP::method::post)
+            return error_response (405, m, problem::invalid_method, "use post");
+
+        return error_response (501, m, problem::unimplemented);
+    }
 
     return error_response (501, m, problem::unimplemented);
 
-    if (m == VALUE) return error_response (501, m, problem::unimplemented);
+    if (m == IMPORT) {
+        if (http_method != net::HTTP::method::put)
+            return error_response (405, m, problem::invalid_method, "use put");
 
-    if (m == DETAILS) return error_response (501, m, problem::unimplemented);
+        return error_response (501, m, problem::unimplemented);
+    }
 
-    if (m == IMPORT) return error_response (501, m, problem::unimplemented);
+    if (m == RESTORE) {
+        if (http_method != net::HTTP::method::put)
+            return error_response (405, m, problem::invalid_method, "use put");
 
-    if (m == RESTORE) return error_response (501, m, problem::unimplemented);
+        return error_response (501, m, problem::unimplemented);
+    }
 
-    if (m == SPEND) return error_response (501, m, problem::unimplemented);
+    if (m == SPEND) {
+        if (http_method != net::HTTP::method::post)
+            return error_response (405, m, problem::invalid_method, "use post");
 
-    if (m == ENCRYPT_KEY) return error_response (501, m, problem::unimplemented);
+        return error_response (501, m, problem::unimplemented);
+    }
 
-    if (m == DECRYPT_KEY) return error_response (501, m, problem::unimplemented);
+    if (m == BOOST) {
+        if (http_method != net::HTTP::method::post)
+            return error_response (405, m, problem::invalid_method, "use post");
 
-    if (m == BOOST) return error_response (501, m, problem::unimplemented);
+        return error_response (501, m, problem::unimplemented);
+    }
 
-    if (m == SPLIT) return error_response (501, m, problem::unimplemented);
+    if (m == SPLIT) {
+        if (http_method != net::HTTP::method::post)
+            return error_response (405, m, problem::invalid_method, "use post");
 
-    if (m == TAXES) return error_response (501, m, problem::unimplemented);
+        return error_response (501, m, problem::unimplemented);
+    }
+
+    if (m == TAXES) {
+        if (http_method != net::HTTP::method::get)
+            return error_response (405, m, problem::invalid_method, "use get");
+
+        return error_response (501, m, problem::unimplemented);
+    }
+
+    if (m == ENCRYPT_KEY) {
+        if (http_method != net::HTTP::method::post)
+            return error_response (405, m, problem::invalid_method, "use post");
+
+        return error_response (501, m, problem::unimplemented);
+    }
+
+    if (m == DECRYPT_KEY) {
+        if (http_method != net::HTTP::method::post)
+            return error_response (405, m, problem::invalid_method, "use post");
+
+        return error_response (501, m, problem::unimplemented);
+    }
 
     return error_response (501, m, problem::unimplemented);
 }
@@ -784,6 +903,7 @@ R"--(<!DOCTYPE html>
 
   <details>
     <summary>version</summary>
+    <p>Get version string.</p>
     <form id="form-version">
       <button type="button" onclick="callApi('GET', 'version')">Get Version</button>
     </form>
@@ -791,7 +911,8 @@ R"--(<!DOCTYPE html>
   </details>
 
   <details>
-    <summary>help</summary>
+  <summary>help</summary>
+    <p>General help or get help with a specific function.</p>
     <form id="form-help">
       <label><input type="radio" name="method" value="shutdown" onclick="toggleRadio(this)">shutdown</label>
       <br>
@@ -816,6 +937,9 @@ R"--(<!DOCTYPE html>
 
   <details>
     <summary>shutdown</summary>
+    <p>
+      Shutdown the program.
+    </p>
     <form id="form-shutdown">
       <button type="button" onclick="callApi('PUT', 'shutdown')">Shutdown</button>
     </form>
@@ -824,6 +948,10 @@ R"--(<!DOCTYPE html>
 
   <details>
     <summary>add_entropy</summary>
+    <p>
+      The cryptographic random number generator needs entropy periodically. Here we add it manually.
+      Type in some random text with your fingers to provide it.
+    </p>
     <form id="form-add_entropy">
       <input name="value" type="text">
       <br>
@@ -836,6 +964,11 @@ R"--(<!DOCTYPE html>
 
   <details>
     <summary>add_key</summary>
+    <p>
+      Add key. This could be any kind of key: public, private, symmetric. Whatever.
+      You can enter it in the form of a Bitcoin Calculator expression or generate a
+      random key of a specific type.
+    </p>
     <form id="form-add_key">
       <b>key name: </b><input name="key-name" type="text">
       <br>
@@ -854,6 +987,10 @@ R"--(<!DOCTYPE html>
 
   <details>
     <summary>to_private</summary>
+    <p>
+      Provide an expression to derive the private key of a public key named
+      <b>key name</b>.
+    </p>
     <form id="form-to_private">
       <b>key name: </b><input name="key-name" type="text">
       <br>
@@ -864,10 +1001,13 @@ R"--(<!DOCTYPE html>
     <pre id="output-to_private"></pre>
   </details>
 
-  <h2>Wallets</h2>
+  <h2>Wallet Generation</h2>
 
   <details>
     <summary>make_wallet</summary>
+    <p>
+      Make an empty wallet. The wallet has no keys associated with it. You have to build it up.
+    </p>
     <form id="form-make_wallet">
       <b>wallet name: </b><input name="wallet-name" type="text">
       <br>
@@ -877,7 +1017,37 @@ R"--(<!DOCTYPE html>
   </details>
 
   <details>
+    <summary>add key sequence</summary>
+    <p>
+      Add a key sequence to a wallet.
+    </p>
+    <form id="form-add_key_sequence">
+      <b>wallet name: </b><input name="wallet-name" type="text">
+      <b>sequence name: </b><input name="sequence-name" type="text">
+      <b>key name: </b><input name="key-name" type="text">
+      <b>key expression: </b><input name="expression" type="text">
+    </form>
+    <pre id="output-add_key_sequence"></pre>
+  </details>
+
+  <details>
+    <summary>generate</summary>
+    <p>
+      Generate a wallet. We have several options.
+    </p>
+    <form id="form-generate">
+      <b>Use mnemonic: </b><input name="use_mnemonic" type="checkbox">
+    </form>
+    <pre id="output-generate"></pre>
+  </details>
+
+  <h2>Wallets</h2>
+
+  <details>
     <summary>list_wallets</summary>
+    <p>
+      List wallets.
+    </p>
     <form id="form-list_wallets">
       <button type="button" onclick="callApi('GET', 'list_wallets')">List Wallets</button>
     </form>
@@ -885,7 +1055,25 @@ R"--(<!DOCTYPE html>
   </details>
 
   <details>
+    <summary>value</summary>
+    <p>
+      Get wallet value.
+    </p>
+    <form id="form-value">
+      <b>wallet name: </b><input name="wallet-name" type="text">
+      <br>
+      <label><input type="radio" name="choice" value="BSV" onclick="toggleRadio(this)" checked>BSV sats</label>
+      <br>
+      <button type="button" onclick="callApi('POST', 'value')">Value</button>
+    </form>
+    <pre id="output-value"></pre>
+  </details>
+
+  <details>
     <summary>details</summary>
+    <p>
+      Get wallet details (includes and information about the outputs it's stored in).
+    </p>
     <form id="form-details">
       <b>wallet name: </b><input name="wallet-name" type="text">
       <br>
@@ -895,15 +1083,17 @@ R"--(<!DOCTYPE html>
   </details>
 
   <details>
-    <summary>value</summary>
-    <form id="form-value">
-      <b>wallet name: </b><input name="wallet-name" type="text">
-      <br>
-      <label><input type="radio" name="choice" value="BSV" onclick="toggleRadio(this)" checked>BSV sats</label>
-      <br>
-      <button type="button" onclick="callApi('POST', 'value')">Value</button>
+    <summary>spend</summary>
+    <form id="form-restore">
     </form>
-    <pre id="output-value"></pre>
+    <pre id="output-restore"></pre>
+  </details>
+
+  <details>
+    <summary>restore</summary>
+    <form id="form-restore">
+    </form>
+    <pre id="output-restore"></pre>
   </details>
 
   <script>

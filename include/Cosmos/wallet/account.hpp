@@ -63,6 +63,18 @@ namespace Cosmos {
             return v;
         }
 
+        struct account_details {
+            Bitcoin::satoshi Value {0};
+            Bitcoin::prevout Max {Bitcoin::outpoint {}, Bitcoin::output {}};
+            double MeanValue {0};
+
+            account_details () {}
+
+            operator JSON () const;
+        };
+
+        account_details details () const;
+
         account operator + (const account b) const {
             account a = *this;
             for (const auto &[key, value] : b) a = a.insert (key, value);
@@ -84,16 +96,6 @@ namespace Cosmos {
         }
 
     };
-/*
-    entry<Bitcoin::address, signing> inline pay_to_address_signing (const key_expression &d) {
-        return {d.derive ().address ().encode (),
-            signing {{derivation {d.Parent, d.Path}}, pay_to_address::redeem_expected_size ()}};
-    }
-
-    entry<Bitcoin::pubkey, signing> inline pay_to_pubkey_signing (const key_expression &d) {
-        return {Bitcoin::pubkey {d.derive ().Pubkey},
-            signing {{derivation {d.Parent, d.Path}}, pay_to_pubkey::redeem_expected_size ()}};
-    }*/
 
     std::ostream inline &operator << (std::ostream &o, const redeemable &r) {
         return o << "redeemable {" << r.Prevout << ", keys: " << r.Keys << "}";

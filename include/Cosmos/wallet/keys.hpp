@@ -26,6 +26,7 @@ namespace Cosmos {
     template <typename X> X cast_to (expression);
     bool evaluatable (expression);
 
+    // an expression that evaluates to a key type.
     struct key_expression : expression {
         using expression::expression;
         key_expression (const secp256k1::secret &);
@@ -34,6 +35,28 @@ namespace Cosmos {
         key_expression (const Bitcoin::pubkey &);
         key_expression (const HD::BIP_32::secret &);
         key_expression (const HD::BIP_32::pubkey &);
+    };
+
+    // information required to make signatures to redeem an output.
+    struct signing {
+
+        // something that references the keys required to
+        // sign this tx.
+        list<key_expression> Keys;
+
+        // expected size of the completed input script.
+        uint64 ExpectedScriptSize;
+
+        // we may need a partially completed script.
+        bytes UnlockScriptSoFar;
+
+        signing () : Keys {}, ExpectedScriptSize {}, UnlockScriptSoFar {} {}
+        signing (list<key_expression> d, uint64 ez, const bytes &script_code = {}) :
+            Keys {d}, ExpectedScriptSize {ez}, UnlockScriptSoFar {script_code} {}
+
+        uint64 expected_input_size () const {
+            return ExpectedScriptSize + Bitcoin::var_int::size (ExpectedScriptSize) + 40;
+        }
     };
 
     struct key_derivation : expression {
@@ -58,33 +81,6 @@ namespace Cosmos {
 
         key_expression last_public () const;
         key_expression last_private () const;
-    };
-
-    struct keychain {
-        virtual Bitcoin::secret &recover (key_expression) = 0;
-        virtual ~keychain () = 0;
-    };
-
-    // information required to make signatures to redeem an output.
-    struct signing {
-
-        // something that references the keys required to
-        // sign this tx.
-        list<key_expression> Keys;
-
-        // expected size of the completed input script.
-        uint64 ExpectedScriptSize;
-
-        // we may need a partially completed script.
-        bytes UnlockScriptSoFar;
-
-        signing () : Keys {}, ExpectedScriptSize {}, UnlockScriptSoFar {} {}
-        signing (list<key_expression> d, uint64 ez, const bytes &script_code = {}) :
-            Keys {d}, ExpectedScriptSize {ez}, UnlockScriptSoFar {script_code} {}
-
-        uint64 expected_input_size () const {
-            return ExpectedScriptSize + Bitcoin::var_int::size (ExpectedScriptSize) + 40;
-        }
     };
 
     inline key_expression::key_expression (const Bitcoin::secret &x) {

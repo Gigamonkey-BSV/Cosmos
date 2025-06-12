@@ -931,6 +931,27 @@ namespace Cosmos::SQLite {
             return true;
         }
 
+        key_expression get_key (const std::string &key_name) final override {
+            throw method::unimplemented {"SQLite::get_key"};
+        }
+
+        // set the private key for a given public key.
+        key_expression get_private (const std::string &key_name) final override {
+            throw method::unimplemented {"SQLite::get_private"};
+        }
+
+        bool set_derivation (const std::string &wallet_name, const std::string &deriv_name, const derivation &) {
+            throw method::unimplemented {"SQLite::set_derivation"};
+        }
+
+        list<derivation> get_wallet_derivations (const std::string &wallet_name) final override {
+            throw method::unimplemented {"SQLite::get_wallet"};
+        };
+
+        Cosmos::account get_wallet_account (const std::string &wallet_name) final override {
+            throw method::unimplemented {"SQLite::get_wallet"};
+        };
+
         struct readable : database::readable {
 
             const Cosmos::account *account () final override;
@@ -947,7 +968,6 @@ namespace Cosmos::SQLite {
             // key can be any standard key format (in quotes) or a derivation from another key.
             void set_key (const std::string &key_name, const key_expression &k) final override;
             void to_private (const std::string &key_name, const key_expression &k) final override;
-            void set_key_source (const std::string &name, const key_source &k) final override;
 
             // Do we need this?
             Cosmos::history *history () final override;

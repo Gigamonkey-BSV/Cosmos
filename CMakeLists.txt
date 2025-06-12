@@ -131,7 +131,7 @@ add_executable (
     CosmosWallet
     source/random.cpp
     #source/interface.cpp
-    source/generate.cpp
+    #source/generate.cpp
     #source/restore.cpp
     #source/request.cpp
     #source/accept.cpp

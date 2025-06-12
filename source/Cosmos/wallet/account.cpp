@@ -1,5 +1,6 @@
 
 #include <Cosmos/wallet/account.hpp>
+#include <Cosmos/database/write.hpp>
 
 namespace Cosmos {
 
@@ -33,7 +34,9 @@ namespace Cosmos {
     }
 
     // throw if failure.
-    key_expression read_derivation (const JSON &);
+    key_expression read_derivation (const JSON &) {
+        throw method::unimplemented {"read_derivation"};
+    }
 
     redeemable::redeemable (const JSON &j) : signing {} {
 
@@ -82,6 +85,24 @@ namespace Cosmos {
         for (const auto &[key, value] : *this) a[Cosmos::write (key)] = JSON (value);
 
         return a;
+    }
+
+    account::account_details account::details () const {
+        account_details d;
+        for (const auto &[key, value] : *this) {
+            d.Value += value.Prevout.Value;
+            if (value.Prevout.Value > d.Max.value ())
+                d.Max = {key, value.Prevout};
+            d.MeanValue = double (d.Value) / double (this->size ());
+        };
+        return d;
+    }
+
+    account::account_details::operator JSON () const {
+        return JSON::object_t {
+            {"value", int64 (Value)},
+            {"max", Cosmos::write (Max)},
+            {"mean", MeanValue}};
     }
 
 }

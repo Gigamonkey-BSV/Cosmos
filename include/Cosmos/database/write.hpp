@@ -34,8 +34,10 @@ namespace Cosmos {
     JSON write (const Bitcoin::input &j);
     Bitcoin::input read_input (const JSON &j);
 
-    JSON write_path (HD::BIP_32::path p);
+    JSON write (const Bitcoin::prevout &);
+    Bitcoin::prevout read_prevout (const JSON &j);
 
+    JSON write_path (HD::BIP_32::path p);
     HD::BIP_32::path read_path (const JSON &j);
 
     std::string inline write (const N &n) {
@@ -76,6 +78,10 @@ namespace Cosmos {
 
     Bitcoin::input inline read_input (const JSON &j) {
         return Bitcoin::input {read_outpoint (j["reference"]), *encoding::hex::read (std::string (j["script"])), uint32 (j["sequence"])};
+    }
+
+    JSON inline write (const Bitcoin::prevout &p) {
+        return JSON::object_t {{write (p.Key), write (p.Value)}};
     }
 }
 

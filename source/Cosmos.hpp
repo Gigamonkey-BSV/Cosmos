@@ -13,31 +13,31 @@ using filepath = Cosmos::filepath;
 
 enum meth {
     UNSET,
-    HELP,           // print help messages
-    VERSION,        // print a version message
+    HELP,             // print help messages
+    VERSION,          // print a version message
     SHUTDOWN,
-    ADD_ENTROPY,    // add entropy to the random number generator.
+    ADD_ENTROPY,      // add entropy to the random number generator.
     LIST_WALLETS,
     MAKE_WALLET,
     ADD_KEY,
     TO_PRIVATE,
-    ADD_SEQUENCE,
-    GENERATE,       // generate a wallet
-    RESTORE,        // restore a wallet
-    UPDATE,         // depricated: check if txs in pending have been mined.
-    VALUE,          // the value in the wallet.
+    ADD_KEY_SEQUENCE,
+    GENERATE,         // generate a wallet
+    RESTORE,          // restore a wallet
+    UPDATE,           // depricated: check if txs in pending have been mined.
+    VALUE,            // the value in the wallet.
     DETAILS,
-    SEND,           // (depricated)
-    SPEND,          //
-    SPEND_ALL,      // spend all funds.
-    REQUEST,        // request a payment
-    ACCEPT,         // accept a payment
-    PAY,            // make a payment.
-    SIGN,           // sign an unsigned transaction
-    IMPORT,         // import a utxo with private key
-    BOOST,          // boost some content
-    SPLIT,          // split your wallet into tiny pieces for privacy.
-    TAXES,          // calculate income and capital gain for a given year.
+    SEND,             // (depricated)
+    SPEND,            //
+    SPEND_ALL,        // spend all funds.
+    REQUEST,          // request a payment
+    ACCEPT,           // accept a payment
+    PAY,              // make a payment.
+    SIGN,             // sign an unsigned transaction
+    IMPORT,           // import a utxo with private key
+    BOOST,            // boost some content
+    SPLIT,            // split your wallet into tiny pieces for privacy.
+    TAXES,            // calculate income and capital gain for a given year.
     ENCRYPT_KEY,
     DECRYPT_KEY
 };
