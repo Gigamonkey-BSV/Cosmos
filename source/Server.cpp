@@ -4,7 +4,8 @@
 #include <cstdlib>  // for std::getenv
 #include <laserpants/dotenv/dotenv.h>
 
-#include <sv/random.h>
+#include <gigamonkey/schema/random.hpp>
+#include <gigamonkey/schema/bip_39.hpp>
 
 #include <data/async.hpp>
 #include <data/net/URL.hpp>
@@ -128,8 +129,8 @@ struct processor {
 
     void add_entropy (const bytes &);
 
-    crypto::random &get_secure_random ();
-    crypto::random &get_casual_random ();
+    crypto::entropy &get_secure_random ();
+    crypto::entropy &get_casual_random ();
 
     Cosmos::spend_options SpendOptions;
 
@@ -156,7 +157,8 @@ struct processor {
     tuple<Bitcoin::TXID, wallet_info> spend (const instruction &);*/
 
 private:
-    ptr<crypto::fixed_entropy> Entropy {nullptr};
+    ptr<crypto::fixed_entropy> FixedEntropy {nullptr};
+    ptr<crypto::entropy> Entropy {nullptr};
     ptr<crypto::NIST::DRBG> SecureRandom {nullptr};
     ptr<crypto::linear_combination_random> CasualRandom {nullptr};
 
@@ -351,7 +353,9 @@ awaitable<net::HTTP::response> processor::operator () (const net::HTTP::request 
             co_return error_response (405, m, problem::invalid_method, "use post");
 
         maybe<net::HTTP::content> content_type = req.content_type ();
-        if (!bool (content_type) || *content_type != net::HTTP::content::type::application_octet_stream)
+        if (!bool (content_type) || (
+            *content_type != net::HTTP::content::type::application_octet_stream &&
+            *content_type != net::HTTP::content::type::text_plain))
             co_return error_response (400, m, problem::invalid_content_type, "expected content-type:application/octet-stream");
 
         add_entropy (req.Body);
@@ -398,6 +402,13 @@ awaitable<net::HTTP::response> processor::operator () (const net::HTTP::request 
 
 net::HTTP::response value_response (Bitcoin::satoshi x) {
     return JSON_response (JSON (int64 (x)));
+}
+
+maybe<bool> read_bool (const std::string &utf8) {
+    std::string sanitized = sanitize (utf8);
+    if (sanitized == "true") return true;
+    else if (sanitized == "false") return false;
+    else return {};
 }
 
 net::HTTP::response process_method (
@@ -461,10 +472,9 @@ net::HTTP::response process_method (
         bool compressed = true;
         const UTF8 *compressed_param = query.contains ("compressed");
         if (bool (compressed_param)) {
-            std::string compressed_san = sanitize (*compressed_param);
-            if (compressed_san == "true") compressed = true;
-            else if (compressed_san == "false") compressed = false;
-            else return error_response (400, m, problem::invalid_query, "invalid parameter 'compressed'");
+            maybe<bool> maybe_compressed =  read_bool (*compressed_param);
+            if (!maybe_compressed) return error_response (400, m, problem::invalid_query, "invalid parameter 'compressed'");
+            compressed = *maybe_compressed;
         }
 
         Cosmos::key_expression key_expr;
@@ -485,7 +495,7 @@ net::HTTP::response process_method (
             if (bool (content_type))
                 return error_response (400, m, problem::invalid_query, "no body when we generate random keys");
 
-            crypto::random &random = p.get_secure_random ();
+            crypto::entropy &random = p.get_secure_random ();
             secp256k1::secret key;
             random >> key.Value;
 
@@ -495,7 +505,6 @@ net::HTTP::response process_method (
                 } break;
                 case (key_type::HD): {
                     HD::chain_code x;
-                    x.resize (32);
                     random >> x;
                     key_expr = Cosmos::key_expression (HD::BIP_32::secret {key, x, net});
                 } break;
@@ -537,13 +546,11 @@ bool parse_uint32 (const std::string &str, uint32_t &result) {
         size_t idx = 0;
         unsigned long val = std::stoul (str, &idx, 10);  // base 10
 
-        if (idx != str.size ()) {
+        if (idx != str.size ())
             return false;  // Extra characters after number
-        }
 
-        if (val > std::numeric_limits<uint32_t>::max()) {
+        if (val > std::numeric_limits<uint32_t>::max())
             return false;  // Out of range for uint32_t
-        }
 
         result = static_cast<uint32_t> (val);
         return true;
@@ -553,6 +560,11 @@ bool parse_uint32 (const std::string &str, uint32_t &result) {
     } catch (const std::out_of_range &) {
         return false;  // Too large for unsigned long
     }
+}
+
+maybe<net::HTTP::response> read_spend_options (Cosmos::spend_options &, map<UTF8, UTF8> query) {
+    // TODO
+    return {};
 }
 
 net::HTTP::response process_wallet_method (
@@ -628,7 +640,130 @@ net::HTTP::response process_wallet_method (
         if (http_method != net::HTTP::method::post)
             return error_response (405, m, problem::invalid_method, "use post");
 
+        // first we will determine whether we will return a mnemonic
+        bool use_mnemonic = false;
+        const UTF8 *use_mnemonic_param = query.contains ("mnemonic");
+        if (bool (use_mnemonic_param)) {
+            maybe<bool> maybe_mnemonic = read_bool (*use_mnemonic_param);
+            if (!maybe_mnemonic) return error_response (400, m, problem::invalid_query, "invalid parameter 'mnemonic'");
+            use_mnemonic = *maybe_mnemonic;
+        }
+
+        enum class mnemonic_style {
+            none,
+            BIP_39,
+            Electrum_SV
+        } MnemonicStyle {mnemonic_style::none};
+
+        const UTF8 *mnemonic_style_param = query.contains ("mnemonic_style");
+        if (bool (mnemonic_style_param)) {
+            std::string sanitized = sanitize (*mnemonic_style_param);
+            if (sanitized == "electrumsv") MnemonicStyle = mnemonic_style::Electrum_SV;
+            else if (sanitized == "bip39") MnemonicStyle = mnemonic_style::BIP_39;
+            else return error_response (400, m, problem::invalid_query, "invalid parameter 'mnemonic_style'");
+        }
+
+        uint32 number_of_words = 24;
+        const UTF8 *number_of_words_param = query.contains ("number_of_words");
+        if (bool (number_of_words_param)) {
+            if (!parse_uint32 (*number_of_words_param, number_of_words))
+                return error_response (400, m, problem::invalid_name, "invalid parameter 'number_of_words'");
+        }
+
+        if (number_of_words != 12 && number_of_words != 24)
+            return error_response (400, m, problem::invalid_name, "invalid parameter 'number_of_words'");
+
+        enum class wallet_style {
+            BIP_44,
+            BIP_44_plus,
+            experimental
+        } WalletStyle {wallet_style::BIP_44};
+
+        const UTF8 *wallet_style_param = query.contains ("wallet_style");
+        if (bool (wallet_style_param)) {
+            std::string sanitized = sanitize (*wallet_style_param);
+            if (sanitized == "bip44") WalletStyle = wallet_style::BIP_44;
+            else if (sanitized == "bip44plus") WalletStyle = wallet_style::BIP_44_plus;
+            else if (sanitized == "experimental") WalletStyle = wallet_style::experimental;
+            else return error_response (400, m, problem::invalid_query, "invalid parameter 'wallet_style'");
+        }
+
+        uint32 coin_type = 0;
+        const UTF8 *coin_type_param = query.contains ("coin_type");
+        if (bool ()) {
+            if (!parse_uint32 (*number_of_words_param, number_of_words))
+                return error_response (400, m, problem::invalid_name, "invalid parameter 'number_of_words'");
+        }
+
+        if (MnemonicStyle == mnemonic_style::Electrum_SV || WalletStyle == wallet_style::experimental)
+            return error_response (501, m, problem::unimplemented);
+
+        // we generate the wallet the same way regardless of whether the user wants words.
+        bytes wallet_entropy {};
+        wallet_entropy.resize (number_of_words * 4 / 3);
+
+        p.get_secure_random () >> wallet_entropy;
+        std::string wallet_words = HD::BIP_39::generate (wallet_entropy);
+
+        auto master = HD::BIP_32::secret::from_seed (HD::BIP_39::read (wallet_words));
+        auto account = HD::BIP_44::from_root (master, coin_type, 0).to_public ();
+
+        Cosmos::key_expression master_key_expr {master};
+        Cosmos::key_expression account_key_expr {account};
+        Cosmos::key_expression account_derivation {static_cast<std::string> (master_key_expr) + " / `44 / `" + std::to_string (coin_type) + " / `0"};
+
+        std::string master_key_name = static_cast<std::string> (wallet_name) + "_master";
+        std::string account_name = static_cast<std::string> (wallet_name) + "_account_0";
+
+        p.DB->set_key (master_key_name, master_key_expr);
+        p.DB->set_key (account_name, account_key_expr);
+        p.DB->to_private (account_name, account_derivation);
+
+        p.DB->set_derivation (wallet_name, "receive",
+            Cosmos::database::derivation {Cosmos::key_derivation {"@ name index -> name / 0 / index"}, account_name});
+
+        p.DB->set_derivation (wallet_name, "change",
+            Cosmos::database::derivation {Cosmos::key_derivation {"@ name index -> name / 1 / index"}, account_name});
+
+        if (WalletStyle == wallet_style::BIP_44_plus)
+            p.DB->set_derivation (wallet_name, "receivex",
+                Cosmos::database::derivation {Cosmos::key_derivation {"@ name index -> name / 0 / `index"}, account_name});
+
+        if (use_mnemonic) return JSON_response (JSON {wallet_words});
+        return ok_response ();
+
+    }
+
+    if (m == NEXT_ADDRESS) {
         return error_response (501, m, problem::unimplemented);
+    }
+
+    if (m == NEXT_XPUB) {
+        return error_response (501, m, problem::unimplemented);
+    }
+
+    if (m == SPEND) {
+        if (http_method != net::HTTP::method::post)
+            return error_response (405, m, problem::invalid_method, "use post");
+
+        Bitcoin::address pay_to_address;
+        HD::BIP_32::pubkey pay_to_xpub;
+
+        const UTF8 *pay_to_param = query.contains ("pay_to");
+        if (bool (pay_to_param)) {
+            pay_to_address = Bitcoin::address {*pay_to_param};
+            pay_to_xpub = HD::BIP_32::pubkey {*pay_to_param};
+        } else return error_response (400, m, problem::invalid_query, "required parameter 'pay_to' not present");
+
+        if (pay_to_address.valid ()) {
+
+        Cosmos::spend_options spend_options = p.SpendOptions;
+        maybe<net::HTTP::response> error = read_spend_options (spend_options, query);
+        if (bool (error)) return *error;
+            return error_response (501, m, problem::unimplemented);
+        } else if (pay_to_xpub.valid ()) {
+            return error_response (501, m, problem::unimplemented);
+        } else return error_response (400, m, problem::invalid_query, "invalid parameter 'pay_to'");
     }
 
     return error_response (501, m, problem::unimplemented);
@@ -643,13 +778,6 @@ net::HTTP::response process_wallet_method (
     if (m == RESTORE) {
         if (http_method != net::HTTP::method::put)
             return error_response (405, m, problem::invalid_method, "use put");
-
-        return error_response (501, m, problem::unimplemented);
-    }
-
-    if (m == SPEND) {
-        if (http_method != net::HTTP::method::post)
-            return error_response (405, m, problem::invalid_method, "use post");
 
         return error_response (501, m, problem::unimplemented);
     }
@@ -695,8 +823,6 @@ net::HTTP::response process_wallet_method (
 processor::processor (const options &o) {
     SpendOptions = o.spend_options ();
     DB = load_DB (o);
-
-    Entropy = std::make_shared<crypto::fixed_entropy> (bytes_view {});
 
 }
 
@@ -775,7 +901,7 @@ either<options::JSON_DB_options, options::SQLite_options, options::MongoDB_optio
     return sqlite;
 }
 
-crypto::random &processor::get_secure_random () {
+crypto::entropy &processor::get_secure_random () {
 
     if (!SecureRandom) {
 
@@ -788,18 +914,15 @@ crypto::random &processor::get_secure_random () {
 
 }
 
-crypto::random &processor::get_casual_random () {
+crypto::entropy &processor::get_casual_random () {
 
     if (!CasualRandom) {
-        if (!SecureRandom) get_secure_random ();
-
-        Satoshi::RandomInit ();
         uint64 seed;
-        Satoshi::GetStrongRandBytes ((byte *) &seed, 8);
+        get_secure_random () >> seed;
 
         CasualRandom = std::make_shared<crypto::linear_combination_random> (256,
-            std::static_pointer_cast<crypto::random> (std::make_shared<crypto::std_random<std::default_random_engine>> (seed)),
-            std::static_pointer_cast<crypto::random> (SecureRandom));
+            std::static_pointer_cast<crypto::entropy> (std::make_shared<crypto::std_random<std::default_random_engine>> (seed)),
+            std::static_pointer_cast<crypto::entropy> (SecureRandom));
     }
 
     return *CasualRandom.get ();
@@ -807,11 +930,13 @@ crypto::random &processor::get_casual_random () {
 }
 
 void processor::add_entropy (const bytes &b) {
-    if (!Entropy) Entropy = std::make_shared<crypto::fixed_entropy> (b);
+    if (!FixedEntropy) FixedEntropy = std::make_shared<crypto::fixed_entropy> (b);
     else {
-      Entropy->Entropy = b;
-      Entropy->Position = 0;
+        FixedEntropy->Entropy = b;
+        FixedEntropy->Position = 0;
     }
+
+    if (!Entropy) Entropy = std::make_shared<crypto::entropy_sum> (FixedEntropy, std::make_shared<Gigamonkey::bitcoind_entropy> ());
 }
 
 Cosmos::spend_options options::spend_options () const {
@@ -905,7 +1030,7 @@ R"--(<!DOCTYPE html>
     <summary>version</summary>
     <p>Get version string.</p>
     <form id="form-version">
-      <button type="button" onclick="callApi('GET', 'version')">Get Version</button>
+      <button type="button" id="submit-version" onclick="callApi('GET', 'version')">Get Version</button>
     </form>
     <pre id="output-version"></pre>
   </details>
@@ -930,7 +1055,7 @@ R"--(<!DOCTYPE html>
       <br>
       <label><input type="radio" name="method" value="details" onclick="toggleRadio(this)">details</label>
       <br>
-      <button type="button" onclick="callApi('GET', 'help')">Get Help</button>
+      <button type="button" id="submit-help" onclick="callApi('GET', 'help')">Get Help</button>
     </form>
     <pre id="output-help"></pre>
   </details>
@@ -941,7 +1066,7 @@ R"--(<!DOCTYPE html>
       Shutdown the program.
     </p>
     <form id="form-shutdown">
-      <button type="button" onclick="callApi('PUT', 'shutdown')">Shutdown</button>
+      <button type="button" id="submit-shutdown" onclick="callApi('PUT', 'shutdown')">Shutdown</button>
     </form>
     <pre id="output-shutdown"></pre>
   </details>
@@ -953,9 +1078,9 @@ R"--(<!DOCTYPE html>
       Type in some random text with your fingers to provide it.
     </p>
     <form id="form-add_entropy">
-      <input name="value" type="text">
+      <textarea id="user_entropy" name="user_entropy" rows="4" cols="50"></textarea>
       <br>
-      <button type="button" onclick="callApi('POST', 'add_entropy')">Add Entropy</button>
+      <button type="button" id="submit-add_entropy">Add Entropy</button>
     </form>
     <pre id="output-add_entropy"></pre>
   </details>
@@ -970,17 +1095,17 @@ R"--(<!DOCTYPE html>
       random key of a specific type.
     </p>
     <form id="form-add_key">
-      <b>key name: </b><input name="key-name" type="text">
+      <b>key name: </b><input name="name" type="text">
       <br>
-      <label><input type="radio" name="choice" value="expression" onclick="toggleRadio(this)">
+      <label><input type="radio" name="method-type" value="expression" onclick="toggleRadio(this)">
         <input name="value" type="text">
       </label>
       <br>
-      <label><input type="radio" name="choice" value="random-secp256k1" onclick="toggleRadio(this)">random secp256k1</label>
+      <label><input type="radio" name="method-type" value="random-secp256k1" onclick="toggleRadio(this)">random secp256k1</label>
       <br>
-      <label><input type="radio" name="choice" value="random-xpriv" onclick="toggleRadio(this)">random xpub</label>
+      <label><input type="radio" name="method-type" value="random-xpriv" onclick="toggleRadio(this)">random xpub</label>
       <br>
-      <button type="button" onclick="callApi('POST', 'add_key')">Add Key</button>
+      <button type="button" id="submit-add_key" onclick="callAddKey()">Add Key</button>
     </form>
     <pre id="output-add_key"></pre>
   </details>
@@ -992,11 +1117,11 @@ R"--(<!DOCTYPE html>
       <b>key name</b>.
     </p>
     <form id="form-to_private">
-      <b>key name: </b><input name="key-name" type="text">
+      <b>key name: </b><input name="name" type="text">
       <br>
       <b>value of private key: </b><input name="value" type="text">
       <br>
-      <button type="button" onclick="callApi('POST', 'to_private')">To Private</button>
+      <button type="button" id="submit-to_private" onclick="callToPrivate()">To Private</button>
     </form>
     <pre id="output-to_private"></pre>
   </details>
@@ -1011,7 +1136,7 @@ R"--(<!DOCTYPE html>
     <form id="form-make_wallet">
       <b>wallet name: </b><input name="wallet-name" type="text">
       <br>
-      <button type="button" onclick="callApi('POST', 'make_wallet')">Make Wallet</button>
+      <button type="button" onclick="callMakeWallet()">Make Wallet</button>
     </form>
     <pre id="output-make_wallet"></pre>
   </details>
@@ -1030,7 +1155,7 @@ R"--(<!DOCTYPE html>
       <br>
       <b>key expression: </b><input name="expression" type="text">
       <br>
-      <button type="button" onclick="callApi('POST', 'add_key_sequence')">Add Key Sequence</button>
+      <button type="button" id="submit-add_key_sequence" onclick="callAddKeySequence()">Add Key Sequence</button>
     </form>
     <pre id="output-add_key_sequence"></pre>
   </details>
@@ -1041,9 +1166,26 @@ R"--(<!DOCTYPE html>
       Generate a wallet. We have several options.
     </p>
     <form id="form-generate">
-      <b>Use mnemonic: </b><input name="use_mnemonic" type="checkbox">
+      <b>wallet name: </b><input name="wallet-name" type="text">
       <br>
-      <label><input type="radio" name="wallet_type" value="bip_44" onclick="toggleRadio(this)">
+      <b>Use mnemonic: </b><input name="use_mnemonic" type="checkbox">
+      <br>Number of words:<br>
+      <label><input type="radio" name="number_of_words" value="12" onclick="toggleRadio(this)">
+        12 words
+      </label>
+      <br>
+      <label><input type="radio" name="number_of_words" value="24" onclick="toggleRadio(this)">
+        24 words
+      </label>
+      <br>Schema:<br>
+      <label><input type="radio" name="number_of_words" value="BIP_39" onclick="toggleRadio(this)">
+        BIP 39 (standard)
+      </label>
+      <br>
+      <label><input type="radio" name="number_of_words" value="ElectrumSV" onclick="toggleRadio(this)">
+        Electrum SV
+      </label>
+      <label><input type="radio" name="wallet_type" value="BIP_44" onclick="toggleRadio(this)">
         bip 44
       </label>
       <br>
@@ -1051,9 +1193,18 @@ R"--(<!DOCTYPE html>
         experimental
       </label>
       <br>
-      <button type="button" onclick="callApi('POST', 'generate')">Generate</button>
+      <button type="button" id="submit-generate" onclick="callGenerate()">Generate</button>
     </form>
     <pre id="output-generate"></pre>
+  </details>
+
+  <details>
+    <summary>restore</summary>
+    Restore a wallet (not yet implemented)
+    <form id="form-restore">
+      <button type="button" id="submit-spend" onclick="callApi('POST', 'restore')">Value</button>
+    </form>
+    <pre id="output-restore"></pre>
   </details>
 
   <h2>Wallets</h2>
@@ -1064,7 +1215,7 @@ R"--(<!DOCTYPE html>
       List wallets.
     </p>
     <form id="form-list_wallets">
-      <button type="button" onclick="callApi('GET', 'list_wallets')">List Wallets</button>
+      <button type="button" id="submit-list_wallets" onclick="callApi('GET', 'list_wallets')">List Wallets</button>
     </form>
     <pre id="output-list_wallets"></pre>
   </details>
@@ -1079,7 +1230,7 @@ R"--(<!DOCTYPE html>
       <br>
       <label><input type="radio" name="choice" value="BSV" onclick="toggleRadio(this)" checked>BSV sats</label>
       <br>
-      <button type="button" onclick="callApi('POST', 'value')">Value</button>
+      <button type="button" id="submit_value" onclick="callGetValue('POST', 'value')">Value</button>
     </form>
     <pre id="output-value"></pre>
   </details>
@@ -1092,23 +1243,24 @@ R"--(<!DOCTYPE html>
     <form id="form-details">
       <b>wallet name: </b><input name="wallet-name" type="text">
       <br>
-      <button type="button" onclick="callApi('POST', 'details')">Details</button>
+      <button type="button" id="submit_details" onclick="callGetWalletDetails('POST', 'details')">Details</button>
     </form>
     <pre id="output-details"></pre>
   </details>
 
   <details>
     <summary>spend</summary>
-    <form id="form-restore">
+    Spend some coins.
+    <form id="form-spend">
+      <br>
+      <b>amount: </b><input name="amount" type="text">
+      <br>
+      <br>
+      <b>send to: </b><input name="to" type="text"> (Can be an address or an xpub.)
+      <br>
+      <button type="button" id="submit-spend" onclick="callSpend('POST', 'spend')">Value</button>
     </form>
-    <pre id="output-restore"></pre>
-  </details>
-
-  <details>
-    <summary>restore</summary>
-    <form id="form-restore">
-    </form>
-    <pre id="output-restore"></pre>
+    <pre id="output-spend"></pre>
   </details>
 
   <script>
@@ -1154,6 +1306,30 @@ R"--(<!DOCTYPE html>
         document.getElementById(`output-${endpoint}`).textContent = 'Error: ' + err;
       }
     }
+
+    document.getElementById('form-add_entropy').addEventListener('submit', async function(e) {
+
+    async function callAddEntropy() {
+
+        try {
+            const response = await fetch('/add_entropy', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'text/plain',
+                },
+                body: document.getElementById('user_entropy').value
+            });
+
+            const result = await response.text(); // or .json() depending on response type
+            document.getElementById(`output-add_entropy`).textContent = result;
+        } catch (err) {
+            document.getElementById(`output-add_entropy`).textContent = 'Error: ' + err;
+        }
+    }
+
+    async function callAddKey() {}
+
+    async function callToPrivate() {}
   </script>
 </body>
 </html>

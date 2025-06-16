@@ -74,11 +74,7 @@ namespace BoostPOW {
         // You can increase the bounty for a boost by making an identical script.
         uint32_little user_nonce {0};
         if (bool (UserNonce)) user_nonce = *UserNonce;
-        else {
-            uint32 un;
-            *Cosmos::get_casual_random () >> un;
-            user_nonce = un;
-        }
+        else *Cosmos::get_casual_random () >> user_nonce;
 
         // we are using version 1 for now.
         // we will use version 2 when we know we have Stratum extensions right.

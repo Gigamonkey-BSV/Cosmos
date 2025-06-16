@@ -9,9 +9,9 @@ namespace Cosmos {
     using namespace data;
 
     // these functions are not provided by the library.
-    crypto::random *get_random ();// depricated
-    crypto::random *get_secure_random ();
-    crypto::random *get_casual_random ();
+    crypto::entropy *get_random ();// depricated
+    crypto::entropy *get_secure_random ();
+    crypto::entropy *get_casual_random ();
 
     // Some stuff having to do with random number generators. We do not need 
     // strong cryptographic random numbers for boost. It is fine to use 

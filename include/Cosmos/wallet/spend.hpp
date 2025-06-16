@@ -20,7 +20,7 @@ namespace Cosmos {
     struct spend {
         select Select;
         make_change Change;
-        data::crypto::random &Random;
+        data::crypto::entropy &Random;
 
         struct tx {
             nosig::transaction Transaction;

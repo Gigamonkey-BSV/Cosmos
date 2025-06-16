@@ -7,11 +7,11 @@ namespace Cosmos {
     ptr<crypto::NIST::DRBG> SecureRandom {nullptr};
     ptr<crypto::linear_combination_random> CasualRandom {nullptr};
 
-    crypto::random *get_random () {
+    crypto::entropy *get_random () {
         return get_secure_random ();
     }
 
-    crypto::random *get_secure_random () {
+    crypto::entropy *get_secure_random () {
 
         if (!SecureRandom) {
 
@@ -27,7 +27,7 @@ namespace Cosmos {
 
     }
 
-    crypto::random *get_casual_random () {
+    crypto::entropy *get_casual_random () {
 
         if (!CasualRandom) {
             if (!SecureRandom) get_secure_random ();
@@ -37,8 +37,8 @@ namespace Cosmos {
             Satoshi::GetStrongRandBytes ((byte *) &seed, 8);
 
             CasualRandom = std::make_shared<crypto::linear_combination_random> (256,
-                std::static_pointer_cast<crypto::random> (std::make_shared<crypto::std_random<std::default_random_engine>> (seed)),
-                std::static_pointer_cast<crypto::random> (SecureRandom));
+                std::static_pointer_cast<crypto::entropy> (std::make_shared<crypto::std_random<std::default_random_engine>> (seed)),
+                std::static_pointer_cast<crypto::entropy> (SecureRandom));
         }
 
         return CasualRandom.get ();

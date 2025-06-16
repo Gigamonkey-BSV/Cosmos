@@ -22,6 +22,8 @@ enum meth {
     ADD_KEY,
     TO_PRIVATE,
     ADD_KEY_SEQUENCE,
+    NEXT_ADDRESS,     // next address
+    NEXT_XPUB,        // next xpub (if supported)
     GENERATE,         // generate a wallet
     RESTORE,          // restore a wallet
     UPDATE,           // depricated: check if txs in pending have been mined.
@@ -29,7 +31,6 @@ enum meth {
     DETAILS,
     SEND,             // (depricated)
     SPEND,            //
-    SPEND_ALL,        // spend all funds.
     REQUEST,          // request a payment
     ACCEPT,           // accept a payment
     PAY,              // make a payment.
