@@ -57,13 +57,13 @@ ENDIF ()
 
 ## Enable testing
 include (FetchContent)
-FetchContent_Declare (json URL https://github.com/nlohmann/json/releases/download/v3.11.2/json.tar.xz)
+FetchContent_Declare (json URL https://github.com/nlohmann/json/releases/download/v3.12.0/json.tar.xz)
 FetchContent_MakeAvailable (json)
 
 FetchContent_Declare (argh URL https://github.com/adishavit/argh/archive/refs/tags/v1.3.2.zip)
 FetchContent_MakeAvailable (argh)
 
-FetchContent_Declare (ctre URL https://github.com/hanickadot/compile-time-regular-expressions/archive/refs/tags/v3.9.0.zip)
+FetchContent_Declare (ctre URL https://github.com/hanickadot/compile-time-regular-expressions/archive/refs/tags/v3.10.0.zip)
 FetchContent_MakeAvailable (ctre)
 
 # You can configure this for your need, presumbably you want speificy a git tag here instead of a branch
@@ -114,7 +114,7 @@ add_library (
 
 target_include_directories (cosmos_lib PUBLIC include)
 
-target_link_libraries (cosmos_lib PUBLIC nlohmann_json argh diophant gigamonkey Data::data)
+target_link_libraries (cosmos_lib PUBLIC nlohmann_json argh diophant gigamonkey Data::data secp256k1)
 
 target_compile_features (cosmos_lib PUBLIC cxx_std_23)
 set_target_properties (cosmos_lib PROPERTIES CXX_EXTENSIONS OFF)

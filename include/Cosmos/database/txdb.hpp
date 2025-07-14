@@ -97,7 +97,7 @@ namespace Cosmos {
 
     };
 
-    using events = ordered_list<event>;
+    using events = ordered_sequence<event>;
 
     // a database of transactions.
     // we add to the SVP database by enabling

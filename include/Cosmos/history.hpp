@@ -62,7 +62,7 @@ namespace Cosmos {
         // to generate a new account at the end of the range.
         struct episode {
             std::map<Bitcoin::outpoint, Bitcoin::output> Account;
-            ordered_list<tx> History;
+            ordered_sequence<tx> History;
         };
 
         // get all events within a given range.

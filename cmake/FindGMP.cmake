@@ -7,6 +7,7 @@
 
 
 function(define_imported_target library headers)
+  if(NOT TARGET GMP::GMP)
   add_library(GMP::GMP UNKNOWN IMPORTED)
   set_target_properties(GMP::GMP PROPERTIES
     IMPORTED_LOCATION ${library}
@@ -19,6 +20,7 @@ function(define_imported_target library headers)
       CACHE STRING "Path to gmp headers" FORCE)
   mark_as_advanced(FORCE GMP_LIBRARIES)
   mark_as_advanced(FORCE GMP_INCLUDES)
+  endif()
 endfunction()
 
 # Accepting user-provided paths and reusing cached values
@@ -47,7 +49,7 @@ include(FindPackageHandleStandardArgs)
                   ENV GMP_DIR
                   $ENV{GMP_DIR}/include
             PATH_SUFFIXES include
-  	        DOC "The directory containing the GMP header files"
+            DOC "The directory containing the GMP header files"
            )
 
   find_library(GMP_LIBRARY_RELEASE NAMES gmp libgmp-10 gmp-10 mpir

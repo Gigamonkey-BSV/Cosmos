@@ -48,7 +48,7 @@ namespace Cosmos {
                         // otherwise it's either a long or a short term capital gain.
                         } else (n->when ().get<Bitcoin::timestamp> () - when < one_year ? cg.ShortTerm : cg.LongTerm) +=
                             (potential.Price - buy_price) * double (value);
-                    } else potential.Incoming <<= n;
+                    } else potential.Incoming >>= n;
                 } else current_income += n.value ();
 
             history v {};

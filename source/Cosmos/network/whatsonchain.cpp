@@ -221,7 +221,7 @@ namespace Cosmos {
 
         for (auto i = proof["branches"].rbegin (); i < proof["branches"].rend (); i++) {
             const auto &b = *i;
-            p.Proof.Branch.Digests <<= read_TXID (b["hash"]);
+            p.Proof.Branch.Digests >>= read_TXID (b["hash"]);
             p.Proof.Branch.Leaf.Index <<= 1;
             if (std::string (b["pos"]) == "L") p.Proof.Branch.Leaf.Index++;
         }

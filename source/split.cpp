@@ -215,13 +215,13 @@ void command_split (const arg_parser &p) {
         {
             auto view_top = top;
             while (!view_top.empty ()) {
-                const auto &t = view_top.first ();
+                const auto &t = first (view_top);
 
                 if (count++ >= 10) break;
                 std::cout << "\t" << t.Value << " sats in script " << t.ScriptHash << " in " << std::endl;
                 for (const auto &o : t.Outputs) std::cout << "\t\t" << write (o.Key) << " from " << (txdb)[o.Key.Digest]->when () << std::endl;
 
-                view_top = view_top.rest ();
+                view_top = rest (view_top);
             }
         }
 
@@ -257,7 +257,7 @@ void command_split (const arg_parser &p) {
                     else Gain.LongTerm += (current_price - buy_price) * int64 (amount);
                 }
 
-                tax_top = tax_top.rest ();
+                tax_top = rest (tax_top);
             }
         }
 
@@ -324,7 +324,7 @@ void command_split (const arg_parser &p) {
 
                 split_txs <<= next;
 
-                top = top.rest ();
+                top = rest (top);
             }
         }
 

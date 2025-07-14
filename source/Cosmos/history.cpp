@@ -103,8 +103,8 @@ namespace Cosmos {
             e.Spent = read_satoshi (*spent);
             e.Moved = read_satoshi (*moved);
             stack<event> evv;
-            for (const auto &jj : *events) evv <<= read_event (jj, txdb);
-            e.Events = ordered_list<event> (data::reverse (evv));
+            for (const auto &jj : *events) evv >>= read_event (jj, txdb);
+            e.Events = ordered_sequence<event> (reverse (evv));
             return e;
 
         }
@@ -182,11 +182,11 @@ namespace Cosmos {
 
         for (const auto &[key, value] : j["account"].items ()) Account[read_outpoint (key)] = read_output (value);
 
-        for (const auto &jj : j["events"]) Events <<= read_tx (jj, txdb);
+        for (const auto &jj : j["events"]) Events >>= read_tx (jj, txdb);
 
         // this is a new feature.
         auto payments = j.find ("payment");
-        if (payments != j.end ()) for (const auto &jj : *payments) Payments <<= read_payment (jj);
+        if (payments != j.end ()) for (const auto &jj : *payments) Payments >>= read_payment (jj);
 
     }
 
@@ -198,18 +198,18 @@ namespace Cosmos {
         const auto &txid = e.first ().id ();
 
         while (true) {
-            next_tx = next_tx << e.first ();
+            next_tx >>= first (e);
 
-            e = e.rest ();
+            e = rest (e);
 
-            if (data::size (e) == 0 || e.first ().id () != txid) return reverse (next_tx);
+            if (data::size (e) == 0 || first (e).id () != txid) return reverse (next_tx);
         }
     }
 
     history &history::operator <<= (events e) {
         if (data::empty (e)) return *this;
 
-        if (!data::empty (Events) && data::first (e) < data::first (Events).Events.first ())
+        if (!data::empty (Events) && first (e) < first (first (Events).Events))
             throw exception {} << "must be later than latest event";
 
         while (true) {
@@ -251,7 +251,7 @@ namespace Cosmos {
                 next_event.Spent = spent - received;
             }
 
-            Events <<= next_event;
+            Events >>= next_event;
 
             Received += next_event.Received;
             Spent += next_event.Spent;
@@ -272,18 +272,18 @@ namespace Cosmos {
         for (const tx &e : reverse (Events)) {
             when w = e.When;
             if (w < from) ev <<= e.Events;
-            else if (w < to) h <<= e;
+            else if (w < to) h >>= e;
         }
 
-        return episode {ev.Account, ordered_list<tx> (reverse (h))};
+        return episode {ev.Account, ordered_sequence<tx> (reverse (h))};
     }
 
     // the latest known timestamp before unconfirmed events.
     when history::latest_known () const {
         auto e = Events;
         while (!e.empty ()) {
-            if (e.first ().When != when::unconfirmed ()) return e.first ().When;
-            e = e.rest ();
+            if (first (e).When != when::unconfirmed ()) return first (e).When;
+            e = rest (e);
         }
         return when::negative_infinity ();
     }

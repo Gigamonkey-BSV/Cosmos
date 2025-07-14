@@ -18,6 +18,7 @@
 
 #include <Cosmos/database/SQLite/SQLite.hpp>
 
+#include <Diophant/parse.hpp>
 #include <Diophant/grammar.hpp>
 #include <Diophant/symbol.hpp>
 
@@ -307,14 +308,17 @@ awaitable<net::HTTP::response> processor::operator () (const net::HTTP::request 
     std::cout << "Responding to request " << req << std::endl;
     list<UTF8> path = req.Target.path ().read ('/');
 
-    if (path.size () == 0) co_return HTML_JS_UI_response ();
+    if (size (path) == 0) 
+        co_return HTML_JS_UI_response ();
 
     // the first part of the path is always "".
-    path = data::rest (path);
+    path = rest (path);
 
-    if (path.size () == 0 || path[0] == "") co_return HTML_JS_UI_response ();
+    if (size (path) == 0 || path[0] == "") 
+        co_return HTML_JS_UI_response ();
 
-    if (path.size () == 1 && path[0] == "favicon.ico") co_return favicon ();
+    if (size (path) == 1 && path[0] == "favicon.ico") 
+        co_return favicon ();
 
     meth m = read_method (path[0]);
 
