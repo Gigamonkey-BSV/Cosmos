@@ -49,7 +49,7 @@ meth read_method (const UTF8 &p) {
     if (m == "version") return VERSION;
     if (m == "shutdown") return SHUTDOWN;
     if (m == "add_entropy") return ADD_ENTROPY;
-    if (m == "add_key") return ADD_KEY;
+    if (m == "set_key") return SET_KEY;
     if (m == "to_private") return TO_PRIVATE;
     if (m == "invert_hash") return INVERT_HASH;
     if (m == "make_wallet") return MAKE_WALLET;
@@ -77,28 +77,28 @@ meth read_method (const UTF8 &p) {
 std::ostream &operator << (std::ostream &o, meth m) {
     switch (m) {
         case UNSET: return o << "unset";
-        case HELP: return o << "help";           // print help messages
+        case HELP: return o << "help";              // print help messages
         case VERSION: return o << "version";        // print a version message
         case SHUTDOWN: return o << "shutdown";
         case ADD_ENTROPY: return o << "add_entropy";    // add entropy to the random number generator.
         case MAKE_WALLET: return o << "make_wallet";
-        case ADD_KEY: return o << "add_key";
+        case SET_KEY: return o << "add_key";
         case TO_PRIVATE: return o << "to_private";
         case GENERATE: return o << "generate";       // generate a wallet
-        case RESTORE: return o << "restore";        // restore a wallet
-        case UPDATE: return o << "update";         // depricated: check if txs in pending have been mined.
-        case VALUE: return o << "value";          // the value in the wallet.
+        case RESTORE: return o << "restore";         // restore a wallet
+        case UPDATE: return o << "update";           // depricated: check if txs in pending have been mined.
+        case VALUE: return o << "value";             // the value in the wallet.
         case DETAILS: return o << "details";
-        case SEND: return o << "send";           // (depricated)
-        case SPEND: return o << "spend";          // check pending txs for having been mined. (depricated)
+        case SEND: return o << "send";              // (depricated)
+        case SPEND: return o << "spend";            // check pending txs for having been mined. (depricated)
         case REQUEST: return o << "request";        // request a payment
         case ACCEPT: return o << "accept";         // accept a payment
-        case PAY: return o << "pay";            // make a payment.
-        case SIGN: return o << "sign";           // sign an unsigned transaction
+        case PAY: return o << "pay";               // make a payment.
+        case SIGN: return o << "sign";             // sign an unsigned transaction
         case IMPORT: return o << "import";         // import a utxo with private key
         case BOOST: return o << "boost";          // boost some content
-        case SPLIT: return o << "split";          // split your wallet into tiny pieces for privacy.
-        case TAXES: return o << "taxes";          // calculate income and capital gain for a given year.
+        case SPLIT: return o << "split";           // split your wallet into tiny pieces for privacy.
+        case TAXES: return o << "taxes";           // calculate income and capital gain for a given year.
         case ENCRYPT_KEY: return o << "encrypt_key";
         case DECRYPT_KEY: return o << "decrypt_key";
         default: throw data::exception {} << "unknown method";

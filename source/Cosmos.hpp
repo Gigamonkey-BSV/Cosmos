@@ -19,13 +19,14 @@ enum meth {
     ADD_ENTROPY,      // add entropy to the random number generator.
     LIST_WALLETS,
     MAKE_WALLET,
-    ADD_KEY,
+    SET_KEY,
     TO_PRIVATE,
     INVERT_HASH,
     ADD_KEY_SEQUENCE,
     NEXT_ADDRESS,     // next address
     NEXT_XPUB,        // next xpub (if supported)
     GENERATE,         // generate a wallet
+    ACCEPT,           // accept a payment
     RESTORE,          // restore a wallet
     UPDATE,           // depricated: check if txs in pending have been mined.
     VALUE,            // the value in the wallet.
@@ -33,7 +34,6 @@ enum meth {
     SEND,             // (depricated)
     SPEND,            //
     REQUEST,          // request a payment
-    ACCEPT,           // accept a payment
     PAY,              // make a payment.
     SIGN,             // sign an unsigned transaction
     IMPORT,           // import a utxo with private key

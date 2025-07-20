@@ -446,7 +446,7 @@ net::HTTP::response process_method (
     }
 
     // Associate a secret key with a name. The key could be anything; private, public, or symmetric. 
-    if (m == ADD_KEY) {
+    if (m == SET_KEY) {
         if (http_method != net::HTTP::method::post)
             return error_response (405, m, problem::invalid_method, "use post");
 
@@ -713,6 +713,8 @@ net::HTTP::response process_wallet_method (
             std::string sanitized = sanitize (*wallet_style_param);
             if (sanitized == "bip44") WalletStyle = wallet_style::BIP_44;
             else if (sanitized == "bip44plus") WalletStyle = wallet_style::BIP_44_plus;
+            // experimental means me generate two secp256k1 keys and use one as the chain code.
+            // this allows us to use bip 32 and hd stuff and future protocols. 
             else if (sanitized == "experimental") WalletStyle = wallet_style::experimental;
             else return error_response (400, m, problem::invalid_query, "invalid parameter 'wallet_style'");
         }
@@ -764,10 +766,23 @@ net::HTTP::response process_wallet_method (
     }
 
     if (m == NEXT_ADDRESS) {
+        // look at the receive key sequence.
+        // generate a new key
+        // make a database entery for it. 
         return error_response (501, m, problem::unimplemented);
     }
 
     if (m == NEXT_XPUB) {
+        // look at the receivex key sequence.
+        // generate a new key
+        // is the key an xpub? 
+        // if it is, then make a database entry. We don't know what the entry looks like yet. 
+        return error_response (501, m, problem::unimplemented);
+    }
+
+    if (m == IMPORT) {
+        // we need to find addresses and xpubs that we need to check. 
+        // could just check the last several keys? 
         return error_response (501, m, problem::unimplemented);
     }
 
@@ -1068,53 +1083,37 @@ R"--(<!DOCTYPE html>
   <details>
   <summary>help</summary>
     <p>General help or get help with a specific function.</p>
-    <form id="form-help">
-      <label><input type="radio" name="help_method" value="shutdown" onclick="toggleRadio(this)">shutdown</label>
-      <br>
-      <label><input type="radio" name="help_method" value="add_entropy" onclick="toggleRadio(this)">add_entropy</label>
-      <br>
-      <label><input type="radio" name="help_method" value="invert_hash" onclick="toggleRadio(this)">invert_hash</label>
-      <br>
-      <label><input type="radio" name="help_method" value="add_key" onclick="toggleRadio(this)">add_key</label>
-      <br>
-      <label><input type="radio" name="help_method" value="to_private" onclick="toggleRadio(this)">to_private</label>
-      <br>
-      <label><input type="radio" name="help_method" value="list_wallets" onclick="toggleRadio(this)">list_wallets</label>
-      <br>
-      <label><input type="radio" name="help_method" value="make_wallet" onclick="toggleRadio(this)">make_wallet</label>
-      <br>
-      <label><input type="radio" name="help_method" value="add_key_sequence" onclick="toggleRadio(this)">add_key_sequence</label>
-      <br>
-      <label><input type="radio" name="help_method" value="value" onclick="toggleRadio(this)">value</label>
-      <br>
-      <label><input type="radio" name="help_method" value="details" onclick="toggleRadio(this)">details</label>
-      <br>
-      <label><input type="radio" name="help_method" value="generate" onclick="toggleRadio(this)">generate</label>
-      <br>
-      <button type="button" id="submit-help" onclick="callHelp()">Get Help</button>
-    </form>
-    <pre id="output-help"></pre>
     <p>
       <code>GET /help</code>
       or 
       <code>GET /help/&lt;method&gt;</code>
-      here <i>method</i> is one of 
-      <code>
-        version
-        help
-        shutdown
-        add_entropy
-        invert_hash
-        add_key
-        to_private
-        list_wallets
-        make_wallet
-        add_key_sequence
-        value
-        details
-        generate
-      </code>
     </p>
+    <form id="form-help">
+      <label><input type="radio" name="method" value="shutdown" onclick="toggleRadio(this)">shutdown</label>
+      <br>
+      <label><input type="radio" name="method" value="add_entropy" onclick="toggleRadio(this)">add_entropy</label>
+      <br>
+      <label><input type="radio" name="method" value="invert_hash" onclick="toggleRadio(this)">invert_hash</label>
+      <br>
+      <label><input type="radio" name="ethod" value="add_key" onclick="toggleRadio(this)">add_key</label>
+      <br>
+      <label><input type="radio" name="method" value="to_private" onclick="toggleRadio(this)">to_private</label>
+      <br>
+      <label><input type="radio" name="method" value="list_wallets" onclick="toggleRadio(this)">list_wallets</label>
+      <br>
+      <label><input type="radio" name="method" value="make_wallet" onclick="toggleRadio(this)">make_wallet</label>
+      <br>
+      <label><input type="radio" name="method" value="add_key_sequence" onclick="toggleRadio(this)">add_key_sequence</label>
+      <br>
+      <label><input type="radio" name="method" value="value" onclick="toggleRadio(this)">value</label>
+      <br>
+      <label><input type="radio" name="method" value="details" onclick="toggleRadio(this)">details</label>
+      <br>
+      <label><input type="radio" name="method" value="generate" onclick="toggleRadio(this)">generate</label>
+      <br>
+      <button type="button" id="submit-help" onclick="callHelp()">Get Help</button>
+    </form>
+    <pre id="output-help"></pre>
   </details>
 
   <details>
@@ -1122,7 +1121,9 @@ R"--(<!DOCTYPE html>
     <p>
       Shutdown the program.
     </p>
-    <p><code>PUT /shutdown</code></p>
+    <p>
+      <code>PUT /shutdown</code>
+    </p>
     <form id="form-shutdown">
       <button type="button" id="submit-shutdown" onclick="callApi('PUT', 'shutdown')">Shutdown</button>
     </form>
@@ -1131,10 +1132,15 @@ R"--(<!DOCTYPE html>
 
   <details>
     <summary>add_entropy</summary>
-    <p><code>POST /add_entropy</code></p>
     <p>
       The cryptographic random number generator needs entropy periodically. Here we add it manually.
       Type in some random text with your fingers to provide it.
+    </p>
+    <p>
+      <code>POST /add_entropy</code>
+      <br>
+      Provide entropy in the body of the request. <code>content-type</code> 
+      should be <code>text/plain</code> or <code>application/octet-stream</code>
     </p>
     <form id="form-add_entropy">
       <textarea id="user_entropy" name="user_entropy" rows="4" cols="50"></textarea>
@@ -1144,26 +1150,60 @@ R"--(<!DOCTYPE html>
     <pre id="output-add_entropy"></pre>
   </details>
 
-  <h2>Keys</h2>
+  <h2>Keys and data</h2>
 
   <details>
-    <summary>invert_hash</summary>
+    <summary>Invert Hash</summary>
     <p>
       Add data and its hash, which can be retrieved later by hash.
     </p>
+    <p>
+      <code>POST /invert_hash?digest=&lt;hex&gt;&function=&lt;hash function name&gt;&</code> or <code>GET /invert_hash?digest=&lt;hex&gt;</code>
+      <br>
+      Supported hash functions are <code>SHA1</code>, <code>SHA2_256</code>, <code>RIPEMD160</code>, 
+      <code>Hash256</code>, and <code>Hash160</code>, 
+    </p>
     <form id="form-invert_hash">
+      <label><input type="radio" name="HTTP_method" value="GET" onclick="toggleRadio (this)">GET</label>
+      <br>
+      <label><input type="radio" name="HTTP_method" value="POST" onclick="toggleRadio (this)">POST</label>
+      <br>
+      <label><input type="radio" name="function" value="SHA1" onclick="toggleRadio (this)">SHA1</label>
+      <br>
+      <label><input type="radio" name="function" value="SHA2_256" onclick="toggleRadio (this)">SHA2 256</label>
+      <br>
+      <label><input type="radio" name="function" value="RIPEMD160" onclick="toggleRadio (this)">RIPEMD160</label>
+      <br>
+      <label><input type="radio" name="function" value="Hash256" onclick="toggleRadio (this)">Hash256</label>
+      <br>
+      <label><input type="radio" name="function" value="Hash160" onclick="toggleRadio (this)">Hash160</label>
+      <br>
+      <b>digest: (hex) </b><input name="wallet-name" type="text">
+      <label><input type="radio" name="data_format" value="HEX" onclick="toggleRadio (this)">hex</label>
+      <br>
+      <label><input type="radio" name="data_format" value="ASCII" onclick="toggleRadio (this)">ASCII</label>
+      <br>
+      <textarea id="hashed_data" name="hashed_data" rows="4" cols="50"></textarea>
+      <br>
       <button type="button" id="submit-invert_hash" onclick="callInvertHash()">Invert Hash</button>
     </form>
   </details>
 
   <details>
-    <summary>add_key</summary>
+    <summary>Set Key</summary>
     <p>
-      Add key. This could be any kind of key: public, private, symmetric. Whatever.
-      You can enter it in the form of a Bitcoin Calculator expression or generate a
-      random key of a specific type.
+      Add or retrieve a key. This could be any kind of key: public, private,
+      symmetric, whatever. You can enter it in the form of a Bitcoin
+      Calculator expression or generate a random key of a specific type.
+    </p>
+    <p>
+      <code>POST /set_key?</code> or <code>GET /set_key?</code>
     </p>
     <form id="form-add_key">
+      <label><input type="radio" name="HTTP_method" value="GET" onclick="toggleRadio(this)">GET</label>
+      <br>
+      <label><input type="radio" name="HTTP_method" value="POST" onclick="toggleRadio(this)">POST</label>
+      <br>
       <b>key name: </b><input name="name" type="text">
       <br>
       <label><input type="radio" name="method-type" value="expression" onclick="toggleRadio(this)">
@@ -1180,15 +1220,22 @@ R"--(<!DOCTYPE html>
   </details>
 
   <details>
-    <summary>to_private</summary>
+    <summary>To Private</summary>
     <p>
       Provide an expression to derive the private key of a public key named
       <b>key name</b>.
     </p>
+    <p>
+      <code>POST /to_private?</code> or <code>GET /to_private?</code>
+    </p>
     <form id="form-to_private">
-      <b>key name: </b><input name="name" type="text">
+      <label><input type="radio" name="HTTP_method" value="GET" onclick="toggleRadio(this)">GET</label>
       <br>
-      <b>value of private key: </b><input name="value" type="text">
+      <label><input type="radio" name="HTTP_method" value="POST" onclick="toggleRadio(this)">POST</label>
+      <br>
+      <b>key name: </b><input name="key_name" type="text">
+      <br>
+      <b>value of private key: </b><input name="key_value" type="text">
       <br>
       <button type="button" id="submit-to_private" onclick="callToPrivate()">To Private</button>
     </form>
@@ -1198,12 +1245,15 @@ R"--(<!DOCTYPE html>
   <h2>Wallet Generation</h2>
 
   <details>
-    <summary>make_wallet</summary>
+    <summary>Make Wallet</summary>
     <p>
       Make an empty wallet. The wallet has no keys associated with it. You have to build it up.
     </p>
+    <p>
+      <code>POST /make_wallet?name=</code> or <code>GET /make_wallet?</code>
+    </p>
     <form id="form-make_wallet">
-      <b>wallet name: </b><input name="wallet-name" type="text">
+      <b>wallet name: </b><input name="make_wallet-wallet-name" type="text">
       <br>
       <button type="button" onclick="callMakeWallet()">Make Wallet</button>
     </form>
@@ -1211,9 +1261,12 @@ R"--(<!DOCTYPE html>
   </details>
 
   <details>
-    <summary>add key sequence</summary>
+    <summary>Add Key Sequence</summary>
     <p>
       Add a key sequence to a wallet.
+    </p>
+    <p>
+      <code>POST /add_key_sequence?</code>
     </p>
     <form id="form-add_key_sequence">
       <b>wallet name: </b><input name="wallet-name" type="text">
@@ -1230,16 +1283,16 @@ R"--(<!DOCTYPE html>
   </details>
 
   <details>
-    <summary>generate</summary>
+    <summary>Generate</summary>
     <p>
-      Generate a wallet. We have several options.
+      Generate a wallet.
     </p>
     <form id="form-generate">
-      <b>wallet name: </b><input name="wallet-name" type="text">
+      <b>wallet name: </b><input name="wallet_name" type="text">
       <br>
-      <b>Use mnemonic: </b><input name="use_mnemonic" type="checkbox">
+      <b>Use mnemonic: </b><input name="mnemonic" type="checkbox" checked>
       <br>Number of words:<br>
-      <label><input type="radio" name="number_of_words" value="12" onclick="toggleRadio(this)">
+      <label><input type="radio" name="number_of_words" value="12" onclick="toggleRadio(this)" checked>
         12 words
       </label>
       <br>
@@ -1247,15 +1300,23 @@ R"--(<!DOCTYPE html>
         24 words
       </label>
       <br>Schema:<br>
-      <label><input type="radio" name="number_of_words" value="BIP_39" onclick="toggleRadio(this)">
+      <label><input type="radio" name="mnemonic_style" value="BIP_39" onclick="toggleRadio(this)" checked>
         BIP 39 (standard)
       </label>
       <br>
-      <label><input type="radio" name="number_of_words" value="ElectrumSV" onclick="toggleRadio(this)">
+      <label><input type="radio" name="mnemonic_style" value="ElectrumSV" onclick="toggleRadio(this)">
         Electrum SV
       </label>
+      <br>
+      <label>
+      </label>
+      <br>
       <label><input type="radio" name="wallet_type" value="BIP_44" onclick="toggleRadio(this)">
         bip 44
+      </label>
+      <br>
+      <label><input type="radio" name="wallet_type" value="BIP_44+" onclick="toggleRadio(this)" checked>
+        bip 44+
       </label>
       <br>
       <label><input type="radio" name="wallet_type" value="experimental" onclick="toggleRadio(this)">
@@ -1300,7 +1361,7 @@ R"--(<!DOCTYPE html>
       <br>
       <label><input type="radio" name="choice" value="BSV" onclick="toggleRadio(this)" checked>BSV sats</label>
       <br>
-      <button type="button" id="submit_value" onclick="callGetValue()">Value</button>
+      <button type="button" id="submit-value" onclick="callGetValue()">Value</button>
     </form>
     <pre id="output-value"></pre>
   </details>
@@ -1313,18 +1374,54 @@ R"--(<!DOCTYPE html>
     <form id="form-details">
       <b>wallet name: </b><input name="wallet-name" type="text">
       <br>
-      <button type="button" id="submit_details" onclick="callGetWalletDetails()">Details</button>
+      <button type="button" id="submit-details" onclick="callGetWalletDetails()">Details</button>
     </form>
     <pre id="output-details"></pre>
   </details>
 
   <details>
-    <summary>spend</summary>
+    <summary>Next Key</summary>
+    <p>
+      Get next receive key.
+    </p>
+    <form id="form-next_key">
+      <b>wallet name: </b><input name="wallet-name" type="text">
+      <br>
+      <button type="button" id="submit-next_key" onclick="callWalletNextKey()">Details</button>
+    </form>
+    <pre id="output-next_key"></pre>
+  </details>
+
+  <details>
+    <summary>Next XPub</summary>
+    <p>
+      Get next XPUB (if supported; BIP44+ and experimental wallet formats only.)
+    </p>
+    <form id="form-next_xpub">
+      <b>wallet name: </b><input name="wallet-name" type="text">
+      <br>
+      <button type="button" id="submit-next_xpub" onclick="callWalletNextXPub()">Details</button>
+    </form>
+    <pre id="output-next_xpub"></pre>
+  </details>
+
+  <details>
+    <summary>Accept</summary>
+    <form id="form-accept">
+      <b>wallet name: </b><input name="wallet-name" type="text">
+      <br>
+      <button type="button" id="submit-accept" onclick="callWalletAccept()">Accept</button>
+    </form>
+    <pre id="output-accept"></pre>
+  </details>
+
+  <details>
+    <summary>Spend</summary>
     Spend some coins.
     <form id="form-spend">
+      <b>wallet name: </b><input name="wallet-name" type="text">
       <br>
       <b>amount: </b><input name="amount" type="text">
-      <br>
       <br>
       <b>send to: </b><input name="to" type="text"> (Can be an address or an xpub.)
       <br>
@@ -1379,7 +1476,7 @@ R"--(<!DOCTYPE html>
 
     async function callHelp () {
 
-      const selected = document.querySelector ('input[name="help_method"]');
+      const selected = document.getElementById ('form-help').elements["method"];
 
       const target;
 
@@ -1395,35 +1492,72 @@ R"--(<!DOCTYPE html>
         });
 
         const result = await response.text(); // or .json() depending on response type
-        document.getElementById(`output-add_entropy`).textContent = result;
+        document.getElementById (`output-add_entropy`).textContent = result;
       } catch (err) {
-        document.getElementById(`output-add_entropy`).textContent = 'Error: ' + err;
+        document.getElementById (`output-add_entropy`).textContent = 'Error: ' + err;
       }
     }
 
-    async function callAddEntropy() {
+    async function callAddEntropy () {
 
       try {
-        const response = await fetch('/add_entropy', {
+        const response = await fetch ('/add_entropy', {
           method: 'POST',
           headers: {
             'Content-Type': 'text/plain',
           },
-          body: document.getElementById('user_entropy').value
+          body: document.getElementById ('form-add_entropy').elements["user_entropy"].value
         });
 
         const result = await response.text(); // or .json() depending on response type
-        document.getElementById(`output-add_entropy`).textContent = result;
+        document.getElementById (`output-add_entropy`).textContent = result;
       } catch (err) {
-        document.getElementById(`output-add_entropy`).textContent = 'Error: ' + err;
+        document.getElementById (`output-add_entropy`).textContent = 'Error: ' + err;
       }
+    }
+
+    async function callGenerate () {
+      const elements = document.getElementById ('form-generate').elements;
+      var target = '/generate' + elements["wallet-name"].value; + '?'
+
+      // Whether we use a mnemonic at all. 
+      if (elements["mnemonic"].checked) {
+      
+        target += 'mnemonic=true&mnemonic_style=' + 
+            elements["mnemonic_style"].value + 
+            '&number_of_words=' + elements["number_of_words"].value + '&';
+      
+      }
+
+      target += 'wallet_style=' + elements["wallet_style"].value + '&coin_type=' + elements["coin_type"].value;
+
+      try {
+        const response = await fetch (target, {
+          method: 'POST',
+        });
+
+        const result = await response.text(); // or .json() depending on response type
+        document.getElementById (`output-generate`).textContent = result;
+      } catch (err) {
+        document.getElementById (`output-generate`).textContent = 'Error: ' + err;
+      }
+
+    }
+
+    async function callNextAddress () {
+    }
+
+    async function callNextXPub () {
+
+    }
+
+    async function callInvertHash() {
+      
     }
 
     async function callAddKey() {}
 
-    async function callToPrivate(http_method) {}
-
-    async function callInvertHash(http_method) {}
+    async function callToPrivate() {}
 
     async function callMakeWallet () {}
 
@@ -1431,9 +1565,11 @@ R"--(<!DOCTYPE html>
 
     async function callGetWalletDetails () {}
 
-    async function callRestore () {}
+    async function callImport () {}
 
-    async function callGenerate () {}
+    async function callSpend () {}
+
+    async function callRestore () {}
   </script>
 </body>
 </html>

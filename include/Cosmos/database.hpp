@@ -29,15 +29,11 @@ namespace Cosmos {
         virtual maybe<tuple<hash_function, bytes>> get_invert_hash (slice<const byte>) = 0;
 
         virtual bool set_key (const std::string &key_name, const key_expression &k) = 0;
-
-        // set the private key for a given public key.
-        virtual bool set_to_private (const std::string &key_name, const key_expression &k) = 0;
-        virtual key_expression get_to_private (const std::string &key_name, const key_expression &k) = 0;
-
         virtual key_expression get_key (const std::string &key_name) = 0;
 
         // set the private key for a given public key.
-        virtual key_expression get_private (const std::string &key_name) = 0;
+        virtual bool set_to_private (const std::string &key_name, const key_expression &k) = 0;
+        virtual key_expression get_to_private (const std::string &key_name) = 0;
 
         struct derivation {
             key_derivation Derivation;

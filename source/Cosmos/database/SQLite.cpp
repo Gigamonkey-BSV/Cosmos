@@ -539,6 +539,10 @@ namespace Cosmos::SQLite {
             else if (get_latest_version () > 2) throw data::exception {} << "unrecognized database";
         }
 
+        /*
+            SPV database
+        */
+
         block_header header (const N &height) final override {
             auto rows = storage.select (
                 columns (&Block::header, &Block::hash),
@@ -879,6 +883,10 @@ namespace Cosmos::SQLite {
 
         }
 
+        /*
+            historical prices database
+        */
+
         constexpr static const uint32 half_day_seconds = 60 * 60 * 24 / 2 + 1;
 
         maybe<double> get_price (monetary_unit, const Bitcoin::timestamp &t) final override {
@@ -902,54 +910,42 @@ namespace Cosmos::SQLite {
             storage.insert (Price {-1, mu.str (), t.Value, price});
         }
 
-        bool make_wallet (const std::string &name) final override {
-            try {
-                storage.insert (Wallet {-1, name});
-            } catch (const std::system_error &e) {
-                return false;
-            }
-
-            return true;
-        }
-
-        list<std::string> list_wallet_names () final override {
-            list<std::string> names;
-            for (const auto &name : storage.select (&Wallet::name)) names <<= name;
-            return names;
-        }
+        /*
+            keys and hashes
+        */
 
         bool set_invert_hash (data::slice<const data::byte> digest, hash_function f, data::slice<const data::byte> data) final override {
-            /*
+            
             try {
-                storage.insert (Digest {digest, data::byte (f), data});
+                storage.insert (
+                    sqlite_orm::into<Digest> (), 
+                    columns (&Digest::digest, &Digest::function, &Digest::data), 
+                    values (data::bytes {digest}, data::byte (f), data::bytes {data}));
             } catch (const std::system_error &e) {
                 return false;
             }
 
             return true;
-            */
-            throw 0;
         }
 
         data::maybe<std::tuple<Cosmos::hash_function, data::bytes>> get_invert_hash (data::slice<const data::byte> dig) final override {
-            /*
+            
+            data::bytes doob {dig};
+            
             auto rows = storage.select (
-                columns (&Digest::function, &Digest::data),
-                where (is_equal (&Digest::digest, dig)), limit (1));
+                columns (&Digest::digest, &Digest::function, &Digest::data),
+                where (is_equal (&Digest::digest, doob)), limit (1));
 
             if (rows.empty ()) return {};
             
             const auto &entry = rows.front ();
 
-            return {std::tuple<Cosmos::hash_function, data::bytes> {
-                Cosmos::hash_function (std::get<0> (entry)), 
-                data::bytes {std::get<1> (entry)}
+            return data::maybe<std::tuple<Cosmos::hash_function, data::bytes>> {std::tuple<Cosmos::hash_function, data::bytes> {
+                Cosmos::hash_function (std::get<1> (entry)), 
+                data::bytes {std::get<2> (entry)}
             }};
-            */
-           throw 0;
         }
 
-        // TODO ensure that the key is not already there.
         bool set_key (const std::string &key_name, const key_expression &k) final override {
 
             try {
@@ -962,6 +958,18 @@ namespace Cosmos::SQLite {
             }
 
             return true;
+        }
+
+        key_expression get_key (const std::string &key_name) final override {
+            auto rows = storage.select (
+                columns (&Secret::name, &Secret::key),
+                where (is_equal (&Secret::name, key_name)), limit (1));
+
+            if (rows.empty ()) return {};
+            
+            const auto &entry = rows.front ();
+
+            return key_expression {std::get<1> (entry)};
         }
 
         bool set_to_private (const std::string &key_name, const key_expression &k) final override {
@@ -977,17 +985,36 @@ namespace Cosmos::SQLite {
             return true;
         }
         
-        key_expression get_to_private (const std::string &key_name, const key_expression &k) final override {
-            throw 0;
+        key_expression get_to_private (const std::string &key_name) final override {
+            auto rows = storage.select (
+                columns (&Pubkey::name, &Pubkey::key),
+                where (is_equal (&Pubkey::name, key_name)), limit (1));
+
+            if (rows.empty ()) return {};
+            
+            const auto &entry = rows.front ();
+
+            return key_expression {std::get<1> (entry)};
         }
 
-        key_expression get_key (const std::string &key_name) final override {
-            throw method::unimplemented {"SQLite::get_key"};
+        /*
+            wallet database
+        */
+
+        bool make_wallet (const std::string &name) final override {
+            try {
+                storage.insert (Wallet {-1, name});
+            } catch (const std::system_error &e) {
+                return false;
+            }
+
+            return true;
         }
 
-        // set the private key for a given public key.
-        key_expression get_private (const std::string &key_name) final override {
-            throw method::unimplemented {"SQLite::get_private"};
+        list<std::string> list_wallet_names () final override {
+            list<std::string> names;
+            for (const auto &name : storage.select (&Wallet::name)) names <<= name;
+            return names;
         }
 
         bool set_derivation (const std::string &wallet_name, const std::string &deriv_name, const derivation &) {
