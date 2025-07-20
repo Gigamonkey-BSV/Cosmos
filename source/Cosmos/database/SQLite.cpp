@@ -254,6 +254,7 @@ namespace Cosmos::SQLite {
     using namespace sqlite_orm;
     using data::crypto::digest256;
 
+    // database version.
     struct Version {
         uint64_t version;
         std::string details;
@@ -290,6 +291,13 @@ namespace Cosmos::SQLite {
     struct Output {
         Bitcoin::outpoint outpoint;
         digest256 script_hash;
+    };
+
+    // a hash digest and the data.
+    struct Digest {
+        data::bytes digest;
+        data::byte function;
+        data::bytes data;
     };
 
     // an address that is found in a script hash.
@@ -431,6 +439,13 @@ namespace Cosmos::SQLite {
                 make_column ("outpoint", &Output::outpoint, primary_key ()),
                 make_column ("script_hash", &Output::script_hash)
             ),
+
+            make_table ("digests", 
+                make_column ("digest", &Digest::digest, primary_key ()), 
+                make_column ("function", &Digest::function), 
+                make_column ("data", &Digest::data), 
+                unique (&Digest::digest)
+            ), 
 
             make_table ("addresses",
                 make_column ("id", &Address::id, primary_key ().autoincrement ()),
@@ -903,6 +918,37 @@ namespace Cosmos::SQLite {
             return names;
         }
 
+        bool set_invert_hash (data::slice<const data::byte> digest, hash_function f, data::slice<const data::byte> data) final override {
+            /*
+            try {
+                storage.insert (Digest {digest, data::byte (f), data});
+            } catch (const std::system_error &e) {
+                return false;
+            }
+
+            return true;
+            */
+            throw 0;
+        }
+
+        data::maybe<std::tuple<Cosmos::hash_function, data::bytes>> get_invert_hash (data::slice<const data::byte> dig) final override {
+            /*
+            auto rows = storage.select (
+                columns (&Digest::function, &Digest::data),
+                where (is_equal (&Digest::digest, dig)), limit (1));
+
+            if (rows.empty ()) return {};
+            
+            const auto &entry = rows.front ();
+
+            return {std::tuple<Cosmos::hash_function, data::bytes> {
+                Cosmos::hash_function (std::get<0> (entry)), 
+                data::bytes {std::get<1> (entry)}
+            }};
+            */
+           throw 0;
+        }
+
         // TODO ensure that the key is not already there.
         bool set_key (const std::string &key_name, const key_expression &k) final override {
 
@@ -918,7 +964,7 @@ namespace Cosmos::SQLite {
             return true;
         }
 
-        bool to_private (const std::string &key_name, const key_expression &k) final override {
+        bool set_to_private (const std::string &key_name, const key_expression &k) final override {
             try {
                 storage.insert (
                     sqlite_orm::into<Pubkey> (),
@@ -929,6 +975,10 @@ namespace Cosmos::SQLite {
             }
 
             return true;
+        }
+        
+        key_expression get_to_private (const std::string &key_name, const key_expression &k) final override {
+            throw 0;
         }
 
         key_expression get_key (const std::string &key_name) final override {

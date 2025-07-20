@@ -51,6 +51,7 @@ meth read_method (const UTF8 &p) {
     if (m == "add_entropy") return ADD_ENTROPY;
     if (m == "add_key") return ADD_KEY;
     if (m == "to_private") return TO_PRIVATE;
+    if (m == "invert_hash") return INVERT_HASH;
     if (m == "make_wallet") return MAKE_WALLET;
     if (m == "list_wallets") return LIST_WALLETS;
     if (m == "generate") return GENERATE;

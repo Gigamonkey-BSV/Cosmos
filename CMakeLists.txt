@@ -127,9 +127,9 @@ add_executable (
     source/Server.cpp
 )
 
-add_executable (
-    CosmosWallet
-    source/random.cpp
+#add_executable (
+    #CosmosWallet
+    #source/random.cpp
     #source/interface.cpp
     #source/generate.cpp
     #source/restore.cpp
@@ -137,9 +137,9 @@ add_executable (
     #source/accept.cpp
     #source/split.cpp
     #source/import.cpp
-    source/Cosmos.cpp
-    source/Client.cpp
-)
+    #source/Cosmos.cpp
+    #source/Client.cpp
+#)
 
 target_link_libraries (
     CosmosWalletServer PUBLIC
@@ -156,18 +156,18 @@ target_include_directories (
 target_compile_features (CosmosWalletServer PUBLIC cxx_std_20)
 set_target_properties (CosmosWalletServer PROPERTIES CXX_EXTENSIONS OFF)
 
-target_link_libraries (
-    CosmosWallet PUBLIC
-    cosmos_lib
-)
+#target_link_libraries (
+#    CosmosWallet PUBLIC
+#    cosmos_lib
+#)
 
-target_include_directories (
-    CosmosWallet PUBLIC
-    include
-)
+#target_include_directories (
+#    CosmosWallet PUBLIC
+#    include
+#)
 
-target_compile_features (CosmosWallet PUBLIC cxx_std_20)
-set_target_properties (CosmosWallet PROPERTIES CXX_EXTENSIONS OFF)
+#target_compile_features (CosmosWallet PUBLIC cxx_std_20)
+#set_target_properties (CosmosWallet PROPERTIES CXX_EXTENSIONS OFF)
 
 # add_definitions ("-DHAS_BOOST")
 

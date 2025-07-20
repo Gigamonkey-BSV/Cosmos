@@ -48,7 +48,7 @@ namespace Cosmos {
             since_last_used = 0;
             next_index = i;
 
-            v = v + ev;
+            v = v & ev;
 
             Bitcoin::satoshi in_wallet = 0;
             Bitcoin::satoshi received = 0;
