@@ -6,22 +6,15 @@ Version 0.0.1 alpha.
 
 * send and receive funds over BSV.
 * keep utxos tiny and approximately logorithmically distributed.
-* calculate capital gain.
 
-## Known issues:
+## Next features to be implemented for version 2
 
-* recovery bug: the first time you recover a wallet, the account comes out incorrect. You can
-  repair it by deleting all generated files except txdb.json and running the restore command again.
-* Problems with recovering wallets that have unmined transactions.
-
-## Next features to be implemented for version 1
-
-* config file
 * pay method
 * receive method
 * sign method
+* calculate capital gain.
 
-## Plan for version 2
+## Plan for version 3
 
 * p2p
 * HTTP interface
