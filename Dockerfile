@@ -1,5 +1,14 @@
 FROM gigamonkey/gigamonkey-lib:v2.3 AS build
 
+# Bitcoin Calculator
+WORKDIR /tmp
+ADD https://api.github.com/repos/Gigamonkey-BSV/BitcoinCalculator/git/refs/heads/master /root/bitcoin_calculator_version.json
+RUN git clone --depth 1 --branch master https://github.com/Gigamonkey-BSV/BitcoinCalculator.git
+WORKDIR /tmp/BitcoinCalculator
+RUN cmake -G Ninja -B build -S . -DPACKAGE_TESTS=OFF -DCMAKE_BUILD_TYPE=Release
+RUN cmake --build build -j 10
+RUN cmake --install build
+
 COPY . /home/cosmos
 WORKDIR /home/cosmos
 RUN chmod -R 777 .
