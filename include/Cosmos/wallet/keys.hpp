@@ -35,6 +35,13 @@ namespace Cosmos {
         key_expression (const Bitcoin::pubkey &);
         key_expression (const HD::BIP_32::secret &);
         key_expression (const HD::BIP_32::pubkey &);
+
+        operator secp256k1::secret () const;
+        operator Bitcoin::secret () const;
+        operator HD::BIP_32::secret () const;
+        operator secp256k1::pubkey () const;
+        operator Bitcoin::pubkey () const;
+        operator HD::BIP_32::pubkey () const;
     };
 
     // information required to make signatures to redeem an output.

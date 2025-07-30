@@ -647,7 +647,7 @@ net::HTTP::response process_wallet_method (
 
         Cosmos::key_derivation key_deriv {data::string (body)};
 
-        if (p.DB->set_derivation (wallet_name, name, Cosmos::database::derivation {key_deriv, key_name, index})) return ok_response ();
+        if (p.DB->set_wallet_derivation (wallet_name, name, Cosmos::database::derivation {key_deriv, key_name, index})) return ok_response ();
         return error_response (500, m, problem::failed, "could not set wallet derivation");
     }
 
@@ -750,14 +750,14 @@ net::HTTP::response process_wallet_method (
         p.DB->set_key (account_name, account_key_expr);
         p.DB->set_to_private (account_name, account_derivation);
 
-        p.DB->set_derivation (wallet_name, "receive",
+        p.DB->set_wallet_derivation (wallet_name, "receive",
             Cosmos::database::derivation {Cosmos::key_derivation {"@ name index -> name / 0 / index"}, account_name});
 
-        p.DB->set_derivation (wallet_name, "change",
+        p.DB->set_wallet_derivation (wallet_name, "change",
             Cosmos::database::derivation {Cosmos::key_derivation {"@ name index -> name / 1 / index"}, account_name});
 
         if (WalletStyle == wallet_style::BIP_44_plus)
-            p.DB->set_derivation (wallet_name, "receivex",
+            p.DB->set_wallet_derivation (wallet_name, "receivex",
                 Cosmos::database::derivation {Cosmos::key_derivation {"@ name index -> name / 0 / `index"}, account_name});
 
         if (use_mnemonic) return JSON_response (JSON {wallet_words});
@@ -766,23 +766,79 @@ net::HTTP::response process_wallet_method (
     }
 
     if (m == NEXT_ADDRESS) {
+        if (http_method != net::HTTP::method::post)
+            return error_response (405, m, problem::invalid_method, "use post");
+        
         // look at the receive key sequence.
-        // generate a new key
+        Diophant::symbol sequence_name;
+
+        {
+          const UTF8 *sequence_name_param = query.contains ("sequence_name");
+          if (bool (sequence_name_param)) sequence_name = *sequence_name_param;
+          else sequence_name = std::string {"receive"};
+        }
+
+        if (!sequence_name.valid ()) return error_response (400, m, problem::invalid_name);
+        
+        // do we have a sequence by this name? 
+        maybe<Cosmos::database::derivation> seq = p.DB->get_wallet_derivation (wallet_name, sequence_name);
+        if (!bool (seq)) return error_response (400, m, problem::invalid_query);
+
+        // generate a new key. We must be able to generate a pubkey.
+        Cosmos::key_expression k = seq->increment ();
+
+        Bitcoin::pubkey p;
+        try {
+           p = Bitcoin::pubkey (k);
+        } catch (...) {}
+
+        if (!p.valid ()) return error_response (400, m, problem::invalid_query);
+
         // make a database entery for it. 
         return error_response (501, m, problem::unimplemented);
     }
 
     if (m == NEXT_XPUB) {
+        if (http_method != net::HTTP::method::post)
+            return error_response (405, m, problem::invalid_method, "use post");
+        
         // look at the receivex key sequence.
-        // generate a new key
-        // is the key an xpub? 
+        Diophant::symbol sequence_name;
+
+        {
+          const UTF8 *sequence_name_param = query.contains ("sequence_name");
+          if (bool (sequence_name_param)) sequence_name = *sequence_name_param;
+          else sequence_name = std::string {"receivex"};
+        }
+
+        if (!sequence_name.valid ()) return error_response (400, m, problem::invalid_name);
+
+        // do we have a sequence by this name? 
+        maybe<Cosmos::database::derivation> seq = p.DB->get_wallet_derivation (wallet_name, sequence_name);
+        if (!bool (seq)) return error_response (400, m, problem::invalid_query);
+
+        // generate a new key. 
+        Cosmos::key_expression k = seq->increment ();
+
+        HD::BIP_32::pubkey p;
+        try {
+           p = HD::BIP_32::pubkey (k);
+        } catch (...) {}
+
+        if (!p.valid ()) return error_response (400, m, problem::invalid_query);
+
         // if it is, then make a database entry. We don't know what the entry looks like yet. 
         return error_response (501, m, problem::unimplemented);
     }
 
+
     if (m == IMPORT) {
+        if (http_method != net::HTTP::method::put)
+            return error_response (405, m, problem::invalid_method, "use put");
         // we need to find addresses and xpubs that we need to check. 
         // could just check the last several keys? 
+
+        // first we need a function that recognizes output patterns. 
         return error_response (501, m, problem::unimplemented);
     }
 
@@ -811,13 +867,6 @@ net::HTTP::response process_wallet_method (
     }
 
     return error_response (501, m, problem::unimplemented);
-
-    if (m == IMPORT) {
-        if (http_method != net::HTTP::method::put)
-            return error_response (405, m, problem::invalid_method, "use put");
-
-        return error_response (501, m, problem::unimplemented);
-    }
 
     if (m == RESTORE) {
         if (http_method != net::HTTP::method::put)
@@ -1387,6 +1436,8 @@ R"--(<!DOCTYPE html>
     <form id="form-next_key">
       <b>wallet name: </b><input name="wallet-name" type="text">
       <br>
+      <b>sequence name: </b><input name="sequence_name" type="text">
+      <br>
       <button type="button" id="submit-next_key" onclick="callWalletNextKey()">Details</button>
     </form>
     <pre id="output-next_key"></pre>
@@ -1399,6 +1450,8 @@ R"--(<!DOCTYPE html>
     </p>
     <form id="form-next_xpub">
       <b>wallet name: </b><input name="wallet-name" type="text">
+      <br>
+      <b>sequence name: </b><input name="sequence_name" type="text">
       <br>
       <button type="button" id="submit-next_xpub" onclick="callWalletNextXPub()">Details</button>
     </form>
@@ -1509,7 +1562,7 @@ R"--(<!DOCTYPE html>
           body: document.getElementById ('form-add_entropy').elements["user_entropy"].value
         });
 
-        const result = await response.text(); // or .json() depending on response type
+        const result = await response.text (); // or .json() depending on response type
         document.getElementById (`output-add_entropy`).textContent = result;
       } catch (err) {
         document.getElementById (`output-add_entropy`).textContent = 'Error: ' + err;
@@ -1544,32 +1597,77 @@ R"--(<!DOCTYPE html>
 
     }
 
+    async function callWalletMethod (http_method, wallet_method, wallet_name) {
+    
+      let target = '/' + wallet_method + '/' + wallet_name;
+
+      let output = 'output-' + wallet_method;
+
+      try {
+        const response = await fetch (target, {
+          method: http_method,
+        });
+
+        const result = await response.text (); // or .json() depending on response type
+        document.getElementById (output).textContent = result;
+      } catch (err) {
+        document.getElementById (output).textContent = 'Error: ' + err;
+      }
+    }
+
+    async function callGetValue () {
+      callWalletMethod ('GET', 'value', document.getElementById ('form-value').elements['wallet-name']);
+    }
+
+    async function callGetWalletDetails () {
+      callWalletMethod ('GET', 'details', document.getElementById ('form-value').elements['wallet-name']);
+    }
+
     async function callNextAddress () {
+      const elements = document.getElementById ('form-next_address').elements;
+      let sequence_name = elements['sequence_name'];
+      let params = {};
+      if (sequence_name === "") params['sequence_name'] = sequence_name;
+      callWalletMethod ('POST', 'next_address', elements['wallet_name'], params);
     }
 
     async function callNextXPub () {
-
+      const elements = document.getElementById ('form-next_xpub').elements;
+      let sequence_name = elements['sequence_name'];
+      let params = {};
+      if (sequence_name === "") params['sequence_name'] = sequence_name;
+      callWalletMethod ('POST', 'next_address', elements['wallet_name'], params);
     }
 
-    async function callInvertHash() {
+    async function callInvertHash () {
+      const elements = document.getElementById ('form-invert_hash').elements;
       
     }
 
-    async function callAddKey() {}
+    async function callAddKey () {
+      const elements = document.getElementById ('form-add_key').elements;
+      
+    }
 
-    async function callToPrivate() {}
+    async function callToPrivate () {
+      const elements = document.getElementById ('form-to_private').elements;
+    }
 
-    async function callMakeWallet () {}
+    async function callMakeWallet () {
+      const elements = document.getElementById ('form-make_wallet').elements;
+    }
 
-    async function callGetValue () {}
+    async function callImport () {
+      const elements = document.getElementById ('form-import').elements;
+    }
 
-    async function callGetWalletDetails () {}
+    async function callSpend () {
+      const elements = document.getElementById ('form-spend').elements;
+    }
 
-    async function callImport () {}
-
-    async function callSpend () {}
-
-    async function callRestore () {}
+    async function callRestore () {
+      const elements = document.getElementById ('form-restore').elements;
+    }
   </script>
 </body>
 </html>

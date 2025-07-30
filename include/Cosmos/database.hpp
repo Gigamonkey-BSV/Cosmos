@@ -41,11 +41,17 @@ namespace Cosmos {
             uint32 Index;
             derivation (const key_derivation &d, const std::string key_name, uint32 index = 0):
                 Derivation {d}, KeyName {key_name}, Index {index} {}
+            
+            key_expression increment () {
+                throw method::unimplemented {"derivation::increment"};
+            }
         };
 
-        virtual bool set_derivation (const std::string &wallet_name, const std::string &deriv_name, const derivation &) = 0;
+        virtual bool set_wallet_derivation (const std::string &wallet_name, const std::string &deriv_name, const derivation &) = 0;
 
         virtual list<derivation> get_wallet_derivations (const std::string &wallet_name) = 0;
+
+        virtual maybe<derivation> get_wallet_derivation (const std::string &wallet_name, const std::string &deriv_name) = 0;
 
         virtual Cosmos::account get_wallet_account (const std::string &wallet_name) = 0;
 

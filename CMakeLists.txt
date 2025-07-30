@@ -99,6 +99,7 @@ add_library (
     source/Cosmos/network.cpp
     source/Cosmos/files.cpp
 
+    source/Cosmos/wallet/keys.cpp
     source/Cosmos/wallet/account.cpp
     source/Cosmos/wallet/restore.cpp
     source/Cosmos/wallet/select.cpp

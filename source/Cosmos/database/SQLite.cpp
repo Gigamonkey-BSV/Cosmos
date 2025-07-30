@@ -1017,16 +1017,20 @@ namespace Cosmos::SQLite {
             return names;
         }
 
-        bool set_derivation (const std::string &wallet_name, const std::string &deriv_name, const derivation &) {
+        bool set_wallet_derivation (const std::string &wallet_name, const std::string &deriv_name, const derivation &) {
             throw method::unimplemented {"SQLite::set_derivation"};
         }
 
         list<derivation> get_wallet_derivations (const std::string &wallet_name) final override {
-            throw method::unimplemented {"SQLite::get_wallet"};
+            throw method::unimplemented {"SQLite::get_wallet_derivations"};
+        };
+
+        maybe<derivation> get_wallet_derivation (const std::string &wallet_name, const std::string &deriv_name) final override {
+            throw method::unimplemented {"SQLite::get_wallet_derivation"};
         };
 
         Cosmos::account get_wallet_account (const std::string &wallet_name) final override {
-            throw method::unimplemented {"SQLite::get_wallet"};
+            throw method::unimplemented {"SQLite::get_wallet_account"};
         };
 
         struct readable : database::readable {
