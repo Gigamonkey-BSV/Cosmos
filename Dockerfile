@@ -25,6 +25,7 @@ RUN apt-get -y update &&  \
     libcrypto++-dev \
     libcrypto++-doc \
     libcrypto++-utils \
+    libsqlite3-dev \
     libgmp3-dev \
         ca-certificates &&\
     rm -rf /var/lib/apt/lists/*
