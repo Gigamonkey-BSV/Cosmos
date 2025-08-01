@@ -19,7 +19,7 @@
 #include <Cosmos/database/SQLite/SQLite.hpp>
 
 #include <Diophant/parse.hpp>
-#include <Diophant/grammar.hpp>
+#include <Diophant/parse/grammar.hpp>
 #include <Diophant/symbol.hpp>
 
 #include "Cosmos.hpp"

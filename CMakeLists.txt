@@ -66,7 +66,7 @@ FetchContent_MakeAvailable (argh)
 FetchContent_Declare (ctre URL https://github.com/hanickadot/compile-time-regular-expressions/archive/refs/tags/v3.10.0.zip)
 FetchContent_MakeAvailable (ctre)
 
-# You can configure this for your need, presumbably you want speificy a git tag here instead of a branch
+# You can configure this for your need, presumbably you want specify a git tag here instead of a branch
 FetchContent_Declare (sqliteOrm
   GIT_REPOSITORY https://github.com/fnc12/sqlite_orm
   GIT_TAG        origin/dev
