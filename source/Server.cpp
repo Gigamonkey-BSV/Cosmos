@@ -254,6 +254,7 @@ enum class problem {
     invalid_target,
     invalid_expression,
     missing_parameter, 
+    invalid_parameter,
     failed,
     unimplemented
 };
@@ -443,42 +444,116 @@ net::HTTP::response process_method (
         enum class hash_function {
             unset,
             SHA1, 
+            MD5,
             SHA2_256, 
-            RIPEMD160, 
+            SHA2_512,
+            RIPEMD160,
+            SHA3_256,
+            SHA3_512, 
             Hash256, 
             Hash160,
         } HashFunction {hash_function::unset};
 
-        enum class data_format {
-            ASCII, 
-            HEX
-        } DataFormat {data_format::ASCII};
+        enum class digest_format {
+            unset, 
+            HEX,
+            BASE58_CHECK, 
+            BASE64
+        } DigestFormat {digest_format::unset};
 
+        // which function to use. 
         const UTF8 *hash_function_param = query.contains ("function");
         if (bool (hash_function_param)) {
             std::string sanitized = sanitize (*hash_function_param);
             if (sanitized == "sha1") HashFunction = hash_function::SHA1;
-            else if (sanitized == "sha2256") HashFunction = key_type::SHA2_256;
-            else if (sanitized == "ripmd160") HashFunction = key_type::RIPEMD160;
-            else if (sanitized == "hash256") HashFunction = key_type::Hash256;
-            else if (sanitized == "hash160") HashFunction = key_type::Hash160;
+            else if (sanitized == "md5") HashFunction = hash_function::MD5;
+            else if (sanitized == "sha2256") HashFunction = hash_function::SHA2_256;
+            else if (sanitized == "sha2512") HashFunction = hash_function::SHA2_512;
+            else if (sanitized == "sha3256") HashFunction = hash_function::SHA3_256;
+            else if (sanitized == "sha3512") HashFunction = hash_function::SHA3_512;
+            else if (sanitized == "ripmd160") HashFunction = hash_function::RIPEMD160;
+            else if (sanitized == "hash256") HashFunction = hash_function::Hash256;
+            else if (sanitized == "hash160") HashFunction = hash_function::Hash160;
             else return error_response (400, m, problem::invalid_query, "invalid parameter 'function'");
         } else return error_response (400, m, problem::missing_parameter, "missing required parameter 'function'");
 
-        const UTF8 *data_format_param = query.contains ("data_format");
-        if (bool (format_type_param)) {
-            std::string sanitized = sanitize (*format_type_param);
-            if (key_type_san == "ascii") DataFormat = key_type::ASCII;
-            else if (key_type_san == "hex") DataFormat = key_type::HEX;
-            else return error_response (400, m, problem::invalid_query, "invalid parameter 'data_format'");
-        }
-
         if (http_method != net::HTTP::method::post && http_method != net::HTTP::method::get) 
             return error_response (405, m, problem::invalid_method, "use post or get");
-        
-        // get the 
 
-        throw data::method::unimplemented {"INVERT_HASH"};
+        const UTF8 *digest_format_param = query.contains ("digest_format");
+        if (bool (digest_format_param)) {
+            std::string sanitized = sanitize (*digest_format_param);
+            if (sanitized == "hex") DigestFormat = digest_format::HEX;
+            else if (sanitized == "base58check") DigestFormat = digest_format::BASE58_CHECK;
+            else if (sanitized == "base64") DigestFormat = digest_format::BASE64;
+            else return error_response (400, m, problem::invalid_parameter, "invalid parameter 'digest_format'");
+        } else if (http_method == net::HTTP::method::get)
+            return error_response (400, m, problem::missing_parameter, "missing required parameter 'digest_format'");
+
+        // the digest provided by the query. In the case of POST, this is optional. 
+        data::maybe<bytes> digest;
+
+        const UTF8 *digest_param = query.contains ("digest");
+        if (bool (digest_param)) {
+          switch (DigestFormat) {
+              case digest_format::HEX: {
+                  return error_response (501, m, problem::unimplemented);
+              } break;
+              case digest_format::BASE58_CHECK: {
+                  return error_response (501, m, problem::unimplemented);
+              } break;
+              case digest_format::BASE64: {
+                  return error_response (501, m, problem::unimplemented);
+              } break;
+              default: 
+                  return error_response (400, m, problem::invalid_parameter, "invalid parameter 'digest'");
+          }
+        } else if (DigestFormat != digest_format::unset) 
+            return error_response (400, m, problem::missing_parameter, "missing required parameter 'digest'");
+        
+        data::maybe<const bytes &> data_to_hash;
+
+        if (!bool (content_type)) {
+            if (http_method == net::HTTP::method::post) 
+                return error_response (400, m, problem::invalid_query, "data to hash should be provided in body");
+        } else if (*content_type != net::HTTP::content::type::application_octet_stream && *content_type != net::HTTP::content::type::text_plain) {
+            return error_response (400, m, problem::invalid_content_type, "either plain text or bytes");
+        } else {
+            data_to_hash = body;
+
+            bytes hash_digest;
+
+            switch (HashFunction) {
+                case hash_function::SHA1: {} break;
+                case hash_function::SHA2_256: {} break;
+                case hash_function::SHA2_512: {} break;
+                case hash_function::SHA3_256: {} break;
+                case hash_function::SHA3_512: {} break;
+                case hash_function::RIPEMD160: {} break;
+                case hash_function::Hash256: {} break;
+                case hash_function::Hash160: {} break;
+                default: {
+                    return error_response (501, m, problem::unimplemented);
+                }
+            }
+
+            if (bool (digest) && hash_digest != *digest) 
+                return error_response (400, m, problem::invalid_query, 
+                    "provided hash digest does not match calculated");
+            
+            return error_response (501, m, problem::unimplemented);
+
+        }
+        
+
+        if (http_method == net::HTTP::method::post) {
+
+        } else {
+                
+        }
+
+
+        return error_response (501, m, problem::unimplemented);
     }
 
     // Associate a secret key with a name. The key could be anything; private, public, or symmetric. 
@@ -600,7 +675,7 @@ net::HTTP::response process_method (
             if (p.DB->set_to_private (key_name, key_expr)) return ok_response ();
             return error_response (500, m, problem::failed, "could not set private key");
         } else if (http_method != net::HTTP::method::get) {
-            throw data::method::unimplemented {"get TO_PRIVATE"};
+            return error_response (501, m, problem::unimplemented, "GET TO_PRIVATE");
         } else return error_response (405, m, problem::invalid_method, "use post or get");
     }
 
@@ -1253,6 +1328,14 @@ R"--(<!DOCTYPE html>
       <br>
       <label><input type="radio" name="HTTP_method" value="POST" onclick="toggleRadio (this)">POST</label>
       <br>
+      <b>digest: (hex) </b><input name="hash_digest" type="text">
+      <label for="digest_format"></label>
+      <select name="digest_format">
+        <option value="HEX">hex</option>
+        <option value="BASE58_CHECK">base 58 check</option>
+        <option value="BASE64">base 64</option>
+      </select>
+      <br>
       <label><input type="radio" name="function" value="SHA1" onclick="toggleRadio (this)">SHA1</label>
       <br>
       <label><input type="radio" name="function" value="SHA2_256" onclick="toggleRadio (this)">SHA2 256</label>
@@ -1263,7 +1346,6 @@ R"--(<!DOCTYPE html>
       <br>
       <label><input type="radio" name="function" value="Hash160" onclick="toggleRadio (this)">Hash160</label>
       <br>
-      <b>digest: (hex) </b>
       <label><input type="radio" name="data_format" value="HEX" onclick="toggleRadio (this)">hex</label>
       <br>
       <label><input type="radio" name="data_format" value="ASCII" onclick="toggleRadio (this)">ASCII</label>
@@ -1299,7 +1381,7 @@ R"--(<!DOCTYPE html>
       <br>
       <label><input type="radio" name="method-type" value="random-xpriv" onclick="toggleRadio(this)">random xpub</label>
       <br>
-      <button type="button" id="submit-add_key" onclick="callAddKey()">Add Key</button>
+      <button type="button" id="submit-add_key" onclick="callAddKey ()">Add Key</button>
     </form>
     <pre id="output-add_key"></pre>
   </details>
@@ -1686,12 +1768,25 @@ R"--(<!DOCTYPE html>
     async function callInvertHash () {
       const elements = document.getElementById ('form-invert_hash').elements;
       const http_method = elements['HTTP_method'];
+
       let params = {
-        data_format = element['data_format'];
         function = element['function'];
       };
 
-      // TODO
+      const digest = elements['digest'];
+
+      if (digest =!= "") {
+        params['digest'] = digest;
+        params['digest_format'] = elements['digest_format'];
+      } else if (http_method == 'POST') {
+        // TODO: this is an error
+      }
+
+      if (http_method == 'POST') {
+        // TODO get the data to hash
+      }
+
+      // TODO make the query
     }
 
     async function callAddKey () {
