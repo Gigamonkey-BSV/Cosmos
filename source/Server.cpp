@@ -253,6 +253,7 @@ enum class problem {
     invalid_query,
     invalid_target,
     invalid_expression,
+    missing_parameter, 
     failed,
     unimplemented
 };
@@ -438,11 +439,46 @@ net::HTTP::response process_method (
     const data::bytes &body) {
 
     if (m == INVERT_HASH) {
-        if (http_method == net::HTTP::method::post) {
-            throw data::method::unimplemented {"post INVERT_HASH"};
-        } else if (http_method != net::HTTP::method::get) {
-            throw data::method::unimplemented {"get INVERT_HASH"};
-        } else return error_response (405, m, problem::invalid_method, "use post or get");
+
+        enum class hash_function {
+            unset,
+            SHA1, 
+            SHA2_256, 
+            RIPEMD160, 
+            Hash256, 
+            Hash160,
+        } HashFunction {hash_function::unset};
+
+        enum class data_format {
+            ASCII, 
+            HEX
+        } DataFormat {data_format::ASCII};
+
+        const UTF8 *hash_function_param = query.contains ("function");
+        if (bool (hash_function_param)) {
+            std::string sanitized = sanitize (*hash_function_param);
+            if (sanitized == "sha1") HashFunction = hash_function::SHA1;
+            else if (sanitized == "sha2256") HashFunction = key_type::SHA2_256;
+            else if (sanitized == "ripmd160") HashFunction = key_type::RIPEMD160;
+            else if (sanitized == "hash256") HashFunction = key_type::Hash256;
+            else if (sanitized == "hash160") HashFunction = key_type::Hash160;
+            else return error_response (400, m, problem::invalid_query, "invalid parameter 'function'");
+        } else return error_response (400, m, problem::missing_parameter, "missing required parameter 'function'");
+
+        const UTF8 *data_format_param = query.contains ("data_format");
+        if (bool (format_type_param)) {
+            std::string sanitized = sanitize (*format_type_param);
+            if (key_type_san == "ascii") DataFormat = key_type::ASCII;
+            else if (key_type_san == "hex") DataFormat = key_type::HEX;
+            else return error_response (400, m, problem::invalid_query, "invalid parameter 'data_format'");
+        }
+
+        if (http_method != net::HTTP::method::post && http_method != net::HTTP::method::get) 
+            return error_response (405, m, problem::invalid_method, "use post or get");
+        
+        // get the 
+
+        throw data::method::unimplemented {"INVERT_HASH"};
     }
 
     // Associate a secret key with a name. The key could be anything; private, public, or symmetric. 
@@ -481,7 +517,7 @@ net::HTTP::response process_method (
 
         const UTF8 *key_name_param = query.contains ("name");
         if (!bool (key_name_param))
-            return error_response (400, m, problem::invalid_query, "required parameter 'name' not present");
+            return error_response (400, m, problem::missing_parameter, "required parameter 'name' not present");
 
         Diophant::symbol key_name = tao_pegtl_grammar::read_symbol (*key_name_param);
 
@@ -1227,7 +1263,7 @@ R"--(<!DOCTYPE html>
       <br>
       <label><input type="radio" name="function" value="Hash160" onclick="toggleRadio (this)">Hash160</label>
       <br>
-      <b>digest: (hex) </b><input name="wallet-name" type="text">
+      <b>digest: (hex) </b>
       <label><input type="radio" name="data_format" value="HEX" onclick="toggleRadio (this)">hex</label>
       <br>
       <label><input type="radio" name="data_format" value="ASCII" onclick="toggleRadio (this)">ASCII</label>
@@ -1497,10 +1533,10 @@ R"--(<!DOCTYPE html>
       }
     }
 
-    async function callApi(http_method, endpoint) {
+    async function callApi (http_method, endpoint) {
 
       const form = document.getElementById (`form-${endpoint}`);
-      const formData = new FormData(form);
+      const formData = new FormData (form);
       let url = `/${endpoint}`;
 
       let options = {
@@ -1510,20 +1546,20 @@ R"--(<!DOCTYPE html>
 
       if (http_method === 'GET') {
         // Convert formData to URL query parameters
-        const params = new URLSearchParams(formData).toString();
+        const params = new URLSearchParams (formData).toString ();
         url += `?${params}`;
       } else if (http_method === 'POST') {
         // Send form data as URL-encoded body
-        options.body = new URLSearchParams(formData);
+        options.body = new URLSearchParams (formData);
         options.headers['Content-Type'] = 'application/x-www-form-urlencoded';
       }
 
       try {
-        const res = await fetch(url, options);
-        const text = await res.text();
-        document.getElementById(`output-${endpoint}`).textContent = text;
+        const res = await fetch (url, options);
+        const text = await res.text ();
+        document.getElementById (`output-${endpoint}`).textContent = text;
       } catch (err) {
-        document.getElementById(`output-${endpoint}`).textContent = 'Error: ' + err;
+        document.getElementById (`output-${endpoint}`).textContent = 'Error: ' + err;
       }
     }
 
@@ -1571,7 +1607,7 @@ R"--(<!DOCTYPE html>
 
     async function callGenerate () {
       const elements = document.getElementById ('form-generate').elements;
-      var target = '/generate' + elements["wallet-name"].value; + '?'
+      var target = '/generate' + elements["wallet-name"].value + '?'
 
       // Whether we use a mnemonic at all. 
       if (elements["mnemonic"].checked) {
@@ -1589,7 +1625,7 @@ R"--(<!DOCTYPE html>
           method: 'POST',
         });
 
-        const result = await response.text(); // or .json() depending on response type
+        const result = await response.text (); // or .json() depending on response type
         document.getElementById (`output-generate`).textContent = result;
       } catch (err) {
         document.getElementById (`output-generate`).textContent = 'Error: ' + err;
@@ -1597,9 +1633,13 @@ R"--(<!DOCTYPE html>
 
     }
 
-    async function callWalletMethod (http_method, wallet_method, wallet_name) {
+    async function callWalletMethod (http_method, wallet_method, wallet_name, params) {
     
       let target = '/' + wallet_method + '/' + wallet_name;
+
+      if (params =!= undefined) {
+        target += '?' + new URLSearchParams (params).toString ();
+      }
 
       let output = 'output-' + wallet_method;
 
@@ -1613,6 +1653,10 @@ R"--(<!DOCTYPE html>
       } catch (err) {
         document.getElementById (output).textContent = 'Error: ' + err;
       }
+    }
+
+    async function callMakeWallet () {
+      callWalletMethod ('POST', 'make_wallet', document.getElementById ('form-make_wallet').elements['wallet-name']);
     }
 
     async function callGetValue () {
@@ -1641,20 +1685,33 @@ R"--(<!DOCTYPE html>
 
     async function callInvertHash () {
       const elements = document.getElementById ('form-invert_hash').elements;
-      
+      const http_method = elements['HTTP_method'];
+      let params = {
+        data_format = element['data_format'];
+        function = element['function'];
+      };
+
+      // TODO
     }
 
     async function callAddKey () {
       const elements = document.getElementById ('form-add_key').elements;
-      
+      const http_method = elements['HTTP_method'];
+      if (http_method == 'GET') {
+
+      } else {
+        
+      }
     }
 
     async function callToPrivate () {
       const elements = document.getElementById ('form-to_private').elements;
-    }
-
-    async function callMakeWallet () {
-      const elements = document.getElementById ('form-make_wallet').elements;
+      const http_method = elements['HTTP_method'];
+      if (http_method == 'GET') {
+        
+      } else {
+        
+      }
     }
 
     async function callImport () {
