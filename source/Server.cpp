@@ -1,28 +1,31 @@
 
+
 #include <charconv>
 
 #include <cstdlib>  // for std::getenv
 #include <laserpants/dotenv/dotenv.h>
-
-#include <gigamonkey/schema/random.hpp>
-#include <gigamonkey/schema/bip_39.hpp>
 
 #include <data/async.hpp>
 #include <data/net/URL.hpp>
 #include <data/net/JSON.hpp>
 #include <data/net/HTTP_server.hpp>
 
-#include <Cosmos/database.hpp>
-#include <Cosmos/random.hpp>
-#include <Cosmos/options.hpp>
-
-#include <Cosmos/database/SQLite/SQLite.hpp>
+#include <gigamonkey/schema/random.hpp>
+#include <gigamonkey/schema/bip_39.hpp>
 
 #include <Diophant/parse.hpp>
 #include <Diophant/parse/grammar.hpp>
 #include <Diophant/symbol.hpp>
 
+// TODO: in here we have 'using namespace data' and that causes a
+// problem if the includes are in the wrong order. This should be fixed. 
 #include "Cosmos.hpp"
+#include "server/db.hpp"
+
+#include <Cosmos/random.hpp>
+#include <Cosmos/options.hpp>
+
+#include <Cosmos/database/SQLite/SQLite.hpp>
 
 namespace Bitcoin = Gigamonkey::Bitcoin;
 namespace secp256k1 = Gigamonkey::secp256k1;
@@ -34,25 +37,7 @@ struct options : io::arg_parser {
     // path to an env file containing program options. 
     maybe<filepath> env () const;
 
-    // depricated. We changed things too much to be
-    // able to use the old JSON database anymore.
-    struct JSON_DB_options {
-        std::string Path; // should be a directory
-    };
-
-    struct SQLite_options {
-        maybe<filepath> Path {}; // missing for in-memory
-    };
-
-    // we were talking about using mongodb at one point 
-    // but that is not supported at all right now. 
-    struct MongoDB_options {
-        net::URL URL;
-        std::string UserName;
-        std::string Password;
-    }; // not yet supported.
-
-    either<JSON_DB_options, SQLite_options, MongoDB_options> db_options () const;
+    ::db_options db_options () const;
 
     net::IP::TCP::endpoint endpoint () const;
     uint32 threads () const;
@@ -123,8 +108,6 @@ void signal_handler (int signal) {
     if (signal == SIGINT || signal == SIGTERM) shutdown ();
 }
 
-ptr<Cosmos::database> load_DB (const options &o);
-
 struct processor {
 
     processor (const options &o);
@@ -138,7 +121,7 @@ struct processor {
 
     Cosmos::spend_options SpendOptions;
 
-    ptr<Cosmos::database> DB;
+    ptr<database> DB;
 
     struct make_wallet_options {};
 
@@ -433,6 +416,10 @@ maybe<bool> read_bool (const std::string &utf8) {
     else return {};
 }
 
+using hash_function = Cosmos::hash_function;
+using key_expression = Cosmos::key_expression;
+using key_derivation = Cosmos::key_derivation;
+
 net::HTTP::response process_method (
     processor &p, net::HTTP::method http_method, meth m,
     map<UTF8, UTF8> query,
@@ -441,18 +428,7 @@ net::HTTP::response process_method (
 
     if (m == INVERT_HASH) {
 
-        enum class hash_function {
-            unset,
-            SHA1, 
-            MD5,
-            SHA2_256, 
-            SHA2_512,
-            RIPEMD160,
-            SHA3_256,
-            SHA3_512, 
-            Hash256, 
-            Hash160,
-        } HashFunction {hash_function::unset};
+        hash_function HashFunction {0};
 
         enum class digest_format {
             unset, 
@@ -616,7 +592,7 @@ net::HTTP::response process_method (
             compressed = *maybe_compressed;
         }
 
-        Cosmos::key_expression key_expr;
+        key_expression key_expr;
 
         if (Method == generation_method::expression) {
             if (KeyType != key_type::unset)
@@ -625,7 +601,7 @@ net::HTTP::response process_method (
             if (!bool (content_type) || *content_type != net::HTTP::content::type::text_plain)
                 return error_response (400, m, problem::invalid_content_type, "expected content-type:text/plain");
 
-            key_expr = Cosmos::key_expression {data::string (body)};
+            key_expr = key_expression {data::string (body)};
 
         } else {
             if (KeyType != key_type::unset)
@@ -640,15 +616,15 @@ net::HTTP::response process_method (
 
             switch (KeyType) {
                 case (key_type::WIF): {
-                    key_expr = Cosmos::key_expression {Bitcoin::secret {net, key, compressed}};
+                    key_expr = key_expression {Bitcoin::secret {net, key, compressed}};
                 } break;
                 case (key_type::HD): {
                     HD::chain_code x;
                     random >> x;
-                    key_expr = Cosmos::key_expression (HD::BIP_32::secret {key, x, net});
+                    key_expr = key_expression (HD::BIP_32::secret {key, x, net});
                 } break;
                 default: {
-                    key_expr = Cosmos::key_expression {key};
+                    key_expr = key_expression {key};
                 }
             }
         }
@@ -690,7 +666,7 @@ bool parse_uint32 (const std::string &str, uint32_t &result) {
         if (idx != str.size ())
             return false;  // Extra characters after number
 
-        if (val > std::numeric_limits<uint32_t>::max())
+        if (val > std::numeric_limits<uint32_t>::max ())
             return false;  // Out of range for uint32_t
 
         result = static_cast<uint32_t> (val);
@@ -756,9 +732,9 @@ net::HTTP::response process_wallet_method (
                 return error_response (400, m, problem::invalid_name, "invalid parameter 'index'");
         }
 
-        Cosmos::key_derivation key_deriv {data::string (body)};
+        key_derivation key_deriv {data::string (body)};
 
-        if (p.DB->set_wallet_derivation (wallet_name, name, Cosmos::database::derivation {key_deriv, key_name, index})) return ok_response ();
+        if (p.DB->set_wallet_derivation (wallet_name, name, database::derivation {key_deriv, key_name, index})) return ok_response ();
         return error_response (500, m, problem::failed, "could not set wallet derivation");
     }
 
@@ -862,14 +838,14 @@ net::HTTP::response process_wallet_method (
         p.DB->set_to_private (account_name, account_derivation);
 
         p.DB->set_wallet_derivation (wallet_name, "receive",
-            Cosmos::database::derivation {Cosmos::key_derivation {"@ name index -> name / 0 / index"}, account_name});
+            database::derivation {Cosmos::key_derivation {"@ name index -> name / 0 / index"}, account_name});
 
         p.DB->set_wallet_derivation (wallet_name, "change",
-            Cosmos::database::derivation {Cosmos::key_derivation {"@ name index -> name / 1 / index"}, account_name});
+            database::derivation {Cosmos::key_derivation {"@ name index -> name / 1 / index"}, account_name});
 
         if (WalletStyle == wallet_style::BIP_44_plus)
             p.DB->set_wallet_derivation (wallet_name, "receivex",
-                Cosmos::database::derivation {Cosmos::key_derivation {"@ name index -> name / 0 / `index"}, account_name});
+                database::derivation {Cosmos::key_derivation {"@ name index -> name / 0 / `index"}, account_name});
 
         if (use_mnemonic) return JSON_response (JSON {wallet_words});
         return ok_response ();
@@ -892,7 +868,7 @@ net::HTTP::response process_wallet_method (
         if (!sequence_name.valid ()) return error_response (400, m, problem::invalid_name);
         
         // do we have a sequence by this name? 
-        maybe<Cosmos::database::derivation> seq = p.DB->get_wallet_derivation (wallet_name, sequence_name);
+        maybe<database::derivation> seq = p.DB->get_wallet_derivation (wallet_name, sequence_name);
         if (!bool (seq)) return error_response (400, m, problem::invalid_query);
 
         // generate a new key. We must be able to generate a pubkey.
@@ -925,7 +901,7 @@ net::HTTP::response process_wallet_method (
         if (!sequence_name.valid ()) return error_response (400, m, problem::invalid_name);
 
         // do we have a sequence by this name? 
-        maybe<Cosmos::database::derivation> seq = p.DB->get_wallet_derivation (wallet_name, sequence_name);
+        maybe<database::derivation> seq = p.DB->get_wallet_derivation (wallet_name, sequence_name);
         if (!bool (seq)) return error_response (400, m, problem::invalid_query);
 
         // generate a new key. 
@@ -1026,15 +1002,13 @@ net::HTTP::response process_wallet_method (
 
 processor::processor (const options &o) {
     SpendOptions = o.spend_options ();
-    DB = load_DB (o);
-
+    DB = load_DB (o.db_options ());
 }
 
-ptr<Cosmos::database> load_DB (const options &o) {
-    auto db_opts = o.db_options ();
-    if (!db_opts.is<options::SQLite_options> ()) throw exception {} << "Only SQLite is supported";
+ptr<database> load_DB (const db_options &db_opts) {
+    if (!db_opts.is<SQLite_options> ()) throw exception {} << "Only SQLite is supported";
 
-    return Cosmos::SQLite::load (db_opts.get<options::SQLite_options> ().Path);
+    return Cosmos::SQLite::load (db_opts.get<SQLite_options> ().Path);
 }
 
 maybe<filepath> options::env () const {
@@ -1094,13 +1068,27 @@ uint32 options::threads () const {
     return *threads;
 }
 
-either<options::JSON_DB_options, options::SQLite_options, options::MongoDB_options> options::db_options () const {
+db_options options::db_options () const {
     SQLite_options sqlite;
-    this->get ("sqlite_path", sqlite.Path);
-    if (bool (sqlite.Path)) return sqlite;
 
-    const char *val = std::getenv ("COSMOS_SQLITE_PATH");
-    if (bool (val)) sqlite.Path = filepath {val};
+    maybe<std::string> db_type;
+    this->get ("db_type", db_type);
+    if (bool (db_type) && sanitize (*db_type) != "sqlite")
+        throw data::exception {} << "only SQLite is supported as a database";
+
+    bool param_in_memory = this->has ("sqlite_in_memory");
+
+    this->get ("sqlite_path", sqlite.Path);
+    if (!bool (sqlite.Path)) {
+        const char *val = std::getenv ("COSMOS_SQLITE_PATH");
+        if (bool (val)) sqlite.Path = filepath {val};
+    }
+
+    if (param_in_memory && bool (sqlite.Path)) 
+        throw data::exception {} << "SQLite database set as in-memory but a path was also set.";
+
+    if (!bool (sqlite.Path) && !param_in_memory)
+        std::cout << "warning: SQLite database is in-memory. All information will be erased on program exit." << std::endl; 
 
     return sqlite;
 }

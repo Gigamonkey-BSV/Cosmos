@@ -13,12 +13,18 @@ namespace Cosmos {
     void setup_BIP_44_wallet (const HD::BIP_32::secret &master, list<uint32> accounts = {1});
 
     enum class hash_function : byte {
-        SHA1 = 0,
-        SHA2_256 = 1,
-        RIPEMD_160 = 2, 
-        Hash256 = 3, 
-        Hash160 = 4
+        SHA1 = 1,
+        MD5 = 2,
+        SHA2_256 = 3,
+        SHA2_512 = 4, 
+        RIPEMD160 = 5, 
+        SHA3_256 = 6,
+        SHA3_512 = 7, 
+        Hash256 = 8, 
+        Hash160 = 9
     };
+
+    bool supported (hash_function);
 
     struct database : local_TXDB, local_price_data {
 
@@ -99,6 +105,10 @@ namespace Cosmos {
         };
 
     };
+
+    bool inline supported (hash_function f) {
+        return byte (f) > 0 && byte (f) < 10;
+    }
 
 }
 

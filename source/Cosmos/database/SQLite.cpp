@@ -915,6 +915,8 @@ namespace Cosmos::SQLite {
         */
 
         bool set_invert_hash (data::slice<const data::byte> digest, hash_function f, data::slice<const data::byte> data) final override {
+
+            if (!supported (f)) return false;
             
             try {
                 storage.insert (
