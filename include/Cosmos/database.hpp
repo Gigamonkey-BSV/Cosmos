@@ -25,6 +25,8 @@ namespace Cosmos {
     };
 
     bool supported (hash_function);
+    
+    std::ostream &operator << (std::ostream &, hash_function);
 
     struct database : local_TXDB, local_price_data {
 
@@ -108,6 +110,21 @@ namespace Cosmos {
 
     bool inline supported (hash_function f) {
         return byte (f) > 0 && byte (f) < 10;
+    }
+    
+    std::ostream inline &operator << (std::ostream &o, hash_function f) {
+        switch (f) {
+            case hash_function::SHA1: return o << "SHA1";
+            case hash_function::MD5: return o << "MD5";
+            case hash_function::SHA2_256: return o << "SHA2 256";
+            case hash_function::SHA2_512: return o << "SHA2 512";
+            case hash_function::RIPEMD160: return o << "RIPEMD160";
+            case hash_function::SHA3_256: return o << "SHA3 256";
+            case hash_function::SHA3_512: return o << "SHA3 512";
+            case hash_function::Hash256: return o << "Hash256";
+            case hash_function::Hash160: return o << "Hash160";
+            default: return o << "invalid hash function";
+        }
     }
 
 }

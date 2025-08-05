@@ -1,3 +1,6 @@
+#ifndef SERVER_DB
+#define SERVER_DB
+
 #include <Cosmos/database.hpp>
 
 using namespace data;
@@ -27,3 +30,5 @@ using db_options = either<JSON_DB_options, SQLite_options, MongoDB_options>;
 using database = Cosmos::database;
 
 ptr<database> load_DB (const db_options &o);
+
+#endif
