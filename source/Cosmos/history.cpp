@@ -14,7 +14,7 @@ namespace Cosmos {
                 if (std::string (j) == "out") return direction::out;
             }
 
-            throw exception {} << "invalid history direction format";
+            throw data::exception {} << "invalid history direction format";
         }
 
         JSON write_event (const event &r) {
@@ -35,7 +35,7 @@ namespace Cosmos {
             if (d != j.end () && p != j.end ()) {
 
                 if (!p->is_string ())
-                    throw exception {} << "invalid JSON history event format";
+                    throw data::exception {} << "invalid JSON history event format";
 
                 point = read_outpoint (std::string (*p));
                 dir = read_direction (std::string (*d));
@@ -46,7 +46,7 @@ namespace Cosmos {
                 // we need to translate the old format into the new one.
 
                 auto index = j.find ("index");
-                if (index == j.end ()) throw exception {} << "invalid ray format JSON: index";
+                if (index == j.end ()) throw data::exception {} << "invalid ray format JSON: index";
 
                 auto output = j.find ("output");
 
@@ -81,7 +81,7 @@ namespace Cosmos {
 
         history::tx read_tx (const JSON &j, TXDB &txdb) {
 
-            if (!j.is_object ()) throw exception {} << "invalid event JSON format";
+            if (!j.is_object ()) throw data::exception {} << "invalid event JSON format";
             auto txid = j.find ("txid");
             auto time = j.find ("when");
             auto received = j.find ("received");
@@ -89,12 +89,12 @@ namespace Cosmos {
             auto moved = j.find ("moved");
             auto events = j.find ("events");
 
-            if (txid == j.end ()) throw exception {} << "invalid event JSON format: 'txid'";
-            if (time == j.end ()) throw exception {} << "invalid event JSON format: 'when'";
-            if (received == j.end ()) throw exception {} << "invalid event JSON format: 'received'";
-            if (spent == j.end ()) throw exception {} << "invalid event JSON format: 'spent'";
-            if (moved == j.end ()) throw exception {} << "invalid event JSON format: 'moved'";
-            if (events == j.end () || !events->is_array ()) throw exception {} << "invalid event JSON format: 'events'";
+            if (txid == j.end ()) throw data::exception {} << "invalid event JSON format: 'txid'";
+            if (time == j.end ()) throw data::exception {} << "invalid event JSON format: 'when'";
+            if (received == j.end ()) throw data::exception {} << "invalid event JSON format: 'received'";
+            if (spent == j.end ()) throw data::exception {} << "invalid event JSON format: 'spent'";
+            if (moved == j.end ()) throw data::exception {} << "invalid event JSON format: 'moved'";
+            if (events == j.end () || !events->is_array ()) throw data::exception {} << "invalid event JSON format: 'events'";
 
             history::tx e {};
             e.TXID = read_TXID (std::string (*txid));
@@ -104,7 +104,7 @@ namespace Cosmos {
             e.Moved = read_satoshi (*moved);
             stack<event> evv;
             for (const auto &jj : *events) evv >>= read_event (jj, txdb);
-            e.Events = ordered_sequence<event> (reverse (evv));
+            e.Events = data::ordered_sequence<event> (reverse (evv));
             return e;
 
         }
@@ -156,7 +156,7 @@ namespace Cosmos {
     history::history (const JSON &j, TXDB &txdb) {
         if (j == JSON (nullptr)) return;
 
-        if (!j.is_object ()) throw exception {} << "invalid events JSON format";
+        if (!j.is_object ()) throw data::exception {} << "invalid events JSON format";
 
         // this was an old format. If it is present it can be ignored now.
         // it might take a long time to read in the old format because it
@@ -169,12 +169,12 @@ namespace Cosmos {
         auto events = j.find ("events");
 
         if (value == j.end () || spent == j.end () || received == j.end () || account == j.end () || events == j.end ())
-            throw exception {} << "invalid events JSON format: missing fields";
+            throw data::exception {} << "invalid events JSON format: missing fields";
 
-        //if (!latest->is_number ()) throw exception {} << "invalid events JSON format: invalid field latest";
-        if (!value->is_number ()) throw exception {} << "invalid events JSON format: invalid field value";
-        if (!spent->is_number ()) throw exception {} << "invalid events JSON format: invalid field spent";
-        if (!received->is_number ()) throw exception {} << "invalid events JSON format: invalid field received";
+        //if (!latest->is_number ()) throw data::exception {} << "invalid events JSON format: invalid field latest";
+        if (!value->is_number ()) throw data::exception {} << "invalid events JSON format: invalid field value";
+        if (!spent->is_number ()) throw data::exception {} << "invalid events JSON format: invalid field spent";
+        if (!received->is_number ()) throw data::exception {} << "invalid events JSON format: invalid field received";
 
         Value = read_satoshi (*value);
         Spent = read_satoshi (*spent);
@@ -210,7 +210,7 @@ namespace Cosmos {
         if (data::empty (e)) return *this;
 
         if (!data::empty (Events) && first (e) < first (first (Events).Events))
-            throw exception {} << "must be later than latest event";
+            throw data::exception {} << "must be later than latest event";
 
         while (true) {
             const auto &next = e.first ();
@@ -275,7 +275,7 @@ namespace Cosmos {
             else if (w < to) h >>= e;
         }
 
-        return episode {ev.Account, ordered_sequence<tx> (reverse (h))};
+        return episode {ev.Account, data::ordered_sequence<tx> (reverse (h))};
     }
 
     // the latest known timestamp before unconfirmed events.

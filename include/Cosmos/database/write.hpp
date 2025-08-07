@@ -10,7 +10,6 @@
 
 // provide standard ways of converting certain types into strings and back.
 namespace Cosmos {
-    using namespace data;
     namespace Bitcoin = Gigamonkey::Bitcoin;
     namespace SPV = Gigamonkey::SPV;
     namespace HD = Gigamonkey::HD;
@@ -60,7 +59,7 @@ namespace Cosmos {
 
     Bitcoin::TXID inline read_TXID (string_view x) {
         Bitcoin::TXID t {std::string {x}};
-        if (!t.valid ()) throw exception {} << "invalid txid " << x;
+        if (!t.valid ()) throw data::exception {} << "invalid txid " << x;
         return t;
     }
 

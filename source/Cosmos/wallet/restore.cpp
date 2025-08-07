@@ -5,7 +5,7 @@ namespace Cosmos {
 
     restore::restored restore::operator () (TXDB &txdb, key_sequence m, int32 start) {
 
-        if (CheckSubKeys) throw exception {} << "TODO: option CheckSubKeys enabled but not implemented.";
+        if (CheckSubKeys) throw data::exception {} << "TODO: option CheckSubKeys enabled but not implemented.";
 
         key_sequence last = m;
 

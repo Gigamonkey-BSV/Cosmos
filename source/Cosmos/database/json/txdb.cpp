@@ -16,7 +16,7 @@ namespace Cosmos {
 
     ptr<SPV::database::memory::entry> read_db_entry (const JSON &j) {
         if (!j.is_object () || !j.contains ("header") || (!j.contains ("height") && !j.contains ("tree")))
-            throw exception {} << "invalid SPV DB entry: " << j;
+            throw data::exception {} << "invalid SPV DB entry: " << j;
         if (j.contains ("tree")) return std::make_shared<SPV::database::memory::entry>
             (read_header (std::string (j["header"])), Merkle::BUMP {j["tree"]});
         else return std::make_shared<SPV::database::memory::entry>
@@ -80,7 +80,7 @@ namespace Cosmos {
     void read_SPVDB (memory_local_TXDB &txdb, const JSON &j) {
 
         if (!j.is_object () || !j.contains ("by_height") || !j.contains ("by_hash") || !j.contains ("by_root") || !j.contains ("txs"))
-            throw exception {} << "invalid JSON SPV database format: " << j;
+            throw data::exception {} << "invalid JSON SPV database format: " << j;
 
         const auto by_height = j.find ("by_height");
         const auto by_hash = j.find ("by_hash");
@@ -88,10 +88,10 @@ namespace Cosmos {
         const auto txs = j.find ("txs");
 
         if (by_height == j.end () || by_hash == j.end () || by_root == j.end () || txs == j.end ())
-            throw exception {} << "invalid JSON SPV database format: missing field";
+            throw data::exception {} << "invalid JSON SPV database format: missing field";
 
         if (!by_height->is_array () || !by_hash->is_object () || !by_root->is_object () || !txs->is_object ())
-            throw exception {} << "invalid JSON SPV database format: invalid field type";
+            throw data::exception {} << "invalid JSON SPV database format: invalid field type";
 
         ptr<SPV::database::memory::entry> last {nullptr};
         for (const auto &jj : *by_height) {
@@ -118,7 +118,7 @@ namespace Cosmos {
         // In the future it should be mandatory.
         const auto unconfirmed = j.find ("unconfirmed");
         if (unconfirmed != j.end ()) {
-            if (!unconfirmed->is_array ()) throw exception {} << "invalid JSON SPV database format: unconfirmed";
+            if (!unconfirmed->is_array ()) throw data::exception {} << "invalid JSON SPV database format: unconfirmed";
             for (const auto &jj : *unconfirmed) txdb.Pending = txdb.Pending.insert (read_TXID (std::string (jj)));
         }
 
@@ -128,17 +128,17 @@ namespace Cosmos {
 
         if (j == JSON (nullptr)) return;
 
-        if (!j.is_object ()) throw exception {} << "invalid TXDB JSON format: not an object.";
-        if (!j.contains ("redeems")) throw exception {} << "invalid TXDB JSON format: missing field 'redeems'. ";
+        if (!j.is_object ()) throw data::exception {} << "invalid TXDB JSON format: not an object.";
+        if (!j.contains ("redeems")) throw data::exception {} << "invalid TXDB JSON format: missing field 'redeems'. ";
         if (!j.contains ("addresses") || !j.contains ("scripts"))
-            throw exception {} << "invalid TXDB JSON format: ";
+            throw data::exception {} << "invalid TXDB JSON format: ";
 
         const JSON &addresses = j["addresses"];
         const JSON &scripts = j["scripts"];
         const JSON &redeems = j["redeems"];
 
         if (!addresses.is_object () || !scripts.is_object () || !redeems.is_object ())
-            throw exception {} << "invalid TXDB JSON format ";
+            throw data::exception {} << "invalid TXDB JSON format ";
 
         // this is an old format and we would not expect
         // to see this going forward.

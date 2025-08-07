@@ -7,6 +7,9 @@
 
 #include <chrono>
 
+using uint32_little = data::uint32_little;
+using int32_little = data::int32_little;
+
 namespace Cosmos {
 
     //using redeem = Gigamonkey::redeem;
@@ -48,7 +51,7 @@ namespace Cosmos {
             transaction (int32_little, list<input>, list<Bitcoin::output>, uint32_little);
 
             // attempt to retrieve all keys and sign.
-            transaction sign (database::readable &) const;
+            transaction sign (database &) const;
 
             // throws if signatures are not complete.
             explicit operator extended::transaction () const;

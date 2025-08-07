@@ -3,9 +3,10 @@
 
 #include "db.hpp"
 
+#include <Cosmos/types.hpp>
 #include <data/io/arg_parser.hpp>
 
-using arg_parser = io::arg_parser;
+using arg_parser = data::io::arg_parser;
 
 struct options : arg_parser {
     options (arg_parser &&ap) : arg_parser {ap} {}

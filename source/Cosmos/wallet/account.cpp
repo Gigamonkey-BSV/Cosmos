@@ -35,7 +35,7 @@ namespace Cosmos {
 
     // throw if failure.
     key_expression read_derivation (const JSON &) {
-        throw method::unimplemented {"read_derivation"};
+        throw data::method::unimplemented {"read_derivation"};
     }
 
     redeemable::redeemable (const JSON &j) : signing {} {
@@ -49,20 +49,20 @@ namespace Cosmos {
 
             const JSON &p = j["derivation"];
 
-            if (!p.is_array ()) throw exception {} << "invalid redeemable format";
+            if (!p.is_array ()) throw data::exception {} << "invalid redeemable format";
 
             for (const JSON &bd : p) Keys <<= read_derivation (bd);
         } else if (j.contains ("keys")) {
             const JSON &p = j["keys"];
 
-            if (!p.is_array ()) throw exception {} << "invalid redeemable format";
+            if (!p.is_array ()) throw data::exception {} << "invalid redeemable format";
 
             for (const JSON &k : p) Keys <<= key_expression (std::string (k));
         }
 
         if (auto xx = j.find ("script_code"); xx != j.end ()) {
             auto x = encoding::hex::read (std::string (*xx));
-            if (!bool (x)) throw exception {} << "could not read hex value from \"" + xx->dump () + "\"";
+            if (!bool (x)) throw data::exception {} << "could not read hex value from \"" + xx->dump () + "\"";
             UnlockScriptSoFar = *x;
         }
 
@@ -72,7 +72,7 @@ namespace Cosmos {
 
         if (j == nullptr) return;
 
-        if (!j.is_object ()) throw exception {} << "invalid account JSON format 1";
+        if (!j.is_object ()) throw data::exception {} << "invalid account JSON format 1";
 
         account a {};
         for (const auto &[key, value] : j.items ()) a = a.insert (read_outpoint (key), redeemable {value});

@@ -5,7 +5,7 @@ namespace Cosmos {
 
     maybe<double> remote_price_data::get_price (monetary_unit u, const Bitcoin::timestamp &t) {
         try {
-            return synced (&network::price, &Net, u, t);
+            return data::synced (&network::price, &Net, u, t);
         } catch (const net::HTTP::exception &) {
             return {};
         }

@@ -6,7 +6,11 @@
 #include <data/net/HTTP_client.hpp>
 #include <gigamonkey/merkle/proof.hpp>
 
+namespace net = data::net;
+using JSON = data::JSON;
+
 namespace Cosmos {
+    using N = data::N;
 
     struct whatsonchain : net::HTTP::client {
         struct UTXO {
@@ -34,11 +38,11 @@ namespace Cosmos {
         whatsonchain (ptr<net::HTTP::SSL> ssl) :
             net::HTTP::client {ssl,
                 net::HTTP::REST {"https", "api.whatsonchain.com"},
-                tools::rate_limiter {3, data::milliseconds {1000}}} {}
+                data::tools::rate_limiter {3, data::milliseconds {1000}}} {}
 
         whatsonchain (): net::HTTP::client {
             net::HTTP::REST {"https", "api.whatsonchain.com"},
-            tools::rate_limiter {3, data::milliseconds {1000}}} {}
+            data::tools::rate_limiter {3, data::milliseconds {1000}}} {}
 
         static std::string write (const Bitcoin::TXID &);
         static Bitcoin::TXID read_TXID (const JSON &);

@@ -1,16 +1,17 @@
 #ifndef SERVER_PROBLEM
 #define SERVER_PROBLEM
 
-#include "../Cosmos.hpp"
+#include <iostream>
 
 enum class problem {
-    unknown_method,
+    unknown, 
     invalid_method,
+    unknown_method,
     invalid_content_type,
     need_entropy,
-    invalid_name,
-    invalid_query,
     invalid_target,
+    invalid_wallet_name,
+    invalid_query,
     invalid_expression,
     missing_parameter,
     invalid_parameter,
@@ -19,9 +20,5 @@ enum class problem {
 };
 
 std::ostream &operator << (std::ostream &, problem);
-
-net::HTTP::response error_response (unsigned int status, meth m, problem, const std::string & = "");
-
-net::HTTP::response help_response (meth = UNSET);
 
 #endif

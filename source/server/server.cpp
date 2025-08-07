@@ -1,5 +1,5 @@
 #include "server.hpp"
-#include "problem.hpp"
+#include "method.hpp"
 
 #include <Diophant/parse.hpp>
 #include <Diophant/symbol.hpp>
@@ -75,14 +75,14 @@ maybe<bool> read_bool (const std::string &utf8) {
 // without a particular wallet. 
 net::HTTP::response process_method (
     server &,
-    net::HTTP::method, meth,
+    net::HTTP::method, method,
     map<UTF8, UTF8> query,
     const maybe<net::HTTP::content> &,
     const data::bytes &);
 
 // for methods that operate on a specific wallet. 
 net::HTTP::response process_wallet_method (
-    server &p, net::HTTP::method http_method, meth m,
+    server &p, net::HTTP::method http_method, method m,
     Diophant::symbol wallet_name,
     map<UTF8, UTF8> query,
     const maybe<net::HTTP::content> &content,
@@ -95,45 +95,43 @@ awaitable<net::HTTP::response> server::operator () (const net::HTTP::request &re
     std::cout << "Responding to request " << req << std::endl;
     list<UTF8> path = req.Target.path ().read ('/');
 
-    if (size (path) == 0) 
-        co_return HTML_JS_UI_response ();
+    // if no API method was called, serve the GUI. 
+    if (size (path) == 0) co_return HTML_JS_UI_response ();
 
     // the first part of the path is always "" as long as we use "/" as a delimiter 
     // because a path always begins with "/". 
     path = rest (path);
 
-    if (size (path) == 0 || path[0] == "") 
-        co_return HTML_JS_UI_response ();
+    if (size (path) == 0 || path[0] == "") co_return HTML_JS_UI_response ();
 
     // The favicon doesn't work right now, not sure why.
-    if (size (path) == 1 && path[0] == "favicon.ico") 
-        co_return favicon ();
+    if (size (path) == 1 && path[0] == "favicon.ico") co_return favicon ();
 
-    meth m = read_method (path[0]);
+    method m = read_method (path[0]);
 
-    if (m == UNSET) co_return error_response (400, m, problem::unknown_method, path[0]);
+    if (m == method::UNSET) co_return error_response (400, m, problem::unknown_method, path[0]);
 
-    if (m == VERSION) {
+    if (m == method::VERSION) {
         if (req.Method != net::HTTP::method::get)
-            co_return error_response (405, m, problem::invalid_method, "use get");
+            co_return error_response (405, method::VERSION, problem::invalid_method, "use get");
 
         co_return version_response ();
     }
 
-    if (m == HELP) {
+    if (m == method::HELP) {
         if (req.Method != net::HTTP::method::get)
-            co_return error_response (405, m, problem::invalid_method, "use get");
+            co_return error_response (405, method::HELP, problem::invalid_method, "use get");
 
         if (path.size () == 1) co_return help_response ();
         else {
-            meth help_with_method = read_method (path[1]);
-            if (help_with_method == UNSET)
-                co_return error_response (400, HELP, problem::unknown_method, path[1]);
+            method help_with_method = read_method (path[1]);
+            if (help_with_method == method::UNSET)
+                co_return error_response (400, method::HELP, problem::unknown_method, path[1]);
             co_return help_response (help_with_method);
         }
     }
 
-    if (m == SHUTDOWN) {
+    if (m == method::SHUTDOWN) {
         if (req.Method != net::HTTP::method::put)
             co_return error_response (405, m, problem::invalid_method, "use put");
 
@@ -141,22 +139,22 @@ awaitable<net::HTTP::response> server::operator () (const net::HTTP::request &re
         co_return ok_response ();
     }
 
-    if (m == ADD_ENTROPY) {
+    if (m == method::ADD_ENTROPY) {
         if (req.Method != net::HTTP::method::post)
-            co_return error_response (405, m, problem::invalid_method, "use post");
+            co_return error_response (405, method::ADD_ENTROPY, problem::invalid_method, "use post");
 
         maybe<net::HTTP::content> content_type = req.content_type ();
         if (!bool (content_type) || (
             *content_type != net::HTTP::content::type::application_octet_stream &&
             *content_type != net::HTTP::content::type::text_plain))
-            co_return error_response (400, m, problem::invalid_content_type, "expected content-type:application/octet-stream");
+            co_return error_response (400, method::ADD_ENTROPY, problem::invalid_content_type, "expected content-type:application/octet-stream");
 
         add_entropy (req.Body);
 
         co_return ok_response ();
     }
 
-    if (m == LIST_WALLETS) {
+    if (m == method::LIST_WALLETS) {
         if (req.Method != net::HTTP::method::get)
             co_return error_response (405, m, problem::invalid_method, "use get");
         JSON::array_t names;
@@ -167,11 +165,14 @@ awaitable<net::HTTP::response> server::operator () (const net::HTTP::request &re
     }
 
     // we checked the methods that don't take any parameters. 
+    // now we get the parameters from the query. 
     map<UTF8, UTF8> query;
     maybe<dispatch<UTF8, UTF8>> qm = req.Target.query_map ();
     if (bool (qm)) {
         map<UTF8, list<UTF8>> q = data::dispatch_to_map (*qm);
-        for (const auto &[k, v] : q) if (v.size () != 1) co_return error_response (400, m, problem::invalid_name, "duplicate query parameters");
+        
+        for (const auto &[k, v] : q) if (v.size () != 1) 
+          co_return error_response (400, m, problem::invalid_parameter, "duplicate query parameters");
         else query = query.insert (k, v[0]);
     }
 
@@ -187,7 +188,7 @@ awaitable<net::HTTP::response> server::operator () (const net::HTTP::request &re
 
         // make sure the wallet name is a valid string.
         Diophant::symbol wallet_name {path[1]};
-        if (!valid (wallet_name)) co_return error_response (400, m, problem::invalid_name, "name argument must be alpha alnum+");
+        if (!data::valid (wallet_name)) co_return error_response (400, m, problem::invalid_wallet_name);
 
         co_return process_wallet_method (*this, req.Method, m, wallet_name, query, req.content_type (), req.Body);
 
@@ -204,15 +205,15 @@ net::HTTP::response invert_hash (server &p,
     const data::bytes &body); 
 
 net::HTTP::response process_method (
-    server &p, net::HTTP::method http_method, meth m,
+    server &p, net::HTTP::method http_method, method m,
     map<UTF8, UTF8> query,
     const maybe<net::HTTP::content> &content_type,
     const data::bytes &body) {
 
-    if (m == INVERT_HASH) return invert_hash (p, http_method, query, content_type, body); 
+    if (m == method::INVERT_HASH) return invert_hash (p, http_method, query, content_type, body); 
 
     // Associate a secret key with a name. The key could be anything; private, public, or symmetric. 
-    if (m == SET_KEY) {
+    if (m == method::SET_KEY) {
         if (http_method != net::HTTP::method::post)
             return error_response (405, m, problem::invalid_method, "use post");
 
@@ -252,7 +253,7 @@ net::HTTP::response process_method (
         Diophant::symbol key_name {*key_name_param};
 
         // make sure the name is a valid symbol name
-        if (!key_name.valid ()) return error_response (400, m, problem::invalid_name, "name argument must be alpha alnum+");
+        if (!key_name.valid ()) return error_response (400, m, problem::invalid_parameter, "parameter 'name' must be alpha alnum+");
 
         Bitcoin::net net = Bitcoin::net::Main;
         const UTF8 *net_type_param = query.contains ("net");
@@ -313,7 +314,7 @@ net::HTTP::response process_method (
 
     }
 
-    if (m == TO_PRIVATE) {
+    if (m == method::TO_PRIVATE) {
         if (http_method == net::HTTP::method::post) {
 
             if (!bool (content_type) || *content_type != net::HTTP::content::type::text_plain)
@@ -337,7 +338,7 @@ net::HTTP::response process_method (
         } else return error_response (405, m, problem::invalid_method, "use post or get");
     }
 
-    return error_response (500, m, problem::invalid_name, "wallet method called without wallet name");
+    return error_response (500, m, problem::invalid_wallet_name, "wallet method called without wallet name");
 }
 
 bool parse_uint32 (const std::string &str, uint32_t &result) {
@@ -368,16 +369,16 @@ maybe<net::HTTP::response> read_spend_options (Cosmos::spend_options &, map<UTF8
 }
 
 net::HTTP::response process_wallet_method (
-    server &p, net::HTTP::method http_method, meth m,
+    server &p, net::HTTP::method http_method, method m,
     Diophant::symbol wallet_name,
     map<UTF8, UTF8> query,
     const maybe<net::HTTP::content> &content,
     const data::bytes &body) {
 
     // make sure the wallet name is a valid string.
-    if (wallet_name == "") return error_response (400, m, problem::invalid_name, "name argument must be alpha alnum+");
+    if (!wallet_name.valid ()) return error_response (400, m, problem::invalid_wallet_name, "name argument must be alpha alnum+");
 
-    if (m == MAKE_WALLET) {
+    if (m == method::MAKE_WALLET) {
         if (http_method != net::HTTP::method::post)
             return error_response (405, m, problem::invalid_method, "use post");
 
@@ -386,7 +387,7 @@ net::HTTP::response process_wallet_method (
         else return error_response (500, m, problem::failed, "could not create wallet");
     }
 
-    if (m == ADD_KEY_SEQUENCE) {
+    if (m == method::ADD_KEY_SEQUENCE) {
         if (http_method != net::HTTP::method::post)
             return error_response (405, m, problem::invalid_method, "use post");
 
@@ -397,7 +398,7 @@ net::HTTP::response process_wallet_method (
         Diophant::symbol key_name {*key_name_param};
 
         // make sure the name is a valid symbol name
-        if (!valid (key_name)) return error_response (400, m, problem::invalid_name, "key_name parameter must be alpha alnum+");
+        if (!data::valid (key_name)) return error_response (400, m, problem::invalid_parameter, "key_name parameter must be alpha alnum+");
 
         const UTF8 *name_param = query.contains ("name");
         if (!bool (name_param))
@@ -406,13 +407,13 @@ net::HTTP::response process_wallet_method (
         Diophant::symbol name {*name_param};
 
         // make sure the name is a valid symbol name
-        if (!valid (name)) return error_response (400, m, problem::invalid_name, "name parameter must be alpha alnum+");
+        if (!data::valid (name)) return error_response (400, m, problem::invalid_parameter, "name parameter must be alpha alnum+");
 
         uint32 index = 0;
         const UTF8 *index_param = query.contains ("index");
         if (bool (index_param)) {
             if (!parse_uint32 (*index_param, index))
-                return error_response (400, m, problem::invalid_name, "invalid parameter 'index'");
+                return error_response (400, m, problem::invalid_parameter, "'index'");
         }
 
         key_derivation key_deriv {data::string (body)};
@@ -421,21 +422,21 @@ net::HTTP::response process_wallet_method (
         return error_response (500, m, problem::failed, "could not set wallet derivation");
     }
 
-    if (m == VALUE) {
+    if (m == method::VALUE) {
         if (http_method != net::HTTP::method::get)
             return error_response (405, m, problem::invalid_method, "use get");
 
         return value_response (p.DB->get_wallet_account (wallet_name).value ());
     }
 
-    if (m == DETAILS) {
+    if (m == method::DETAILS) {
         if (http_method != net::HTTP::method::get)
             return error_response (405, m, problem::invalid_method, "use get");
 
         return JSON_response (p.DB->get_wallet_account (wallet_name).details ());
     }
 
-    if (m == GENERATE) {
+    if (m == method::GENERATE) {
         if (http_method != net::HTTP::method::post)
             return error_response (405, m, problem::invalid_method, "use post");
 
@@ -466,11 +467,11 @@ net::HTTP::response process_wallet_method (
         const UTF8 *number_of_words_param = query.contains ("number_of_words");
         if (bool (number_of_words_param)) {
             if (!parse_uint32 (*number_of_words_param, number_of_words))
-                return error_response (400, m, problem::invalid_name, "invalid parameter 'number_of_words'");
+                return error_response (400, m, problem::invalid_parameter, "'number_of_words' should be either 12 or 24");
         }
 
         if (number_of_words != 12 && number_of_words != 24)
-            return error_response (400, m, problem::invalid_name, "invalid parameter 'number_of_words'");
+            return error_response (400, m, problem::invalid_parameter, "'number_of_words' should be either 12 or 24");
 
         enum class wallet_style {
             BIP_44,
@@ -486,14 +487,14 @@ net::HTTP::response process_wallet_method (
             // experimental means me generate two secp256k1 keys and use one as the chain code.
             // this allows us to use bip 32 and hd stuff and future protocols. 
             else if (sanitized == "experimental") WalletStyle = wallet_style::experimental;
-            else return error_response (400, m, problem::invalid_query, "invalid parameter 'wallet_style'");
+            else return error_response (400, m, problem::invalid_query, "'wallet_style'");
         }
 
         uint32 coin_type = 0;
         const UTF8 *coin_type_param = query.contains ("coin_type");
         if (bool ()) {
             if (!parse_uint32 (*number_of_words_param, number_of_words))
-                return error_response (400, m, problem::invalid_name, "invalid parameter 'number_of_words'");
+                return error_response (400, m, problem::invalid_parameter, "'number_of_words'");
         }
 
         if (MnemonicStyle == mnemonic_style::Electrum_SV || WalletStyle == wallet_style::experimental)
@@ -535,7 +536,7 @@ net::HTTP::response process_wallet_method (
 
     }
 
-    if (m == NEXT_ADDRESS) {
+    if (m == method::NEXT_ADDRESS) {
         if (http_method != net::HTTP::method::post)
             return error_response (405, m, problem::invalid_method, "use post");
         
@@ -548,7 +549,7 @@ net::HTTP::response process_wallet_method (
           else sequence_name = std::string {"receive"};
         }
 
-        if (!sequence_name.valid ()) return error_response (400, m, problem::invalid_name);
+        if (!sequence_name.valid ()) return error_response (400, m, problem::invalid_parameter, "sequence_name");
         
         // do we have a sequence by this name? 
         maybe<database::derivation> seq = p.DB->get_wallet_derivation (wallet_name, sequence_name);
@@ -568,7 +569,7 @@ net::HTTP::response process_wallet_method (
         return error_response (501, m, problem::unimplemented);
     }
 
-    if (m == NEXT_XPUB) {
+    if (m == method::NEXT_XPUB) {
         if (http_method != net::HTTP::method::post)
             return error_response (405, m, problem::invalid_method, "use post");
         
@@ -581,7 +582,7 @@ net::HTTP::response process_wallet_method (
           else sequence_name = std::string {"receivex"};
         }
 
-        if (!sequence_name.valid ()) return error_response (400, m, problem::invalid_name);
+        if (!sequence_name.valid ()) return error_response (400, m, problem::invalid_parameter, "sequence_name");
 
         // do we have a sequence by this name? 
         maybe<database::derivation> seq = p.DB->get_wallet_derivation (wallet_name, sequence_name);
@@ -602,7 +603,7 @@ net::HTTP::response process_wallet_method (
     }
 
 
-    if (m == IMPORT) {
+    if (m == method::IMPORT) {
         if (http_method != net::HTTP::method::put)
             return error_response (405, m, problem::invalid_method, "use put");
         // we need to find addresses and xpubs that we need to check. 
@@ -612,7 +613,7 @@ net::HTTP::response process_wallet_method (
         return error_response (501, m, problem::unimplemented);
     }
 
-    if (m == SPEND) {
+    if (m == method::SPEND) {
         if (http_method != net::HTTP::method::post)
             return error_response (405, m, problem::invalid_method, "use post");
 
@@ -638,42 +639,42 @@ net::HTTP::response process_wallet_method (
 
     return error_response (501, m, problem::unimplemented);
 
-    if (m == RESTORE) {
+    if (m == method::RESTORE) {
         if (http_method != net::HTTP::method::put)
             return error_response (405, m, problem::invalid_method, "use put");
 
         return error_response (501, m, problem::unimplemented);
     }
 
-    if (m == BOOST) {
+    if (m == method::BOOST) {
         if (http_method != net::HTTP::method::post)
             return error_response (405, m, problem::invalid_method, "use post");
 
         return error_response (501, m, problem::unimplemented);
     }
 
-    if (m == SPLIT) {
+    if (m == method::SPLIT) {
         if (http_method != net::HTTP::method::post)
             return error_response (405, m, problem::invalid_method, "use post");
 
         return error_response (501, m, problem::unimplemented);
     }
 
-    if (m == TAXES) {
+    if (m == method::TAXES) {
         if (http_method != net::HTTP::method::get)
             return error_response (405, m, problem::invalid_method, "use get");
 
         return error_response (501, m, problem::unimplemented);
     }
 
-    if (m == ENCRYPT_KEY) {
+    if (m == method::ENCRYPT_KEY) {
         if (http_method != net::HTTP::method::post)
             return error_response (405, m, problem::invalid_method, "use post");
 
         return error_response (501, m, problem::unimplemented);
     }
 
-    if (m == DECRYPT_KEY) {
+    if (m == method::DECRYPT_KEY) {
         if (http_method != net::HTTP::method::post)
             return error_response (405, m, problem::invalid_method, "use post");
 
@@ -699,646 +700,4 @@ net::HTTP::response favicon () {
     return net::HTTP::response (200,
         {{"content-type", "image/x-icon"}},
         favicon_ico);
-}
-
-net::HTTP::response HTML_JS_UI_response () {
-    data::string ui =
-R"--(<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Node API Interface</title>
-  <style>
-    body {
-      font-family: sans-serif;
-      padding: 1em;
-      background: #f0f0f0;
-    }
-    details {
-      margin-bottom: 1em;
-      background: #fff;
-      border-radius: 8px;
-      box-shadow: 0 0 5px rgba(0,0,0,0.1);
-      padding: 1em;
-    }
-    summary {
-      font-weight: bold;
-      cursor: pointer;
-    }
-    button {
-      margin-top: 0.5em;
-      margin-bottom: 0.5em;
-    }
-    pre {
-      background: #eee;
-      padding: 0.5em;
-      border-radius: 4px;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-  </style>
-</head>
-<body>
-  <h1>Cosmos Wallet</h1>
-
-  <h2>Basic Functions</h2>
-
-  <details>
-    <summary>version</summary>
-    <p>Get version string.</p>
-    <code>GET /version</code>
-    <form id="form-version">
-      <button type="button" id="submit-version" onclick="callApi('GET', 'version')">Get Version</button>
-    </form>
-    <pre id="output-version"></pre>
-  </details>
-
-  <details>
-  <summary>help</summary>
-    <p>General help or get help with a specific function.</p>
-    <p>
-      <code>GET /help</code>
-      or 
-      <code>GET /help/&lt;method&gt;</code>
-    </p>
-    <form id="form-help">
-      <label><input type="radio" name="method" value="shutdown" onclick="toggleRadio(this)">shutdown</label>
-      <br>
-      <label><input type="radio" name="method" value="add_entropy" onclick="toggleRadio(this)">add_entropy</label>
-      <br>
-      <label><input type="radio" name="method" value="invert_hash" onclick="toggleRadio(this)">invert_hash</label>
-      <br>
-      <label><input type="radio" name="ethod" value="add_key" onclick="toggleRadio(this)">add_key</label>
-      <br>
-      <label><input type="radio" name="method" value="to_private" onclick="toggleRadio(this)">to_private</label>
-      <br>
-      <label><input type="radio" name="method" value="list_wallets" onclick="toggleRadio(this)">list_wallets</label>
-      <br>
-      <label><input type="radio" name="method" value="make_wallet" onclick="toggleRadio(this)">make_wallet</label>
-      <br>
-      <label><input type="radio" name="method" value="add_key_sequence" onclick="toggleRadio(this)">add_key_sequence</label>
-      <br>
-      <label><input type="radio" name="method" value="value" onclick="toggleRadio(this)">value</label>
-      <br>
-      <label><input type="radio" name="method" value="details" onclick="toggleRadio(this)">details</label>
-      <br>
-      <label><input type="radio" name="method" value="generate" onclick="toggleRadio(this)">generate</label>
-      <br>
-      <button type="button" id="submit-help" onclick="callHelp()">Get Help</button>
-    </form>
-    <pre id="output-help"></pre>
-  </details>
-
-  <details>
-    <summary>shutdown</summary>
-    <p>
-      Shutdown the program.
-    </p>
-    <p>
-      <code>PUT /shutdown</code>
-    </p>
-    <form id="form-shutdown">
-      <button type="button" id="submit-shutdown" onclick="callApi('PUT', 'shutdown')">Shutdown</button>
-    </form>
-    <pre id="output-shutdown"></pre>
-  </details>
-
-  <details>
-    <summary>add_entropy</summary>
-    <p>
-      The cryptographic random number generator needs entropy periodically. Here we add it manually.
-      Type in some random text with your fingers to provide it.
-    </p>
-    <p>
-      <code>POST /add_entropy</code>
-      <br>
-      Provide entropy in the body of the request. <code>content-type</code> 
-      should be <code>text/plain</code> or <code>application/octet-stream</code>
-    </p>
-    <form id="form-add_entropy">
-      <textarea id="user_entropy" name="user_entropy" rows="4" cols="50"></textarea>
-      <br>
-      <button type="button" id="submit-add_entropy" onclick="callAddEntropy()">Add Entropy</button>
-    </form>
-    <pre id="output-add_entropy"></pre>
-  </details>
-
-  <h2>Keys and data</h2>
-
-  <details>
-    <summary>Invert Hash</summary>
-    <p>
-      Add data and its hash, which can be retrieved later by hash.
-    </p>
-    <p>
-      <code>POST /invert_hash?digest=&lt;hex&gt;&function=&lt;hash function name&gt;&</code> or <code>GET /invert_hash?digest=&lt;hex&gt;</code>
-      <br>
-      Supported hash functions are <code>SHA1</code>, <code>SHA2_256</code>, <code>RIPEMD160</code>, 
-      <code>Hash256</code>, and <code>Hash160</code>, 
-    </p>
-    <form id="form-invert_hash">
-      <label><input type="radio" name="HTTP_method" value="GET" onclick="toggleRadio (this)">GET</label>
-      <br>
-      <label><input type="radio" name="HTTP_method" value="POST" onclick="toggleRadio (this)">POST</label>
-      <br>
-      <b>digest: (hex) </b><input name="hash_digest" type="text">
-      <label for="digest_format"></label>
-      <select name="digest_format">
-        <option value="HEX">hex</option>
-        <option value="BASE58_CHECK">base 58 check</option>
-        <option value="BASE64">base 64</option>
-      </select>
-      <br>
-      <label><input type="radio" name="function" value="SHA1" onclick="toggleRadio (this)">SHA1</label>
-      <br>
-      <label><input type="radio" name="function" value="SHA2_256" onclick="toggleRadio (this)">SHA2 256</label>
-      <br>
-      <label><input type="radio" name="function" value="RIPEMD160" onclick="toggleRadio (this)">RIPEMD160</label>
-      <br>
-      <label><input type="radio" name="function" value="Hash256" onclick="toggleRadio (this)">Hash256</label>
-      <br>
-      <label><input type="radio" name="function" value="Hash160" onclick="toggleRadio (this)">Hash160</label>
-      <br>
-      <label><input type="radio" name="data_format" value="HEX" onclick="toggleRadio (this)">hex</label>
-      <br>
-      <label><input type="radio" name="data_format" value="ASCII" onclick="toggleRadio (this)">ASCII</label>
-      <br>
-      <textarea id="hashed_data" name="hashed_data" rows="4" cols="50"></textarea>
-      <br>
-      <button type="button" id="submit-invert_hash" onclick="callInvertHash()">Invert Hash</button>
-    </form>
-  </details>
-
-  <details>
-    <summary>Set Key</summary>
-    <p>
-      Add or retrieve a key. This could be any kind of key: public, private,
-      symmetric, whatever. You can enter it in the form of a Bitcoin
-      Calculator expression or generate a random key of a specific type.
-    </p>
-    <p>
-      <code>POST /set_key?</code> or <code>GET /set_key?</code>
-    </p>
-    <form id="form-add_key">
-      <label><input type="radio" name="HTTP_method" value="GET" onclick="toggleRadio(this)">GET</label>
-      <br>
-      <label><input type="radio" name="HTTP_method" value="POST" onclick="toggleRadio(this)">POST</label>
-      <br>
-      <b>key name: </b><input name="name" type="text">
-      <br>
-      <label><input type="radio" name="method-type" value="expression" onclick="toggleRadio(this)">
-        <input name="value" type="text">
-      </label>
-      <br>
-      <label><input type="radio" name="method-type" value="random-secp256k1" onclick="toggleRadio(this)">random secp256k1</label>
-      <br>
-      <label><input type="radio" name="method-type" value="random-xpriv" onclick="toggleRadio(this)">random xpub</label>
-      <br>
-      <button type="button" id="submit-add_key" onclick="callAddKey ()">Add Key</button>
-    </form>
-    <pre id="output-add_key"></pre>
-  </details>
-
-  <details>
-    <summary>To Private</summary>
-    <p>
-      Provide an expression to derive the private key of a public key named
-      <b>key name</b>.
-    </p>
-    <p>
-      <code>POST /to_private?</code> or <code>GET /to_private?</code>
-    </p>
-    <form id="form-to_private">
-      <label><input type="radio" name="HTTP_method" value="GET" onclick="toggleRadio(this)">GET</label>
-      <br>
-      <label><input type="radio" name="HTTP_method" value="POST" onclick="toggleRadio(this)">POST</label>
-      <br>
-      <b>key name: </b><input name="key_name" type="text">
-      <br>
-      <b>value of private key: </b><input name="key_value" type="text">
-      <br>
-      <button type="button" id="submit-to_private" onclick="callToPrivate()">To Private</button>
-    </form>
-    <pre id="output-to_private"></pre>
-  </details>
-
-  <h2>Wallet Generation</h2>
-
-  <details>
-    <summary>Make Wallet</summary>
-    <p>
-      Make an empty wallet. The wallet has no keys associated with it. You have to build it up.
-    </p>
-    <p>
-      <code>POST /make_wallet?name=</code> or <code>GET /make_wallet?</code>
-    </p>
-    <form id="form-make_wallet">
-      <b>wallet name: </b><input name="make_wallet-wallet-name" type="text">
-      <br>
-      <button type="button" onclick="callMakeWallet()">Make Wallet</button>
-    </form>
-    <pre id="output-make_wallet"></pre>
-  </details>
-
-  <details>
-    <summary>Add Key Sequence</summary>
-    <p>
-      Add a key sequence to a wallet.
-    </p>
-    <p>
-      <code>POST /add_key_sequence?</code>
-    </p>
-    <form id="form-add_key_sequence">
-      <b>wallet name: </b><input name="wallet-name" type="text">
-      <br>
-      <b>sequence name: </b><input name="sequence-name" type="text">
-      <br>
-      <b>key name: </b><input name="key-name" type="text">
-      <br>
-      <b>key expression: </b><input name="expression" type="text">
-      <br>
-      <button type="button" id="submit-add_key_sequence" onclick="callAddKeySequence()">Add Key Sequence</button>
-    </form>
-    <pre id="output-add_key_sequence"></pre>
-  </details>
-
-  <details>
-    <summary>Generate</summary>
-    <p>
-      Generate a wallet.
-    </p>
-    <form id="form-generate">
-      <b>wallet name: </b><input name="wallet_name" type="text">
-      <br>
-      <b>Use mnemonic: </b><input name="mnemonic" type="checkbox" checked>
-      <br>Number of words:<br>
-      <label><input type="radio" name="number_of_words" value="12" onclick="toggleRadio(this)" checked>
-        12 words
-      </label>
-      <br>
-      <label><input type="radio" name="number_of_words" value="24" onclick="toggleRadio(this)">
-        24 words
-      </label>
-      <br>Schema:<br>
-      <label><input type="radio" name="mnemonic_style" value="BIP_39" onclick="toggleRadio(this)" checked>
-        BIP 39 (standard)
-      </label>
-      <br>
-      <label><input type="radio" name="mnemonic_style" value="ElectrumSV" onclick="toggleRadio(this)">
-        Electrum SV
-      </label>
-      <br>
-      <label>
-      </label>
-      <br>
-      <label><input type="radio" name="wallet_type" value="BIP_44" onclick="toggleRadio(this)">
-        bip 44
-      </label>
-      <br>
-      <label><input type="radio" name="wallet_type" value="BIP_44+" onclick="toggleRadio(this)" checked>
-        bip 44+
-      </label>
-      <br>
-      <label><input type="radio" name="wallet_type" value="experimental" onclick="toggleRadio(this)">
-        experimental
-      </label>
-      <br>
-      <button type="button" id="submit-generate" onclick="callGenerate()">Generate</button>
-    </form>
-    <pre id="output-generate"></pre>
-  </details>
-
-  <details>
-    <summary>restore</summary>
-    Restore a wallet (not yet implemented)
-    <form id="form-restore">
-      <button type="button" id="submit-spend">Value</button>
-    </form>
-      <button type="button" id="submit-restore" onclick="callRestore()">Restore</button>
-    <pre id="output-restore"></pre>
-  </details>
-
-  <h2>Wallets</h2>
-
-  <details>
-    <summary>list_wallets</summary>
-    <p>
-      List wallets.
-    </p>
-    <form id="form-list_wallets">
-      <button type="button" id="submit-list_wallets" onclick="callAPI('GET', 'list_wallets)">List Wallets</button>
-    </form>
-    <pre id="output-list_wallets"></pre>
-  </details>
-
-  <details>
-    <summary>value</summary>
-    <p>
-      Get wallet value.
-    </p>
-    <form id="form-value">
-      <b>wallet name: </b><input name="wallet-name" type="text">
-      <br>
-      <label><input type="radio" name="choice" value="BSV" onclick="toggleRadio(this)" checked>BSV sats</label>
-      <br>
-      <button type="button" id="submit-value" onclick="callGetValue()">Value</button>
-    </form>
-    <pre id="output-value"></pre>
-  </details>
-
-  <details>
-    <summary>details</summary>
-    <p>
-      Get wallet details (includes and information about the outputs it's stored in).
-    </p>
-    <form id="form-details">
-      <b>wallet name: </b><input name="wallet-name" type="text">
-      <br>
-      <button type="button" id="submit-details" onclick="callGetWalletDetails()">Details</button>
-    </form>
-    <pre id="output-details"></pre>
-  </details>
-
-  <details>
-    <summary>Next Key</summary>
-    <p>
-      Get next receive key.
-    </p>
-    <form id="form-next_key">
-      <b>wallet name: </b><input name="wallet-name" type="text">
-      <br>
-      <b>sequence name: </b><input name="sequence_name" type="text">
-      <br>
-      <button type="button" id="submit-next_key" onclick="callWalletNextKey()">Details</button>
-    </form>
-    <pre id="output-next_key"></pre>
-  </details>
-
-  <details>
-    <summary>Next XPub</summary>
-    <p>
-      Get next XPUB (if supported; BIP44+ and experimental wallet formats only.)
-    </p>
-    <form id="form-next_xpub">
-      <b>wallet name: </b><input name="wallet-name" type="text">
-      <br>
-      <b>sequence name: </b><input name="sequence_name" type="text">
-      <br>
-      <button type="button" id="submit-next_xpub" onclick="callWalletNextXPub()">Details</button>
-    </form>
-    <pre id="output-next_xpub"></pre>
-  </details>
-
-  <details>
-    <summary>Accept</summary>
-    <form id="form-accept">
-      <b>wallet name: </b><input name="wallet-name" type="text">
-      <br>
-      <button type="button" id="submit-accept" onclick="callWalletAccept()">Accept</button>
-    </form>
-    <pre id="output-accept"></pre>
-  </details>
-
-  <details>
-    <summary>Spend</summary>
-    Spend some coins.
-    <form id="form-spend">
-      <b>wallet name: </b><input name="wallet-name" type="text">
-      <br>
-      <b>amount: </b><input name="amount" type="text">
-      <br>
-      <b>send to: </b><input name="to" type="text"> (Can be an address or an xpub.)
-      <br>
-      <button type="button" id="submit-spend" onclick="callSpend()">Spend</button>
-    </form>
-    <pre id="output-spend"></pre>
-  </details>
-
-  <script>
-    let lastChecked = {};
-
-    function toggleRadio(radio) {
-      const group = radio.name;
-
-      if (lastChecked[group] === radio) {
-          radio.checked = false;
-          lastChecked[group] = null;
-      } else {
-          lastChecked[group] = radio;
-      }
-    }
-
-    async function callApi (http_method, endpoint) {
-
-      const form = document.getElementById (`form-${endpoint}`);
-      const formData = new FormData (form);
-      let url = `/${endpoint}`;
-
-      let options = {
-          method: http_method,
-          headers: {}
-      };
-
-      if (http_method === 'GET') {
-        // Convert formData to URL query parameters
-        const params = new URLSearchParams (formData).toString ();
-        url += `?${params}`;
-      } else if (http_method === 'POST') {
-        // Send form data as URL-encoded body
-        options.body = new URLSearchParams (formData);
-        options.headers['Content-Type'] = 'application/x-www-form-urlencoded';
-      }
-
-      try {
-        const res = await fetch (url, options);
-        const text = await res.text ();
-        document.getElementById (`output-${endpoint}`).textContent = text;
-      } catch (err) {
-        document.getElementById (`output-${endpoint}`).textContent = 'Error: ' + err;
-      }
-    }
-
-    async function callHelp () {
-
-      const selected = document.getElementById ('form-help').elements["method"];
-
-      const target;
-
-      if (selected) {
-        target = '/help/' + selected.value
-      } else {
-        target = '/help';
-      }
-
-      try {
-        const response = await fetch(target, {
-          method: 'GET'
-        });
-
-        const result = await response.text(); // or .json() depending on response type
-        document.getElementById (`output-add_entropy`).textContent = result;
-      } catch (err) {
-        document.getElementById (`output-add_entropy`).textContent = 'Error: ' + err;
-      }
-    }
-
-    async function callAddEntropy () {
-
-      try {
-        const response = await fetch ('/add_entropy', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'text/plain',
-          },
-          body: document.getElementById ('form-add_entropy').elements["user_entropy"].value
-        });
-
-        const result = await response.text (); // or .json() depending on response type
-        document.getElementById (`output-add_entropy`).textContent = result;
-      } catch (err) {
-        document.getElementById (`output-add_entropy`).textContent = 'Error: ' + err;
-      }
-    }
-
-    async function callGenerate () {
-      const elements = document.getElementById ('form-generate').elements;
-      var target = '/generate' + elements["wallet-name"].value + '?'
-
-      // Whether we use a mnemonic at all. 
-      if (elements["mnemonic"].checked) {
-      
-        target += 'mnemonic=true&mnemonic_style=' + 
-            elements["mnemonic_style"].value + 
-            '&number_of_words=' + elements["number_of_words"].value + '&';
-      
-      }
-
-      target += 'wallet_style=' + elements["wallet_style"].value + '&coin_type=' + elements["coin_type"].value;
-
-      try {
-        const response = await fetch (target, {
-          method: 'POST',
-        });
-
-        const result = await response.text (); // or .json() depending on response type
-        document.getElementById (`output-generate`).textContent = result;
-      } catch (err) {
-        document.getElementById (`output-generate`).textContent = 'Error: ' + err;
-      }
-
-    }
-
-    async function callWalletMethod (http_method, wallet_method, wallet_name, params) {
-    
-      let target = '/' + wallet_method + '/' + wallet_name;
-
-      if (params =!= undefined) {
-        target += '?' + new URLSearchParams (params).toString ();
-      }
-
-      let output = 'output-' + wallet_method;
-
-      try {
-        const response = await fetch (target, {
-          method: http_method,
-        });
-
-        const result = await response.text (); // or .json() depending on response type
-        document.getElementById (output).textContent = result;
-      } catch (err) {
-        document.getElementById (output).textContent = 'Error: ' + err;
-      }
-    }
-
-    async function callMakeWallet () {
-      callWalletMethod ('POST', 'make_wallet', document.getElementById ('form-make_wallet').elements['wallet-name']);
-    }
-
-    async function callGetValue () {
-      callWalletMethod ('GET', 'value', document.getElementById ('form-value').elements['wallet-name']);
-    }
-
-    async function callGetWalletDetails () {
-      callWalletMethod ('GET', 'details', document.getElementById ('form-value').elements['wallet-name']);
-    }
-
-    async function callNextAddress () {
-      const elements = document.getElementById ('form-next_address').elements;
-      let sequence_name = elements['sequence_name'];
-      let params = {};
-      if (sequence_name === "") params['sequence_name'] = sequence_name;
-      callWalletMethod ('POST', 'next_address', elements['wallet_name'], params);
-    }
-
-    async function callNextXPub () {
-      const elements = document.getElementById ('form-next_xpub').elements;
-      let sequence_name = elements['sequence_name'];
-      let params = {};
-      if (sequence_name === "") params['sequence_name'] = sequence_name;
-      callWalletMethod ('POST', 'next_address', elements['wallet_name'], params);
-    }
-
-    async function callInvertHash () {
-      const elements = document.getElementById ('form-invert_hash').elements;
-      const http_method = elements['HTTP_method'];
-
-      let params = {
-        function = element['function'];
-      };
-
-      const digest = elements['digest'];
-
-      if (digest =!= "") {
-        params['digest'] = digest;
-        params['digest_format'] = elements['digest_format'];
-      } else if (http_method == 'POST') {
-        // TODO: this is an error
-      }
-
-      if (http_method == 'POST') {
-        // TODO get the data to hash
-      }
-
-      // TODO make the query
-    }
-
-    async function callAddKey () {
-      const elements = document.getElementById ('form-add_key').elements;
-      const http_method = elements['HTTP_method'];
-      if (http_method == 'GET') {
-
-      } else {
-        
-      }
-    }
-
-    async function callToPrivate () {
-      const elements = document.getElementById ('form-to_private').elements;
-      const http_method = elements['HTTP_method'];
-      if (http_method == 'GET') {
-        
-      } else {
-        
-      }
-    }
-
-    async function callImport () {
-      const elements = document.getElementById ('form-import').elements;
-    }
-
-    async function callSpend () {
-      const elements = document.getElementById ('form-spend').elements;
-    }
-
-    async function callRestore () {
-      const elements = document.getElementById ('form-restore').elements;
-    }
-  </script>
-</body>
-</html>
-)--";
-
-    return net::HTTP::response (200,
-        {{"content-type", "text/html"}},
-        bytes (ui));
 }

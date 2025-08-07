@@ -127,9 +127,9 @@ add_executable (
     source/server/db.cpp
     source/server/options.cpp
     source/server/problem.cpp
+    source/server/method.cpp
     source/server/server.cpp
     source/server/invert_hash.cpp
-    source/Cosmos.cpp
     source/Server.cpp
 )
 

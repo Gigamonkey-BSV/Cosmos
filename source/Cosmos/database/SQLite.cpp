@@ -1020,49 +1020,32 @@ namespace Cosmos::SQLite {
         }
 
         bool set_wallet_derivation (const std::string &wallet_name, const std::string &deriv_name, const derivation &) {
-            throw method::unimplemented {"SQLite::set_derivation"};
+            throw data::method::unimplemented {"SQLite::set_derivation"};
         }
 
         list<derivation> get_wallet_derivations (const std::string &wallet_name) final override {
-            throw method::unimplemented {"SQLite::get_wallet_derivations"};
+            throw data::method::unimplemented {"SQLite::get_wallet_derivations"};
         };
 
         maybe<derivation> get_wallet_derivation (const std::string &wallet_name, const std::string &deriv_name) final override {
-            throw method::unimplemented {"SQLite::get_wallet_derivation"};
+            throw data::method::unimplemented {"SQLite::get_wallet_derivation"};
         };
 
         Cosmos::account get_wallet_account (const std::string &wallet_name) final override {
-            throw method::unimplemented {"SQLite::get_wallet_account"};
+            throw data::method::unimplemented {"SQLite::get_wallet_account"};
         };
 
-        struct readable : database::readable {
-
-            const Cosmos::account *account () final override;
-
-            const Cosmos::history *load_history () final override;
-
-            const Cosmos::payments *payments () final override;
-
-            maybe<secp256k1::signature> sign (const Bitcoin::incomplete::transaction &tx, const key_expression &k) final override;
+        void set_wallet_unused (const std::string &wallet_name, const std::string &key_name) final override {
+            throw data::method::unimplemented {"SQLite::set_wallet_unused"};
         };
 
-        struct writable : database::writable {
-
-            // key can be any standard key format (in quotes) or a derivation from another key.
-            void set_key (const std::string &key_name, const key_expression &k) final override;
-            void to_private (const std::string &key_name, const key_expression &k) final override;
-
-            // Do we need this?
-            Cosmos::history *history () final override;
-
-            void set_account (const Cosmos::account &) final override;
-
-            void set_payments (const Cosmos::payments &) final override;
+        void set_wallet_used (const std::string &wallet_name, const std::string &key_name) final override {
+            throw data::method::unimplemented {"SQLite::set_wallet_used"};
         };
 
-        ptr<database::readable> get_wallet (const std::string &name) final override {
-            throw method::unimplemented {"SQLite::get_wallet"};
-        }
+        data::map<Diophant::symbol, key_expression> get_wallet_symbols (const std::string &wallet_name) final override {
+            throw data::method::unimplemented {"SQLite::get_wallet_symbols"};
+        };
 
     };
 

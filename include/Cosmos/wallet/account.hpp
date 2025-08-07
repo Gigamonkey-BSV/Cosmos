@@ -48,8 +48,8 @@ namespace Cosmos {
 
     };
 
-    struct account : base_map<Bitcoin::outpoint, redeemable, account> {
-        using base_map<Bitcoin::outpoint, redeemable, account>::base_map;
+    struct account : data::base_map<Bitcoin::outpoint, redeemable, account> {
+        using data::base_map<Bitcoin::outpoint, redeemable, account>::base_map;
 
         // apply a diff to an account. Throw exception if the diff contains
         // outpoints to be removed that are not in the account.

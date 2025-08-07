@@ -77,9 +77,9 @@ namespace Cosmos {
     };
 
     payments::payment_request inline payments::read_payment_request (const JSON &j) {
-        if (!j.is_object ()) throw exception {} << "invalid payment request format A";
+        if (!j.is_object ()) throw data::exception {} << "invalid payment request format A";
         for (const auto &[id, inv] : j.items ()) return {id, request (inv)};
-        throw exception {} << "invalid payment request format B";
+        throw data::exception {} << "invalid payment request format B";
     }
 
     JSON inline payments::write_payment_request (const payments::payment_request &e) {

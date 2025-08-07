@@ -11,7 +11,7 @@ namespace Cosmos {
     using address_source = Gigamonkey::address_source;
 
     struct change {
-        cross<redeemable> Change;
+        data::cross<redeemable> Change;
 
         // last key used +1
         int32 Last;

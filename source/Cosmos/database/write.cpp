@@ -12,10 +12,10 @@ namespace Cosmos {
     }
 
     HD::BIP_32::path read_path (const JSON &j) {
-        if (!j.is_array ()) throw exception {} << "invalid JSON path format";
+        if (!j.is_array ()) throw data::exception {} << "invalid JSON path format";
         HD::BIP_32::path p;
         for (const JSON &jj : j) {
-            if (!jj.is_number ()) throw exception {} << " could not read path " << j;
+            if (!jj.is_number ()) throw data::exception {} << " could not read path " << j;
             p <<= uint32 (jj);
         }
         return p;
@@ -23,7 +23,7 @@ namespace Cosmos {
 
     Bitcoin::outpoint read_outpoint (const string &x) {
         list<string_view> z = data::split (x, ":");
-        if (z.size () != 2) throw exception {} << "invalid outpoint format: " << x;
+        if (z.size () != 2) throw data::exception {} << "invalid outpoint format: " << x;
         Bitcoin::outpoint o;
         o.Digest = read_TXID (z[0]);
         o.Index = strtoul (std::string {z[1]}.c_str (), nullptr, 10);
@@ -50,7 +50,7 @@ namespace Cosmos {
     }
 
     Bitcoin::header read_header (const string &j) {
-        if (j.size () != 160) throw exception {} << "invalid header size for " << j;
+        if (j.size () != 160) throw data::exception {} << "invalid header size for " << j;
         byte_array<80> p;
         boost::algorithm::unhex (j.begin (), j.end (), p.begin ());
         return Bitcoin::header (p);
@@ -59,7 +59,7 @@ namespace Cosmos {
     either<Bitcoin::pubkey, HD::BIP_32::pubkey> inline read_pubkey (const string &x) {
         if (HD::BIP_32::pubkey p {x}; p.valid ()) return p;
         if (Bitcoin::pubkey p {x}; p.valid ()) return p;
-        throw exception {} << "could not read " << x << " as a bitcoin public key.";
+        throw data::exception {} << "could not read " << x << " as a bitcoin public key.";
     }
 
 }

@@ -7,18 +7,46 @@
 #include <Gigamonkey.hpp>
 #include <gigamonkey/script/pattern/pay_to_address.hpp>
 
-#include <data/io/unimplemented.hpp>
+namespace net = data::net;
+namespace encoding = data::encoding;
+
+using uint32 = data::uint32;
+using uint64 = data::uint64;
+using int64 = data::int64;
+using int32 = data::int32;
+
+using byte = data::byte;
+using bytes = data::bytes;
+
+template <size_t size> using byte_array = data::byte_array<size>;
+
+template <typename X> using ptr = data::ptr<X>;
+template <typename X> using awaitable = data::awaitable<X>;
+template <typename X> using maybe = data::maybe<X>;
+template <typename ... X> using either = data::either<X...>;
+
+template <typename X> using list = data::list<X>;
+template <typename K, typename V> using map = data::map<K, V>;
+template <typename K, typename V> using entry = data::entry<K, V>;
+template <typename K, typename V> using dispatch = data::dispatch<K, V>;
+template <typename X> using set = data::set<X>;
+
+using string_view = data::string_view;
+using string = data::string;
+
+template <typename ...X> using tuple = data::tuple<X...>;
+
+namespace Bitcoin = Gigamonkey::Bitcoin;
+namespace Merkle = Gigamonkey::Merkle;
+namespace secp256k1 = Gigamonkey::secp256k1;
+
+using digest512 = Gigamonkey::digest512;
+using digest256 = Gigamonkey::digest256;
+using digest160 = Gigamonkey::digest160;
+using pay_to_address = Gigamonkey::pay_to_address;
+using filepath = std::filesystem::path;
 
 namespace Cosmos {
-    using namespace data;
-    namespace Bitcoin = Gigamonkey::Bitcoin;
-    namespace Merkle = Gigamonkey::Merkle;
-    namespace secp256k1 = Gigamonkey::secp256k1;
-    using digest512 = Gigamonkey::digest512;
-    using digest256 = Gigamonkey::digest256;
-    using digest160 = Gigamonkey::digest160;
-    using pay_to_address = Gigamonkey::pay_to_address;
-    using filepath = std::filesystem::path;
 
     // 1580790300
     const Bitcoin::timestamp &genesis_update_time ();

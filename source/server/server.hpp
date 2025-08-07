@@ -1,7 +1,7 @@
 #include "options.hpp"
 #include <Cosmos/random.hpp>
 
-namespace Bitcoin = Gigamonkey::Bitcoin;
+using UTF8 = data::UTF8;
 
 struct server {
 

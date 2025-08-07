@@ -75,9 +75,9 @@ namespace Cosmos {
 
         network () : IO {}, SSL {std::make_shared<net::HTTP::SSL> (net::HTTP::SSL::tlsv12_client)},
             WhatsOnChain {SSL}, Gorilla {SSL, net::HTTP::REST {"https", "mapi.gorillapool.io"}},
-            CoinGecko {SSL, net::HTTP::REST {"https", "api.coingecko.com"}, tools::rate_limiter {1, data::milliseconds {10}}},
+            CoinGecko {SSL, net::HTTP::REST {"https", "api.coingecko.com"}, data::tools::rate_limiter {1, data::milliseconds {10}}},
             // TODO I don't know what to put for TAAL's rate limiter.
-            TAAL {SSL, net::HTTP::REST {"https", "arc.taal.com"}, tools::rate_limiter {1, data::milliseconds {10}}} {
+            TAAL {SSL, net::HTTP::REST {"https", "arc.taal.com"}, data::tools::rate_limiter {1, data::milliseconds {10}}} {
             SSL->set_default_verify_paths ();
             SSL->set_verify_mode (net::asio::ssl::verify_peer);
         }
@@ -113,7 +113,7 @@ namespace Cosmos {
         network_fees (network &n, double d = .05) : Net {n}, Default {d} {}
         double get () final override {
             try {
-                return double (synced (&network::mining_fee, &Net));
+                return double (data::synced (&network::mining_fee, &Net));
             } catch (std::exception &e) {
                 std::cout << "Warning! Exception caught while trying to get a fee quote: " << e.what () << std::endl;
                 return Default;

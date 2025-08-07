@@ -44,13 +44,13 @@ namespace Cosmos {
     namespace {
         const ptr<const entry<N, Bitcoin::header>> import_header (local_TXDB &local, network &net, const N &n) {
             auto block = net.WhatsOnChain.block ();
-            auto header = synced (&whatsonchain::blocks::get_header_by_height, &block, n);
+            auto header = data::synced (&whatsonchain::blocks::get_header_by_height, &block, n);
             return local.insert (header.Height, header.Header);
         }
 
         const ptr<const entry<N, Bitcoin::header>> import_header (local_TXDB &local, network &net, const digest256 &d) {
             auto block = net.WhatsOnChain.block ();
-            auto header = synced (&whatsonchain::blocks::get_header_by_hash, &block, d);
+            auto header = data::synced (&whatsonchain::blocks::get_header_by_hash, &block, d);
             return local.insert (header.Height, header.Header);
         }
     }
@@ -231,7 +231,7 @@ namespace Cosmos {
     }
 
     std::partial_ordering event::operator <=> (const event &e) const {
-        if (!valid () || !e.valid ()) throw exception {} << "invalid tx.";
+        if (!valid () || !e.valid ()) throw data::exception {} << "invalid tx.";
 
         auto compare_tx = SPV::proof::ordering ((*this)->Proof, e->Proof);
 
@@ -266,7 +266,7 @@ namespace Cosmos {
             if (str == "-infinity") return when::negative_infinity ();
             if (str == "unconfirmed") return when::unconfirmed ();
         } else if (j.is_number_unsigned ()) return when {Bitcoin::timestamp {uint32 (j)}};
-        throw exception {} << "could not read Bitcoin time from " << j;
+        throw data::exception {} << "could not read Bitcoin time from " << j;
     }
 
     when::when (const JSON &j): when {when_from_JSON (j)} {}

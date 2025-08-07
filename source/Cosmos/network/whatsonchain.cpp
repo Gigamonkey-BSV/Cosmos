@@ -2,6 +2,9 @@
 
 namespace Cosmos {
 
+    using uint32_big = data::uint32_big;
+    using uint32_little = data::uint32_little;
+
     std::string inline whatsonchain::write (const Bitcoin::TXID &txid) {
         std::stringstream ss;
         ss << txid;

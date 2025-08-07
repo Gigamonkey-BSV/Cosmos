@@ -5,11 +5,13 @@
 #include <Cosmos/database/write.hpp>
 #include <Cosmos/network.hpp>
 
+#include <data/io/unimplemented.hpp>
+
+namespace Bitcoin = Gigamonkey::Bitcoin;
+namespace Merkle = Gigamonkey::Merkle;
+namespace SPV = Gigamonkey::SPV;
+
 namespace Cosmos {
-    using namespace data;
-    namespace Bitcoin = Gigamonkey::Bitcoin;
-    namespace Merkle = Gigamonkey::Merkle;
-    namespace SPV = Gigamonkey::SPV;
 
     using extended_transaction = Gigamonkey::extended::transaction;
 
@@ -97,7 +99,7 @@ namespace Cosmos {
 
     };
 
-    using events = ordered_sequence<event>;
+    using events = data::ordered_sequence<event>;
 
     // a database of transactions.
     // we add to the SVP database by enabling
@@ -205,8 +207,10 @@ namespace Cosmos {
     }
 
     std::partial_ordering inline vertex::operator <=> (const vertex &tx) const {
-        if (!valid () || !tx.valid ()) throw exception {} << "invalid tx.";
+        if (!valid () || !tx.valid ()) throw data::exception {} << "invalid tx.";
         auto compare_tx = SPV::proof::ordering (Proof, tx.Proof);
+        // TODO 
+        throw data::method::unimplemented {"vertex <=>"};
     }
 
     // whether a Merkle proof is included.

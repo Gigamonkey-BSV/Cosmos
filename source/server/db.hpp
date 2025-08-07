@@ -3,9 +3,7 @@
 
 #include <Cosmos/database.hpp>
 
-using namespace data;
-
-using filepath = Cosmos::filepath;
+namespace net = data::net;
 
 struct SQLite_options {
     maybe<filepath> Path {}; // missing for in-memory

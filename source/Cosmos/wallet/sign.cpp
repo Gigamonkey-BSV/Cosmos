@@ -4,16 +4,20 @@ namespace Cosmos::nosig {
 
     // throws if signatures are not complete.
     input::operator extended::input () const {
-        lazy_bytes_writer w;
+        data::lazy_bytes_writer w;
+        
         for (const auto &x : Script) {
             if (x.is<sigop> ()) throw data::exception {} << "incomplete signature";
             w << x.get<bytes> ();
         }
+        
         return extended::input {Prevout, Bitcoin::input {this->Reference, w.complete (), this->Sequence}};
     }
 
     // attempt to retrieve all keys and sign.
-    transaction transaction::sign (database::readable &db) const {
+    transaction transaction::sign (database &db) const {
+        throw data::method::unimplemented {"sign"};
+        /*
         Bitcoin::incomplete::transaction incomplete (*this);
         return transaction {Version, data::for_each ([&] (const input &in) -> input {
             return input {in.Prevout.Value, in.Prevout.Script, in.Reference,
@@ -25,7 +29,7 @@ namespace Cosmos::nosig {
                         else return data::bytes (Bitcoin::signature {*sig, op.Directive});
                     } else return x;
                 }, in.Script), in.Sequence};
-        }, Inputs), Outputs, LockTime};
+        }, Inputs), Outputs, LockTime};*/
     }
 
     // throws if signatures are not complete.

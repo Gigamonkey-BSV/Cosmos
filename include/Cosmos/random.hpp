@@ -5,9 +5,9 @@
 #include <gigamonkey/types.hpp>
 #include <mutex>
 
-namespace Cosmos {
-    using namespace data;
+namespace crypto = data::crypto;
 
+namespace Cosmos {
     // these functions are not provided by the library.
     crypto::entropy *get_random ();// depricated
     crypto::entropy *get_secure_random ();

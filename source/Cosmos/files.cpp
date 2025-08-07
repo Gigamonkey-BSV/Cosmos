@@ -14,17 +14,17 @@ namespace Cosmos {
     void write_to_file (const std::string &x, const std::string &filename) {
         std::fstream file;
         file.open (filename, std::ios::out);
-        if (!file) throw exception {"could not open file"};
+        if (!file) throw data::exception {"could not open file"};
         file << static_cast<const std::string &> (x);
         file.close ();
     }
 
-    struct file_writer final : message_writer<void, byte> {
+    struct file_writer final : data::message_writer<void, byte> {
         std::fstream Filestream;
 
         file_writer (const std::string &filename): Filestream {} {
             Filestream.open (filename, std::ios::out);
-            if (!Filestream) throw exception {"could not open file"};
+            if (!Filestream) throw data::exception {"could not open file"};
         };
 
         void write (const byte *b, size_t size) final override {
@@ -55,7 +55,8 @@ namespace Cosmos {
     }
 
     crypto::symmetric_key<32> get_user_key_from_password () {
-        return crypto::PKCS5_PBKDF2_HMAC<32, CryptoPP::SHA256> (get_user_password ("Please provide the password to decript your keys"), 2048);
+        return crypto::PKCS5_PBKDF2_HMAC<32, CryptoPP::SHA256> (
+            data::get_user_password ("Please provide the password to decript your keys"), 2048);
     }
 
     file read_from_file (const std::string &filename, crypto::symmetric_key<32> (*get_key) ()) {
@@ -65,9 +66,9 @@ namespace Cosmos {
 
         std::ifstream fi;
         fi.open (filename, std::ios::in);
-        if (!fi) throw exception {"could not open file"};
+        if (!fi) throw data::exception {"could not open file"};
 
-        if (fi.eof ()) throw exception {"invalid file format"};
+        if (fi.eof ()) throw data::exception {"invalid file format"};
 
         char prefix = fi.get ();
 
@@ -79,7 +80,7 @@ namespace Cosmos {
             crypto::initialization_vector<16> iv;
 
             for (int i = 0; i < 16; i++) {
-                if (fi.eof ()) throw exception {} << "invalid file format";
+                if (fi.eof ()) throw data::exception {} << "invalid file format";
 
                 char next_char;
                 fi >> next_char;
@@ -117,7 +118,7 @@ namespace Cosmos {
 
     tuple<JSON, files> files::load (const std::string &x) const {
         if (const auto *v = this->contains (x); bool (v))
-            throw exception {} << "file " << x << " already loaded";
+            throw data::exception {} << "file " << x << " already loaded";
         else {
             file fi = read_from_file (x);
             return {fi.Payload, this->insert (x, fi.Key)};

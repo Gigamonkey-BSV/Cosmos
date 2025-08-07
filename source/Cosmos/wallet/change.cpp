@@ -35,7 +35,7 @@ namespace Cosmos {
             }
         }
 
-        return change {cross<redeemable> (cx), x.Last};
+        return change {data::cross<redeemable> (cx), x.Last};
 
     }
 }

@@ -1,6 +1,11 @@
 #include <Cosmos/random.hpp>
 #include <sv/random.h>
 
+template <typename X> using ptr = data::ptr<X>;
+using byte = data::byte;
+using uint32 = data::uint32;
+using uint64 = data::uint64;
+
 namespace Cosmos {
 
     ptr<crypto::user_entropy> Entropy {nullptr};

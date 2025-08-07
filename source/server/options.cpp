@@ -1,5 +1,7 @@
 #include "options.hpp"
-#include "../Cosmos.hpp"
+#include "method.hpp"
+
+using uint16 = data::uint16;
 
 maybe<filepath> options::env () const {
     maybe<filepath> env_path;
@@ -32,11 +34,11 @@ net::IP::TCP::endpoint options::endpoint () const {
 
         if (bool (pn)) {
             auto [_, ec] = std::from_chars (pn, pn + std::strlen (val), *port_number);
-            if (ec != std::errc ()) throw exception {} << "invalid port number " << pn;
+            if (ec != std::errc ()) throw data::exception {} << "invalid port number " << pn;
         }
     }
 
-    if (!bool (port_number)) throw exception {} << "No port number provided";
+    if (!bool (port_number)) throw data::exception {} << "No port number provided";
 
     return net::IP::TCP::endpoint {*ip_address, *port_number};
 }
@@ -52,7 +54,7 @@ uint32 options::threads () const {
     if (bool (val)) {
         auto [_, ec] = std::from_chars (val, val + std::strlen (val), *threads);
         if (ec == std::errc ()) return *threads;
-        else throw exception {} << "could not parse threads " << val;
+        else throw data::exception {} << "could not parse threads " << val;
     }
 
     return *threads;

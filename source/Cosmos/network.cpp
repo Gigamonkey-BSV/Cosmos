@@ -51,7 +51,7 @@ namespace Cosmos {
     awaitable<broadcast_single_result> network::broadcast (const extended_transaction &tx) {
 
         std::cout << "attempting to broadcast tx " << tx.id () << std::endl;
-        wait_for_enter ();
+        data::wait_for_enter ();
 
         ARC::submit_response response;
         try {
@@ -82,7 +82,7 @@ namespace Cosmos {
 
         std::cout << "attempting to broadcast " << std::endl;
         for (const auto &tx: txs) std::cout << "\t" << tx.id () << std::endl;
-        wait_for_enter ();
+        data::wait_for_enter ();
 
         ARC::submit_txs_response response;
         try {
@@ -137,7 +137,7 @@ namespace Cosmos {
         auto z = co_await Gorilla.get_fee_quote ();
 
         if (!z.valid ())
-            throw exception {} << "invalid fee quote response received: " << string (JSON (z));
+            throw data::exception {} << "invalid fee quote response received: " << string (JSON (z));
 
         auto j = JSON (z);
 

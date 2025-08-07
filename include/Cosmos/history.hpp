@@ -4,6 +4,8 @@
 #include <Cosmos/wallet/account.hpp>
 #include <Cosmos/pay.hpp>
 
+template <typename X> using stack = data::stack<X>;
+
 namespace Cosmos {
 
     // This is how we build an account out of individual events.
@@ -62,7 +64,7 @@ namespace Cosmos {
         // to generate a new account at the end of the range.
         struct episode {
             std::map<Bitcoin::outpoint, Bitcoin::output> Account;
-            ordered_sequence<tx> History;
+            data::ordered_sequence<tx> History;
         };
 
         // get all events within a given range.
