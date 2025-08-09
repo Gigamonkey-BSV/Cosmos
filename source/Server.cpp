@@ -493,7 +493,7 @@ R"--(<!DOCTYPE html>
       Make an empty wallet. The wallet has no keys associated with it. You have to build it up.
     </p>
     <p>
-      <code>POST /make_wallet?name=</code> or <code>GET /make_wallet?</code>
+      <code>POST /make_wallet?name=<i>wallet_name</i></code>
     </p>
     <form id="form-make_wallet">
       <b>wallet name: </b><input name="make_wallet-wallet-name" type="text">
@@ -630,7 +630,7 @@ R"--(<!DOCTYPE html>
     <form id="form-next_key">
       <b>wallet name: </b><input name="wallet-name" type="text">
       <br>
-      <b>sequence name: </b><input name="sequence_name" type="text">
+      <b>sequence name (optional): </b><input name="sequence_name" type="text" value="receive">
       <br>
       <button type="button" id="submit-next_key" onclick="callWalletNextKey()">Details</button>
     </form>
@@ -645,11 +645,21 @@ R"--(<!DOCTYPE html>
     <form id="form-next_xpub">
       <b>wallet name: </b><input name="wallet-name" type="text">
       <br>
-      <b>sequence name: </b><input name="sequence_name" type="text">
+      <b>sequence name (optional): </b><input name="sequence_name" type="text" value="receivex">
       <br>
       <button type="button" id="submit-next_xpub" onclick="callWalletNextXPub()">Details</button>
     </form>
     <pre id="output-next_xpub"></pre>
+  </details>
+
+  <details>
+    <summary>Import</summary>
+    <form id="form-accept">
+      <b>wallet name: </b><input name="wallet-name" type="text">
+      <br>
+      <button type="button" id="submit-accept" onclick="callWalletImport()">Import</button>
+    </form>
+    <pre id="output-import"></pre>
   </details>
 
   <details>
