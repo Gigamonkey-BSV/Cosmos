@@ -133,7 +133,7 @@ awaitable<net::HTTP::response> server::operator () (const net::HTTP::request &re
 
     if (m == method::SHUTDOWN) {
         if (req.Method != net::HTTP::method::put)
-            co_return error_response (405, m, problem::invalid_method, "use put");
+            co_return error_response (405, method::SHUTDOWN, problem::invalid_method, "use put");
 
         Shutdown = true;
         co_return ok_response ();
@@ -536,7 +536,7 @@ net::HTTP::response process_wallet_method (
 
     }
 
-    if (m == method::NEXT_ADDRESS) {
+    if (m == method::NEXT_ADDRESS || m == method::NEXT_XPUB) {
         if (http_method != net::HTTP::method::post)
             return error_response (405, m, problem::invalid_method, "use post");
         
@@ -546,68 +546,65 @@ net::HTTP::response process_wallet_method (
         {
           const UTF8 *sequence_name_param = query.contains ("sequence_name");
           if (bool (sequence_name_param)) sequence_name = *sequence_name_param;
-          else sequence_name = std::string {"receive"};
+          else sequence_name = m == method::NEXT_ADDRESS ? std::string {"receive"} : std::string {"receivex"};
         }
 
         if (!sequence_name.valid ()) return error_response (400, m, problem::invalid_parameter, "sequence_name");
         
-        // do we have a sequence by this name? 
-        maybe<database::derivation> seq = p.DB->get_wallet_derivation (wallet_name, sequence_name);
-        if (!bool (seq)) return error_response (400, m, problem::invalid_query);
-
-        // generate a new key. We must be able to generate a pubkey.
-        key_expression k = seq->increment ();
-
-        Bitcoin::pubkey p;
-        try {
-           p = Bitcoin::pubkey (k);
-        } catch (...) {}
-
-        if (!p.valid ()) return error_response (400, m, problem::invalid_query);
-
-        // make a database entery for it. 
-        return error_response (501, m, problem::unimplemented);
-    }
-
-    if (m == method::NEXT_XPUB) {
-        if (http_method != net::HTTP::method::post)
-            return error_response (405, m, problem::invalid_method, "use post");
-        
-        // look at the receivex key sequence.
-        Diophant::symbol sequence_name;
-
-        {
-          const UTF8 *sequence_name_param = query.contains ("sequence_name");
-          if (bool (sequence_name_param)) sequence_name = *sequence_name_param;
-          else sequence_name = std::string {"receivex"};
-        }
-
-        if (!sequence_name.valid ()) return error_response (400, m, problem::invalid_parameter, "sequence_name");
-
         // do we have a sequence by this name? 
         maybe<database::derivation> seq = p.DB->get_wallet_derivation (wallet_name, sequence_name);
         if (!bool (seq)) return error_response (400, m, problem::invalid_query);
 
         // generate a new key. 
-        key_expression k = seq->increment ();
+        key_expression next_expression = seq->increment ();
+        Cosmos::key_expression next_key {Cosmos::evaluate (*p.DB, p.Machine, next_expression)};
 
-        HD::BIP_32::pubkey p;
-        try {
-           p = HD::BIP_32::pubkey (k);
-        } catch (...) {}
+        if (m == method::NEXT_ADDRESS) {
+            Bitcoin::net net {Bitcoin::net::Main}; // just assume Main if we don't know.
+            Bitcoin::secret next_secret (next_key);
+            Bitcoin::pubkey next_pubkey {};
 
-        if (!p.valid ()) return error_response (400, m, problem::invalid_query);
+            // hot wallet
+            if (next_secret.valid ()) {
+                p.DB->set_key (next_secret.encode (), next_expression);
+                Bitcoin::pubkey next_pubkey = next_secret.to_public ();
+                p.DB->set_to_private (string (next_pubkey), next_expression);
+                net = next_secret.Network;
+            // cold wallet
+            } else if (next_pubkey = Bitcoin::pubkey (next_key); next_pubkey.valid ()) {
+                p.DB->set_key (string (next_pubkey), next_expression);
+            } else return error_response (400, m, problem::failed);
 
-        // if it is, then make a database entry. We don't know what the entry looks like yet. 
-        return error_response (501, m, problem::unimplemented);
+            digest160 next_address_hash = next_pubkey.address_hash ();
+            p.DB->set_invert_hash (next_address_hash, Cosmos::hash_function::Hash160, next_pubkey);
+
+            Bitcoin::address next_address {net, next_address_hash};
+
+            p.DB->set_wallet_unused (wallet_name, next_address);
+
+            return JSON_response (JSON (std::string (next_address)));
+        } else { // else it's NEXT_XPUB
+            return error_response (501, m, problem::unimplemented);
+        }
     }
-
 
     if (m == method::IMPORT) {
         if (http_method != net::HTTP::method::put)
             return error_response (405, m, problem::invalid_method, "use put");
         // we need to find addresses and xpubs that we need to check. 
-        // could just check the last several keys? 
+
+        list<std::string> unused = p.DB->get_wallet_unused (wallet_name);
+
+        list<digest160> unused_addresses;
+        list<HD::BIP_32::pubkey> unused_pubkeys;
+
+        for (const std::string &u : unused) {
+            if (Bitcoin::address a {u}; a.valid ()) {
+
+            } else if (HD::BIP_32::pubkey pp {u}; pp.valid ()) {
+                
+            } 
+        }
 
         // first we need a function that recognizes output patterns. 
         return error_response (501, m, problem::unimplemented);

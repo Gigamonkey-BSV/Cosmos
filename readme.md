@@ -18,8 +18,10 @@ docker build -t cosmos .
 Once it is built, it can be run with. 
 
 ```bash
-docker run cosmos <args...>
+docker run -p <port>:<port> cosmos --port=<port> <args...>
 ```
+
+where `<port>` is the port by which the program will be accessed via HTTP. 
 
 ## Use without Docker (Linux)
 

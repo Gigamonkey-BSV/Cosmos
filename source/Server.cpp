@@ -63,18 +63,23 @@ boost::asio::io_context IO;
 ptr<net::HTTP::server> Server;
 
 std::atomic<bool> Shutdown {false};
-std::vector<std::atomic<bool>> ThreadShutdown;
 
-void shutdown () {
-    if (Shutdown) return;
+bool ShutdownInProgress {false};
+std::mutex ShutdownMutex;
+
+void shutdown () noexcept {
+    std::lock_guard<std::mutex> lock {ShutdownMutex};
+    if (ShutdownInProgress) return;
     std::cout << "\nShut down!" << std::endl;
-    Shutdown = true;
-    for (std::atomic<bool> &u : ThreadShutdown) u = true;
+    ShutdownInProgress = true;
     if (Server != nullptr) Server->close ();
 }
 
 void signal_handler (int signal) {
-    if (signal == SIGINT || signal == SIGTERM) shutdown ();
+    if (signal == SIGINT || signal == SIGTERM) {
+        Shutdown = true;
+        shutdown ();
+    }
 }
 
 void run (const options &program_options) {
@@ -98,55 +103,66 @@ void run (const options &program_options) {
 
     // for now, we require the endpoint to connect only to localhost.
     net::IP::TCP::endpoint endpoint = program_options.endpoint ();
-    if (endpoint.address () != net::IP::address {"127.0.0.1"})
-        throw data::exception {} << "This program is not ready to be connected to the Internet.  localhost is required";
+
+    if (!endpoint.valid ()) throw data::exception {} << 
+        "invalid tcp endpoint " << endpoint << "; it should look something like tcp://127.0.0.1:4567";
+
+    if (endpoint.address () == net::IP::address {"0.0.0.0"})
+        std::cout << "WARNING: the program has been set to accept connections over the Internet. In this mode of operation, "
+            "the user must ensure that all connections to the program are authorized. Right now, Cosmos does nothing to hide "
+            "keys from unauthorized access.";
 
     // I tried something with multiple threads but couldn't quite 
     // get it working. The problem was receiving the signal to 
     // shut down. That can come from any thread. 
     uint32 num_threads = program_options.threads ();
-    if (num_threads < 1) throw data::exception {} << "We cannot run with zero threads. There is already one thread running to read this number.";
-    if (num_threads > 1) throw data::exception {} << "We do not do multithreaded yet";
-    uint32 extra_threads = num_threads - 1;
+    if (num_threads < 1) throw data::exception {} << "We cannot run with zero threads. There is already one thread running to read in the input you have provided.";
+    if (num_threads > 1) throw data::exception {} << "We only support 1 thread right now.";
 
-    std::cout << "loading server on " << endpoint << std::endl;
+    std::cout << "running with endpoint " << endpoint << std::endl;
+    
+    std::cout << "running with ip address " << endpoint.address () << " and " << endpoint.port () << std::endl;
+    std::cout << "connect to " << net::URL (net::URL::make ().protocol ("http").address (endpoint.address ()).port (endpoint.port ())) << " to see the GUI." << std::endl;
     Server = std::make_shared<net::HTTP::server>
         (IO.get_executor (), endpoint, server {program_options});
 
-    data::spawn (IO.get_executor (), [&] () -> awaitable<void> {
-        while (co_await Server->accept ()) {}
-        shutdown ();
-    });
+    // spawn a coroutine for each thread.
+    for (int i = 0; i < num_threads; i++)
+        data::spawn (IO.get_executor (), [&] () -> awaitable<void> {
+            int id = i;
+            std::cout << "awaiting server accept on coroutine " << id << std::endl;
+            while (co_await Server->accept ()) {
+                std::cout << "successfully responded to incoming request on coroutine " << id << std::endl;
+            }
+        });
 
     // Logic for handling exceptions thrown by threads.
     std::exception_ptr stored_exception = nullptr;
     std::mutex exception_mutex;
 
     std::vector<std::thread> threads {};
-    for (int i = 0; i < extra_threads; i++)
-        threads.emplace_back ([&]() {
-            int index = i;
-            try {
-                while (!ThreadShutdown[index]) {
-                    if (stored_exception) shutdown ();
-                    IO.run ();
-                }
 
-                shutdown ();
-            } catch (...) {
-                std::lock_guard<std::mutex> lock (exception_mutex);
-                if (!stored_exception) {
-                    stored_exception = std::current_exception (); // Capture first exception
-                }
+    auto main_loop = [&]() {
+        try {
+            while (!Shutdown) {
+                IO.run ();
             }
-        });
 
-    while (!Shutdown) {
-        if (stored_exception) shutdown ();
-        IO.run ();
-    }
+        } catch (...) {
+            std::lock_guard<std::mutex> lock (exception_mutex);
+            // Capture first exception
+            if (!stored_exception) stored_exception = std::current_exception (); 
+            Shutdown = true;
+        }
+            
+        shutdown ();
+    };
 
-    for (int i = 0; i < extra_threads; i++) threads[i].join ();
+    for (int i = 1; i < num_threads; i++) threads.emplace_back (main_loop);
+
+    main_loop ();
+
+    for (int i = 1; i < num_threads; i++) threads[i - 1].join ();
 
     if (stored_exception) std::rethrow_exception (stored_exception);
 

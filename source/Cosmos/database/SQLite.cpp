@@ -1043,7 +1043,7 @@ namespace Cosmos::SQLite {
             throw data::method::unimplemented {"SQLite::set_wallet_used"};
         };
 
-        data::map<Diophant::symbol, key_expression> get_wallet_symbols (const std::string &wallet_name) final override {
+        list<std::string> get_wallet_unused (const std::string &wallet_name) final override {
             throw data::method::unimplemented {"SQLite::get_wallet_symbols"};
         };
 

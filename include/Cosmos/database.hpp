@@ -7,12 +7,17 @@
 #include <Cosmos/options.hpp>
 
 #include <Diophant/symbol.hpp>
+#include <Diophant/machine.hpp>
 
 template <typename X> using slice = data::slice<X>;
 
 namespace Cosmos {
 
     struct database;
+
+    Diophant::expression inline evaluate (const database &, Diophant::machine, const Diophant::expression &) {
+        throw 0;
+    }
 
     void setup_BIP_44_wallet (const HD::BIP_32::secret &master, list<uint32> accounts = {1});
 
@@ -47,9 +52,10 @@ namespace Cosmos {
         virtual bool set_to_private (const std::string &key_name, const key_expression &k) = 0;
         virtual key_expression get_to_private (const std::string &key_name) = 0;
 
+        // TODO there needs to be a time limit for these things.
         virtual void set_wallet_unused (const std::string &wallet_name, const std::string &key_name) = 0;
         virtual void set_wallet_used (const std::string &wallet_name, const std::string &key_name) = 0;
-        virtual map<Diophant::symbol, key_expression> get_wallet_symbols (const std::string &wallet_name) = 0;
+        virtual list<std::string> get_wallet_unused (const std::string &wallet_name) = 0; 
 
         struct derivation {
             key_derivation Derivation;
@@ -66,7 +72,6 @@ namespace Cosmos {
         virtual bool set_wallet_derivation (const std::string &wallet_name, const std::string &deriv_name, const derivation &) = 0;
 
         virtual list<derivation> get_wallet_derivations (const std::string &wallet_name) = 0;
-
         virtual maybe<derivation> get_wallet_derivation (const std::string &wallet_name, const std::string &deriv_name) = 0;
 
         virtual Cosmos::account get_wallet_account (const std::string &wallet_name) = 0;

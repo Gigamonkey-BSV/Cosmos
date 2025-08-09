@@ -1,5 +1,6 @@
 #include "options.hpp"
 #include <Cosmos/random.hpp>
+#include <Diophant/machine.hpp>
 
 using UTF8 = data::UTF8;
 
@@ -17,6 +18,8 @@ struct server {
     Cosmos::spend_options SpendOptions;
 
     ptr<database> DB;
+
+    Diophant::machine Machine;
 
     struct make_wallet_options {};
 
