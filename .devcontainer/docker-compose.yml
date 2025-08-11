@@ -1,0 +1,23 @@
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+    depends_on:
+      - bitcoind
+    environment:
+      BITCOIND_HOST: bitcoind
+      BITCOIND_PORT: 18442 # default regtest RPC port
+    volumes:
+      - ../:/workspace/cosmos:cached
+    ports:
+      - "8080:8080" # adjust as needed for your app
+
+  bitcoind:
+    image: bitcoinsv/bitcoin-sv:latest
+    platform: linux/amd64
+    volumes:
+      - ./bitcoin.conf:/home/bitcoin/.bitcoin/bitcoin.conf
+    ports:
+      - "18442:18442" # regtest RPC port
+      - "18444:18444" # regtest P2P port
