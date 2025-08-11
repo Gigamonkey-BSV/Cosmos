@@ -213,38 +213,7 @@ net::HTTP::response process_method (
     if (m == method::INVERT_HASH) return invert_hash (p, http_method, query, content_type, body); 
 
     // Associate a secret key with a name. The key could be anything; private, public, or symmetric. 
-    if (m == method::SET_KEY) {
-        if (http_method != net::HTTP::method::post)
-            return error_response (405, m, problem::invalid_method, "use post");
-
-        enum class key_type {
-            unset,
-            secp256k1,
-            WIF,
-            HD
-        } KeyType {key_type::unset};
-
-        enum class generation_method {
-            random,
-            expression
-        } Method {generation_method::expression};
-
-        const UTF8 *key_type = query.contains ("type");
-        if (bool (key_type)) {
-            std::string key_type_san = sanitize (*key_type);
-            if (key_type_san == "secp256k1") KeyType = key_type::secp256k1;
-            else if (key_type_san == "wif") KeyType = key_type::WIF;
-            else if (key_type_san == "hd") KeyType = key_type::HD;
-            else return error_response (400, m, problem::invalid_query, "invalid parameter 'type'");
-        }
-
-        const UTF8 *method_val = query.contains ("method");
-        if (bool (method_val)) {
-            std::string method_san = sanitize (*method_val);
-            if (method_san == "random") Method = generation_method::random;
-            else if (method_san == "expression") Method = generation_method::expression;
-            else return error_response (400, m, problem::invalid_query, "invalid parameter 'type'");
-        }
+    if (m == method::KEY) {
 
         const UTF8 *key_name_param = query.contains ("name");
         if (!bool (key_name_param))
@@ -253,16 +222,68 @@ net::HTTP::response process_method (
         Diophant::symbol key_name {*key_name_param};
 
         // make sure the name is a valid symbol name
-        if (!key_name.valid ()) return error_response (400, m, problem::invalid_parameter, "parameter 'name' must be alpha alnum+");
+        if (!key_name.valid ()) 
+            return error_response (400, m, problem::invalid_parameter, "parameter 'name' must be alpha alnum+");
+
+        enum class generation_method {
+            random,
+            expression
+        } Method;
+            
+        {
+            const UTF8 *method_val = query.contains ("method");
+            if (bool (method_val)) {
+                std::string method_san = sanitize (*method_val);
+                if (method_san == "random") Method = generation_method::random;
+                else if (method_san == "expression") Method = generation_method::expression;
+                else return error_response (400, method::KEY, problem::invalid_query, "invalid parameter 'type'");
+            }
+
+            if (bool (content_type)) {
+                if (bool (method_val) && Method == generation_method::random)
+                    return error_response (400, method::KEY, problem::invalid_query);
+                Method = generation_method::expression; 
+            } else {
+                if (bool (method_val) && Method == generation_method::expression)
+                    return error_response (400, method::KEY, problem::invalid_query);
+                Method = generation_method::random;
+            }
+        }
+
+        // after this point, Method is set as some definite value and is not garbage. 
+
+        enum class key_type {
+            unset,
+            secp256k1,
+            WIF,
+            xpriv
+        } KeyType {key_type::unset};
+
+        const UTF8 *key_type = query.contains ("type");
+        if (bool (key_type)) {
+            if (Method == generation_method::expression) 
+                return error_response (400, method::KEY, problem::invalid_query);
+            std::string key_type_san = sanitize (*key_type);
+            if (key_type_san == "secp256k1") KeyType = key_type::secp256k1;
+            else if (key_type_san == "wif") KeyType = key_type::WIF;
+            else if (key_type_san == "xpriv") KeyType = key_type::xpriv;
+            else return error_response (400, method::KEY, problem::invalid_query, "invalid parameter 'type'");
+        }
+
+        if (Method == generation_method::expression && KeyType != key_type::unset)
+            return error_response (400, method::KEY, problem::invalid_query);
 
         Bitcoin::net net = Bitcoin::net::Main;
         const UTF8 *net_type_param = query.contains ("net");
-        if (bool (key_name_param)) {
+        if (bool (net_type_param)) {
             std::string net_type_san = sanitize (*net_type_param);
             if (net_type_san == "main") net = Bitcoin::net::Main;
             else if (net_type_san == "test") net = Bitcoin::net::Test;
             else return error_response (400, m, problem::invalid_query, "invalid parameter 'net'");
         }
+        
+        if (Method == generation_method::expression && bool (net_type_param))
+            return error_response (400, method::KEY, problem::invalid_query);
 
         bool compressed = true;
         const UTF8 *compressed_param = query.contains ("compressed");
@@ -271,46 +292,68 @@ net::HTTP::response process_method (
             if (!maybe_compressed) return error_response (400, m, problem::invalid_query, "invalid parameter 'compressed'");
             compressed = *maybe_compressed;
         }
+        
+        if (bool (compressed_param) && (Method == generation_method::expression || 
+            (KeyType != key_type::WIF && KeyType != key_type::xpriv)))
+            return error_response (400, method::KEY, problem::invalid_query);
 
-        key_expression key_expr;
-
-        if (Method == generation_method::expression) {
-            if (KeyType != key_type::unset)
-                return error_response (400, m, problem::invalid_query, "key type will be inferred from the expression provided");
-
-            if (!bool (content_type) || *content_type != net::HTTP::content::type::text_plain)
-                return error_response (400, m, problem::invalid_content_type, "expected content-type:text/plain");
-
-            key_expr = key_expression {data::string (body)};
-
-        } else {
-            if (KeyType != key_type::unset)
-                return error_response (400, m, problem::invalid_query, "need a key type to tell us what to generate");
-
+        if (http_method == net::HTTP::method::get) {
+            if (KeyType != key_type::unset) 
+                return error_response (400, method::KEY, problem::invalid_query);
+            
+            if (bool (net_type_param))
+                return error_response (400, method::KEY, problem::invalid_query);
+            
+            if (bool (compressed_param))
+                return error_response (400, method::KEY, problem::invalid_query);
+            
             if (bool (content_type))
-                return error_response (400, m, problem::invalid_query, "no body when we generate random keys");
+                return error_response (400, method::KEY, problem::invalid_query);
+            
+            return error_response (501, m, problem::unimplemented);
 
-            crypto::entropy &random = p.get_secure_random ();
-            secp256k1::secret key;
-            random >> key.Value;
+        } else if (http_method == net::HTTP::method::post) {
 
-            switch (KeyType) {
-                case (key_type::WIF): {
-                    key_expr = key_expression {Bitcoin::secret {net, key, compressed}};
-                } break;
-                case (key_type::HD): {
-                    HD::chain_code x;
-                    random >> x;
-                    key_expr = key_expression (HD::BIP_32::secret {key, x, net});
-                } break;
-                default: {
-                    key_expr = key_expression {key};
+            key_expression key_expr;
+
+            if (Method == generation_method::expression) {
+                if (KeyType != key_type::unset)
+                    return error_response (400, m, problem::invalid_query, "key type will be inferred from the expression provided");
+
+                if (!bool (content_type) || *content_type != net::HTTP::content::type::text_plain)
+                    return error_response (400, m, problem::invalid_content_type, "expected content-type:text/plain");
+
+                key_expr = key_expression {data::string (body)};
+
+            } else {
+                if (KeyType != key_type::unset)
+                    return error_response (400, m, problem::invalid_query, "need a key type to tell us what to generate");
+
+                if (bool (content_type))
+                    return error_response (400, m, problem::invalid_query, "no body when we generate random keys");
+
+                crypto::entropy &random = p.get_secure_random ();
+                secp256k1::secret key;
+                random >> key.Value;
+
+                switch (KeyType) {
+                    case (key_type::WIF): {
+                        key_expr = key_expression {Bitcoin::secret {net, key, compressed}};
+                    } break;
+                    case (key_type::xpriv): {
+                        HD::chain_code x;
+                        random >> x;
+                        key_expr = key_expression (HD::BIP_32::secret {key, x, net});
+                    } break;
+                    default: {
+                        key_expr = key_expression {key};
+                    }
                 }
             }
-        }
 
-        if (p.DB->set_key (key_name, key_expr)) return ok_response ();
-        return error_response (500, m, problem::failed, "could not create key");
+            if (p.DB->set_key (key_name, key_expr)) return ok_response ();
+            return error_response (500, m, problem::failed, "could not create key");
+        } else return error_response (405, m, problem::invalid_method, "use get or post");
 
     }
 
@@ -387,7 +430,7 @@ net::HTTP::response process_wallet_method (
         else return error_response (500, m, problem::failed, "could not create wallet");
     }
 
-    if (m == method::ADD_KEY_SEQUENCE) {
+    if (m == method::KEY_SEQUENCE) {
         if (http_method != net::HTTP::method::post)
             return error_response (405, m, problem::invalid_method, "use post");
 

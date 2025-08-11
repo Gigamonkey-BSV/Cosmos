@@ -17,10 +17,10 @@ enum class method {
     ADD_ENTROPY,      // add entropy to the random number generator.
     LIST_WALLETS,
     MAKE_WALLET,
-    SET_KEY,
+    KEY,
     TO_PRIVATE,
     INVERT_HASH,
-    ADD_KEY_SEQUENCE,
+    KEY_SEQUENCE,
     NEXT_ADDRESS,     // next address
     NEXT_XPUB,        // next xpub (if supported)
     GENERATE,         // generate a wallet

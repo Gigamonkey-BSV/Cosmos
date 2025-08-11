@@ -22,6 +22,7 @@ namespace Cosmos {
     void setup_BIP_44_wallet (const HD::BIP_32::secret &master, list<uint32> accounts = {1});
 
     enum class hash_function : byte {
+        invalid = 0,
         SHA1 = 1,
         MD5 = 2,
         SHA2_256 = 3,
@@ -39,10 +40,7 @@ namespace Cosmos {
 
     struct database : local_TXDB, local_price_data {
 
-        virtual bool make_wallet (const std::string &name) = 0;
-        virtual data::list<std::string> list_wallet_names () = 0;
-
-        virtual bool set_invert_hash (slice<const byte>, hash_function, slice<const byte>) = 0;
+        virtual bool set_invert_hash (slice<const byte> digest, hash_function, slice<const byte> data) = 0;
         virtual maybe<tuple<hash_function, bytes>> get_invert_hash (slice<const byte>) = 0;
 
         virtual bool set_key (const std::string &key_name, const key_expression &k) = 0;
@@ -51,6 +49,9 @@ namespace Cosmos {
         // set the private key for a given public key.
         virtual bool set_to_private (const std::string &key_name, const key_expression &k) = 0;
         virtual key_expression get_to_private (const std::string &key_name) = 0;
+
+        virtual bool make_wallet (const std::string &name) = 0;
+        virtual data::list<std::string> list_wallet_names () = 0;
 
         // TODO there needs to be a time limit for these things.
         virtual void set_wallet_unused (const std::string &wallet_name, const std::string &key_name) = 0;

@@ -400,9 +400,8 @@ R"--(<!DOCTYPE html>
       <code>Hash256</code>, and <code>Hash160</code>, 
     </p>
     <form id="form-invert_hash">
-      <label><input type="radio" name="HTTP_method" value="GET" onclick="toggleRadio (this)">GET</label>
-      <br>
-      <label><input type="radio" name="HTTP_method" value="POST" onclick="toggleRadio (this)">POST</label>
+      <label><input type="radio" name="HTTP_method" value="GET">GET</label>
+      <label><input type="radio" name="HTTP_method" value="POST">POST</label>
       <br>
       <b>digest: (hex) </b><input name="hash_digest" type="text">
       <label for="digest_format"></label>
@@ -433,33 +432,34 @@ R"--(<!DOCTYPE html>
   </details>
 
   <details>
-    <summary>Set Key</summary>
+    <summary>Key</summary>
     <p>
       Add or retrieve a key. This could be any kind of key: public, private,
       symmetric, whatever. You can enter it in the form of a Bitcoin
       Calculator expression or generate a random key of a specific type.
     </p>
     <p>
-      <code>POST /set_key?</code> or <code>GET /set_key?</code>
+      <code>POST /key?</code> or <code>GET /key?</code>
     </p>
     <form id="form-add_key">
-      <label><input type="radio" name="HTTP_method" value="GET" onclick="toggleRadio(this)">GET</label>
-      <br>
-      <label><input type="radio" name="HTTP_method" value="POST" onclick="toggleRadio(this)">POST</label>
+      <label><input type="radio" name="HTTP_method" value="POST" checked>POST</label>
+      <label><input type="radio" name="HTTP_method" value="GET">GET</label>
       <br>
       <b>key name: </b><input name="name" type="text">
       <br>
-      <label><input type="radio" name="method-type" value="expression" onclick="toggleRadio(this)">
+      <label><input type="radio" name="method-type" value="expression">
         <input name="value" type="text">
       </label>
       <br>
-      <label><input type="radio" name="method-type" value="random-secp256k1" onclick="toggleRadio(this)">random secp256k1</label>
+      <label><input type="radio" name="method-type" value="random-secp256k1">random secp256k1</label>
       <br>
-      <label><input type="radio" name="method-type" value="random-xpriv" onclick="toggleRadio(this)">random xpub</label>
+      <label><input type="radio" name="method-type" value="random-WIF.">random secp256k1</label>
       <br>
-      <button type="button" id="submit-add_key" onclick="callAddKey ()">Add Key</button>
+      <label><input type="radio" name="method-type" value="random-xpriv">random xpriv</label>
+      <br>
+      <button type="button" id="submit-set_key" onclick="callKey ()">Set Key</button>
     </form>
-    <pre id="output-add_key"></pre>
+    <pre id="output-set_key"></pre>
   </details>
 
   <details>
@@ -472,9 +472,9 @@ R"--(<!DOCTYPE html>
       <code>POST /to_private?</code> or <code>GET /to_private?</code>
     </p>
     <form id="form-to_private">
-      <label><input type="radio" name="HTTP_method" value="GET" onclick="toggleRadio(this)">GET</label>
+      <label><input type="radio" name="HTTP_method" value="POST" checked>POST</label>
       <br>
-      <label><input type="radio" name="HTTP_method" value="POST" onclick="toggleRadio(this)">POST</label>
+      <label><input type="radio" name="HTTP_method" value="GET" >GET</label>
       <br>
       <b>key name: </b><input name="key_name" type="text">
       <br>
@@ -504,14 +504,14 @@ R"--(<!DOCTYPE html>
   </details>
 
   <details>
-    <summary>Add Key Sequence</summary>
+    <summary>Key Sequence</summary>
     <p>
       Add a key sequence to a wallet.
     </p>
     <p>
-      <code>POST /add_key_sequence?</code>
+      <code>POST /set_key_sequence?</code>
     </p>
-    <form id="form-add_key_sequence">
+    <form id="form-set_key_sequence">
       <b>wallet name: </b><input name="wallet-name" type="text">
       <br>
       <b>sequence name: </b><input name="sequence-name" type="text">
@@ -520,9 +520,9 @@ R"--(<!DOCTYPE html>
       <br>
       <b>key expression: </b><input name="expression" type="text">
       <br>
-      <button type="button" id="submit-add_key_sequence" onclick="callAddKeySequence()">Add Key Sequence</button>
+      <button type="button" id="submit-set_key_sequence" onclick="callSetKeySequence ()">Set Key Sequence</button>
     </form>
-    <pre id="output-add_key_sequence"></pre>
+    <pre id="output-set_key_sequence"></pre>
   </details>
 
   <details>

@@ -18,10 +18,12 @@ docker build -t cosmos .
 Once it is built, it can be run with. 
 
 ```bash
-docker run -p <port>:<port> cosmos --port=<port> <args...>
+docker run -p <port>:<port> cosmos --port=<port> --accept_remote <other args...>
 ```
 
 where `<port>` is the port by which the program will be accessed via HTTP. 
+
+`accept_remote` is required with Docker to enable connections outside of the Docker container.
 
 ## Use without Docker (Linux)
 
@@ -38,7 +40,11 @@ Basic start: use `--port=4567` as the arguments (or whatever) and then go to `lo
 
 ### Arguments
 
+* `--offline`: If set, then the program will not try to connect to the Internet at all. 
 * `--port=<port number>`
+* `--ip_address=<ip address>`
+* `--endpoint=tcp:\\<ip address>:<port>`
+* `--accept_remote`: If this flag is not provided, only local connections are allowed.
 * `--db_type=<"sqlite">`: default is `sqlite`. We may support other databases in the future, so that's why this option is there.
 * `--sqlite_path=<filepath>`
 * `--sqlite_in_memory`: set instead of `sqlite_path` to use an in_memory db. (Testing only).

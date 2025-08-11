@@ -45,12 +45,13 @@ method read_method (const UTF8 &p) {
     if (m == "help") return method::HELP;
     if (m == "version") return method::VERSION;
     if (m == "shutdown") return method::SHUTDOWN;
-    if (m == "add_entropy") return method::ADD_ENTROPY;
-    if (m == "set_key") return method::SET_KEY;
-    if (m == "to_private") return method::TO_PRIVATE;
-    if (m == "invert_hash") return method::INVERT_HASH;
-    if (m == "make_wallet") return method::MAKE_WALLET;
-    if (m == "list_wallets") return method::LIST_WALLETS;
+    if (m == "addentropy") return method::ADD_ENTROPY;
+    if (m == "key") return method::KEY;
+    if (m == "keysequnce") return method::KEY_SEQUENCE;
+    if (m == "toprivate") return method::TO_PRIVATE;
+    if (m == "inverthash") return method::INVERT_HASH;
+    if (m == "makewallet") return method::MAKE_WALLET;
+    if (m == "listwallets") return method::LIST_WALLETS;
     if (m == "generate") return method::GENERATE;
     if (m == "restore") return method::RESTORE;
     if (m == "details") return method::DETAILS;
@@ -65,8 +66,8 @@ method read_method (const UTF8 &p) {
     if (m == "boost") return method::BOOST;
     if (m == "split") return method::SPLIT;
     if (m == "taxes") return method::TAXES;
-    if (m == "encrypt_private_keys") return method::ENCRYPT_KEY;
-    if (m == "decrypt_private_keys") return method::DECRYPT_KEY;
+    if (m == "encryptprivatekeys") return method::ENCRYPT_KEY;
+    if (m == "decryptprivatekeys") return method::DECRYPT_KEY;
 
     return method::UNSET;
 }
@@ -79,7 +80,8 @@ std::ostream &operator << (std::ostream &o, method m) {
         case method::SHUTDOWN: return o << "shutdown";
         case method::ADD_ENTROPY: return o << "add_entropy";    // add entropy to the random number generator.
         case method::MAKE_WALLET: return o << "make_wallet";
-        case method::SET_KEY: return o << "add_key";
+        case method::KEY: return o << "key";
+        case method::KEY_SEQUENCE: return o << "key_sequence";
         case method::TO_PRIVATE: return o << "to_private";
         case method::GENERATE: return o << "generate";       // generate a wallet
         case method::RESTORE: return o << "restore";         // restore a wallet
