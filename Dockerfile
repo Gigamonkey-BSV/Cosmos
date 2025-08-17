@@ -37,5 +37,11 @@ COPY --from=build /home/cosmos/boost_libs/ /usr/local/lib/
 COPY --from=build /home/cosmos/build/CosmosWalletServer /bin/CosmosWalletServer
 RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/local.conf && ldconfig
 WORKDIR /cosmos
+
+# Make some default env values for the wallet.
+ENV COSMOS_WALLET_IP_ADDRESS=0.0.0.0
+ENV COSMOS_WALLET_PORT_NUMBER=4567
+ENV COSMOS_SQLITE_PATH=SQLite.db
+
 ENTRYPOINT [ "/bin/CosmosWalletServer" ]
-CMD ["help"]
+CMD ["version"]

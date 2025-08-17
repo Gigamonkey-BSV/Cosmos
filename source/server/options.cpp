@@ -53,11 +53,18 @@ maybe<uint16> read_port_option (const options &o) {
 
     o.get ("port", port_number);
     if (!bool (port_number)) {
+        std::cout << "no port number provided on arg string" << std::endl;
         const char *pn = std::getenv ("COSMOS_WALLET_PORT_NUMBER");
 
         if (bool (pn)) {
-            auto [_, ec] = std::from_chars (pn, pn + std::strlen (pn), *port_number);
+            std::cout << "found env port number \"" << pn << "\"" << std::endl;
+            unsigned int read_port_number;
+            auto [_, ec] = std::from_chars (pn, pn + std::strlen (pn), read_port_number);
             if (ec != std::errc ()) throw data::exception {} << "invalid port number " << pn;
+            if (read_port_number > std::numeric_limits<uint16>::max ())
+                throw data::exception {} << "Port number is too big to be a uint16";
+            port_number = static_cast<uint16> (read_port_number);
+            std::cout << "port_number is " << port_number << std::endl;
         }
     }
 
@@ -100,6 +107,7 @@ net::IP::address options::ip_address () const {
 
 uint16 options::port () const {
     maybe<net::IP::TCP::endpoint> endpoint = read_endpoint_option (*this);
+    std::cout << "reading port option" << std::endl;
     maybe<uint16> port = read_port_option (*this);
 
     // if these are both provided, they must be consistent. 

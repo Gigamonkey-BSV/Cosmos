@@ -83,48 +83,64 @@ void signal_handler (int signal) {
 }
 
 void run (const options &program_options) {
+    // print version string.
+    if (program_options.has ("version")) {
+        version (std::cout);
+        return;
+    }
 
-    // path to an env file containing program options. 
-    auto envpath = program_options.env ();
+    {
+        // path to an env file containing program options.
+        auto envpath_param = program_options.env ();
+        // if the user provided no path, we look for a file called .env in the working directory.
+        std::filesystem::path envpath = bool (envpath_param) ? *envpath_param : ".env";
 
-    // If the user provided a path, it is an error if it is not found. 
-    // Otherwise we look in the default location but don't throw an
-    // error if we don't find it. 
-    if (bool (envpath)) {
+        if (bool (envpath_param)) std::cout << "No env path provided with --env. Using default " << envpath << std::endl;
+        std::cout << "Searching for env path " << envpath << std::endl;
+
         std::error_code ec;
-        if (!std::filesystem::exists (*envpath, ec)) {
-            throw data::exception {} << "file " << *envpath << " does not exist ";
-        } else if (ec) {
-            throw data::exception {} << "could not access file " << *envpath;
-        }
+        if (!std::filesystem::exists (envpath, ec)) {
+            std::cout << "No file " << envpath << " found" << std::endl;
+            // If the user provided a path, it is an error if it is not found.
+            // Otherwise we look in the default location but don't throw an
+            // error if we don't find it.
+            if (bool (envpath_param)) throw data::exception {} << "file " << envpath << " does not exist ";
+            else dotenv::init ();
+        } else if (ec) throw data::exception {} << "could not access file " << envpath;
+        else dotenv::init (envpath.c_str ());
+    }
 
-        dotenv::init (envpath->c_str ());
-    } else dotenv::init ();
+    {
+        net::IP::TCP::endpoint endpoint = program_options.endpoint ();
 
-    // for now, we require the endpoint to connect only to localhost.
-    net::IP::TCP::endpoint endpoint = program_options.endpoint ();
+        if (!endpoint.valid ()) throw data::exception {} <<
+            "invalid tcp endpoint " << endpoint << "; it should look something like tcp://127.0.0.1:4567";
 
-    if (!endpoint.valid ()) throw data::exception {} << 
-        "invalid tcp endpoint " << endpoint << "; it should look something like tcp://127.0.0.1:4567";
+        if (endpoint.address () == net::IP::address {"0.0.0.0"})
+            std::cout << "WARNING: the program has been set to accept connections over the Internet. In this mode of operation, "
+                "the user must ensure that all connections to the program are authorized. Right now, Cosmos does nothing to hide "
+                "keys from unauthorized access.";
 
-    if (endpoint.address () == net::IP::address {"0.0.0.0"})
-        std::cout << "WARNING: the program has been set to accept connections over the Internet. In this mode of operation, "
-            "the user must ensure that all connections to the program are authorized. Right now, Cosmos does nothing to hide "
-            "keys from unauthorized access.";
+        std::cout << "running with endpoint " << endpoint << std::endl;
+        std::cout << "running with ip address " << endpoint.address () << " and listening on port " << endpoint.port () << std::endl;
+        std::cout << "connect to " <<
+          net::URL (net::URL::make ().protocol ("http").address (endpoint.address ()).port (endpoint.port ())) <<
+          " to see the GUI." << std::endl;
 
-    // I tried something with multiple threads but couldn't quite 
-    // get it working. The problem was receiving the signal to 
-    // shut down. That can come from any thread. 
+        Server = std::make_shared<net::HTTP::server>
+            (IO.get_executor (), endpoint, server {program_options});
+    }
+
+    // We should be able to work with multiple threads now except
+    // that not everything we are using is thread safe.
+    //   * Need a thread-safe database
+    //   * Need a thread-safe internet stream.
     uint32 num_threads = program_options.threads ();
-    if (num_threads < 1) throw data::exception {} << "We cannot run with zero threads. There is already one thread running to read in the input you have provided.";
-    if (num_threads > 1) throw data::exception {} << "We only support 1 thread right now.";
+    if (num_threads < 1) throw data::exception {} <<
+        "We cannot run with zero threads. There is already one thread running to read in the input you have provided.";
 
-    std::cout << "running with endpoint " << endpoint << std::endl;
-    
-    std::cout << "running with ip address " << endpoint.address () << " and " << endpoint.port () << std::endl;
-    std::cout << "connect to " << net::URL (net::URL::make ().protocol ("http").address (endpoint.address ()).port (endpoint.port ())) << " to see the GUI." << std::endl;
-    Server = std::make_shared<net::HTTP::server>
-        (IO.get_executor (), endpoint, server {program_options});
+    if (num_threads > 1) throw data::exception {} <<
+        "We only support 1 thread right now.";
 
     // spawn a coroutine for each thread.
     for (int i = 0; i < num_threads; i++)
@@ -144,10 +160,7 @@ void run (const options &program_options) {
 
     auto main_loop = [&]() {
         try {
-            while (!Shutdown) {
-                IO.run ();
-            }
-
+            while (!Shutdown) IO.run ();
         } catch (...) {
             std::lock_guard<std::mutex> lock (exception_mutex);
             // Capture first exception
@@ -158,6 +171,7 @@ void run (const options &program_options) {
         shutdown ();
     };
 
+    // everybody runs main loop.
     for (int i = 1; i < num_threads; i++) threads.emplace_back (main_loop);
 
     main_loop ();
