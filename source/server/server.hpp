@@ -1,8 +1,17 @@
+#ifndef SERVER_SERVER
+#define SERVER_SERVER
+
 #include "options.hpp"
 #include <Cosmos/random.hpp>
 #include <Diophant/machine.hpp>
 
 using UTF8 = data::UTF8;
+
+namespace secp256k1 = Gigamonkey::secp256k1;
+namespace HD = Gigamonkey::HD;
+
+using key_expression = Cosmos::key_expression;
+using key_derivation = Cosmos::key_derivation;
 
 struct server {
 
@@ -49,6 +58,8 @@ private:
 
 };
 
+maybe<bool> read_bool (const std::string &utf8);
+
 net::HTTP::response favicon ();
 net::HTTP::response HTML_JS_UI_response ();
 net::HTTP::response version_response ();
@@ -68,3 +79,5 @@ net::HTTP::response inline boolean_response (bool b) {
 net::HTTP::response inline value_response (Bitcoin::satoshi x) {
     return JSON_response (JSON (int64 (x)));
 }
+
+#endif

@@ -1,6 +1,7 @@
 #include "server.hpp"
 #include "problem.hpp"
 #include "method.hpp"
+#include "invert_hash.hpp"
 
 #include <gigamonkey/p2p/checksum.hpp>
 

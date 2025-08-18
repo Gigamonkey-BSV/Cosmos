@@ -130,6 +130,7 @@ add_executable (
     source/server/method.cpp
     source/server/server.cpp
     source/server/invert_hash.cpp
+    source/server/key.cpp
     source/Server.cpp
 )
 
@@ -177,14 +178,23 @@ set_target_properties (CosmosWalletServer PROPERTIES CXX_EXTENSIONS OFF)
 
 # add_definitions ("-DHAS_BOOST")
 
-# option (PACKAGE_TESTS "Build the tests" ON)
+option (PACKAGE_TESTS "Build the tests" ON)
+include (CTest)
 
-#if (PACKAGE_TESTS)
-#    include (CTest)
-#    find_package (GTest REQUIRED)
-#    enable_testing ()
-#    add_subdirectory (test)
-#endif ()
+if (PACKAGE_TESTS)
+  include (CTest)
+  # Check if GTests is installed. If not, install it
+  FetchContent_Declare (
+    googletest
+    GIT_REPOSITORY https://github.com/google/googletest.git
+    GIT_TAG v1.14.0
+  )
+
+  set (gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+  FetchContent_MakeAvailable (googletest)
+  enable_testing ()
+  add_subdirectory (test)
+endif ()
 
 install (DIRECTORY include/ DESTINATION include)
 install (TARGETS cosmos_lib)
