@@ -789,7 +789,7 @@ R"--(<!DOCTYPE html>
 
     async function callGenerate () {
       const elements = document.getElementById ('form-generate').elements;
-      var target = '/generate' + elements["wallet-name"].value + '?'
+      var target = '/generate/' + elements["wallet-name"].value + '?'
 
       // Whether we use a mnemonic at all. 
       if (elements["mnemonic"].checked) {

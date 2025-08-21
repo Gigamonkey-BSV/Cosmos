@@ -131,6 +131,7 @@ add_executable (
     source/server/server.cpp
     source/server/invert_hash.cpp
     source/server/key.cpp
+    source/server/generate.cpp
     source/Server.cpp
 )
 

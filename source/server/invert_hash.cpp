@@ -7,6 +7,15 @@
 
 using hash_function = Cosmos::hash_function;
 
+std::ostream &operator << (std::ostream &o, digest_format form) {
+    switch (form) {
+        HEX: return o << "hex";
+        BASE58_CHECK: return o << "base58_check";
+        BASE64: return o << "base64";
+        default: return o << "invalid";
+    }
+}
+
 template <size_t size>
 std::function<bytes (data::byte_slice)> inline get_hash_fn (crypto::digest<size> (*hash_fn) (data::byte_slice)) {
     return [hash_fn] (data::byte_slice bb) -> bytes {
@@ -23,16 +32,10 @@ net::HTTP::response invert_hash (server &p,
     const maybe<net::HTTP::content> &content_type,
     const data::bytes &body) {
 
-    hash_function HashFunction {hash_function::invalid};
-
-    enum class digest_format {
-        unset, 
-        HEX,
-        BASE58_CHECK, 
-        BASE64
-    } DigestFormat {digest_format::unset};
     if (http_method != net::HTTP::method::post && http_method != net::HTTP::method::get) 
         return error_response (405, method::INVERT_HASH, problem::invalid_method, "use post or get");
+
+    hash_function HashFunction {hash_function::invalid};
 
     // Which hash function do we use? 
     const UTF8 *hash_function_param = query.contains ("function");
@@ -50,6 +53,8 @@ net::HTTP::response invert_hash (server &p,
         else return error_response (400, method::INVERT_HASH, problem::invalid_query, "invalid parameter 'function'");
     } else if (http_method == net::HTTP::method::post)
         return error_response (400, method::INVERT_HASH, problem::missing_parameter, "missing required parameter 'function'");
+
+    digest_format DigestFormat {digest_format::unset};
 
     // there are some options in terms of how the hash digest is formatted.
     const UTF8 *digest_format_param = query.contains ("digest_format");

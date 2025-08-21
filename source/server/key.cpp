@@ -4,10 +4,10 @@
 
 std::ostream &operator << (std::ostream &o, key_type k) {
     switch (k) {
-        case key_type::secp256k1: return o << "key type secp256k1";
-        case key_type::WIF: return o << "key type WIF";
-        case key_type::xpriv: return o << "key type xpriv";
-        default: return o << "invalid key type";
+        case key_type::secp256k1: return o << "secp256k1";
+        case key_type::WIF: return o << "WIF";
+        case key_type::xpriv: return o << "xpriv";
+        default: return o << "invalid";
     }
 }
 
@@ -92,6 +92,7 @@ net::HTTP::response key (server &p,
         return error_response (400, method::KEY, problem::invalid_query);
 
     if (http_method == net::HTTP::method::get) {
+        // when we get a key, none of these parameters are needed.
         if (KeyType != key_type::unset)
             return error_response (400, method::KEY, problem::invalid_query);
 
@@ -104,6 +105,7 @@ net::HTTP::response key (server &p,
         if (bool (content_type))
             return error_response (400, method::KEY, problem::invalid_query);
 
+        // TODO we expect to use content-type text/plain.
         return error_response (501, method::KEY, problem::unimplemented);
 
     } else if (http_method == net::HTTP::method::post) {

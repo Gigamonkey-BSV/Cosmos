@@ -18,6 +18,7 @@ add_executable (unit_tests
     ../source/server/server.cpp
     ../source/server/key.cpp
     ../source/server/invert_hash.cpp
+    ../source/server/generate.cpp
     server.cpp
 )
 

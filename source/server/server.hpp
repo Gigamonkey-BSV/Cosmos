@@ -51,6 +51,8 @@ struct server {
     tuple<Bitcoin::TXID, wallet_info> spend (const instruction &);*/
 
 private:
+    // TODO it would be good to have a way of doing deterministic randomness
+    // to make testing easier.
     ptr<crypto::fixed_entropy> FixedEntropy {nullptr};
     ptr<crypto::entropy> Entropy {nullptr};
     ptr<crypto::NIST::DRBG> SecureRandom {nullptr};
@@ -59,6 +61,7 @@ private:
 };
 
 maybe<bool> read_bool (const std::string &utf8);
+bool parse_uint32 (const std::string &str, uint32_t &result);
 
 net::HTTP::response favicon ();
 net::HTTP::response HTML_JS_UI_response ();
@@ -70,6 +73,10 @@ net::HTTP::response inline ok_response () {
 
 net::HTTP::response inline JSON_response (const JSON &j) {
     return net::HTTP::response (200, {{"content-type", "application/json"}}, bytes (data::string (j.dump ())));
+}
+
+net::HTTP::response inline string_response (const string &str) {
+    return net::HTTP::response (200, {{"content-type", "text/plain"}}, bytes (str));
 }
 
 net::HTTP::response inline boolean_response (bool b) {
