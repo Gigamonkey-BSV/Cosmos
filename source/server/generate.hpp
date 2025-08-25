@@ -23,19 +23,20 @@ enum class wallet_style {
     experimental
 };
 
-struct generate_options {
-    std::string Name {};
+struct generate_request_options {
+    std::string Name;
     ::wallet_style WalletStyle {::wallet_style::BIP_44};
     maybe<uint32> CoinTypeDerivationParameter {HD::BIP_44::coin_type_Bitcoin};
     ::mnemonic_style MnemonicStyle {mnemonic_style::none};
     uint32 NumberOfWords {12};
 
-    generate_options &name (const std::string &name);
-    generate_options &wallet_style (::wallet_style);
-    generate_options &mnemonic_style (::mnemonic_style);
-    generate_options &number_of_words (uint32);
-    generate_options &coin_type (uint32);
-    generate_options &coin_type_none ();
+    generate_request_options (const std::string &name): Name {name} {}
+
+    generate_request_options &wallet_style (::wallet_style);
+    generate_request_options &mnemonic_style (::mnemonic_style);
+    generate_request_options &number_of_words (uint32);
+    generate_request_options &coin_type (uint32);
+    generate_request_options &coin_type_none ();
 
     // make a generate request
     operator net::HTTP::request () const;
@@ -49,32 +50,27 @@ net::HTTP::response handle_generate (server &p,
     const maybe<net::HTTP::content> &content_type,
     const data::bytes &body);
 
-generate_options inline &generate_options::name (const std::string &name) {
-    Name = name;
-    return *this;
-}
-
-generate_options inline &generate_options::wallet_style (::wallet_style wx) {
+generate_request_options inline &generate_request_options::wallet_style (::wallet_style wx) {
     WalletStyle = wx;
     return *this;
 }
 
-generate_options inline &generate_options::mnemonic_style (::mnemonic_style mnx) {
+generate_request_options inline &generate_request_options::mnemonic_style (::mnemonic_style mnx) {
     MnemonicStyle = mnx;
     return *this;
 }
 
-generate_options inline &generate_options::number_of_words (uint32 n) {
+generate_request_options inline &generate_request_options::number_of_words (uint32 n) {
     NumberOfWords = n;
     return *this;
 }
 
-generate_options inline &generate_options::coin_type (uint32 u) {
+generate_request_options inline &generate_request_options::coin_type (uint32 u) {
     CoinTypeDerivationParameter = u;
     return *this;
 }
 
-generate_options inline &generate_options::coin_type_none () {
+generate_request_options inline &generate_request_options::coin_type_none () {
     CoinTypeDerivationParameter = {};
     return *this;
 }

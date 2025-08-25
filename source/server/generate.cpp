@@ -4,15 +4,15 @@
 
 #include <gigamonkey/schema/bip_39.hpp>
 
-generate_options::operator net::HTTP::request () const {
+generate_request_options::operator net::HTTP::request () const {
     std::stringstream query_stream;
     query_stream << "?wallet_style=" << WalletStyle;
     if (!bool (CoinTypeDerivationParameter)) query_stream << "&coin_type=none";
     else query_stream << "&coin_type=" << *CoinTypeDerivationParameter;
     if (MnemonicStyle != mnemonic_style::none)
         query_stream << "&mnemonic_style=" << MnemonicStyle << "&number_of_words=" << NumberOfWords;
-    return net::HTTP::request (net::HTTP::request::make {}.path (
-        string::write ("/generate/", Name)).query (query_stream.str ()));
+    return net::HTTP::request::make {}.path (
+        string::write ("/generate/", Name)).query (query_stream.str ()).host ("localhost");
 }
 
 std::ostream &operator << (std::ostream &o, wallet_style x) {

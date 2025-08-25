@@ -11,7 +11,39 @@ std::ostream &operator << (std::ostream &o, key_type k) {
     }
 }
 
-net::HTTP::response key (server &p,
+key_request_options::operator net::HTTP::request () const {
+    auto make = net::HTTP::request::make {}.path ("/key").host ("localhost");
+    std::stringstream query_stream;
+    query_stream << "?name=" << KeyName;
+
+    if (!bool (HTTPMethod)) throw data::exception {} << "No HTTP method provided for method key";
+
+    make = make.method (*HTTPMethod);
+
+    if (bool (KeyType)) {
+        query_stream << "&type=" << KeyType;
+        if (*KeyType != key_type::unset && *KeyType != key_type::secp256k1) {
+            if (Net == Bitcoin::net::Main) query_stream << "&net=main";
+            else query_stream << "&net=test";
+        }
+    }
+
+    if (bool (Body)) {
+        if (*HTTPMethod != net::HTTP::method::post) throw data::exception {} << "On method key, if a body is provided then HTTP method must be POST";
+        if (bool (KeyType) && *KeyType != key_type::unset)
+            throw data::exception {} << "On method key, if a body is provided then key_type must not be provided";
+    } else if (!bool (KeyType) || *KeyType == key_type::unset)
+        throw data::exception {} << "On method key, no key_type provided";
+
+    make = make.body (Body);
+
+    if (*HTTPMethod != net::HTTP::method::get)
+        throw data::exception {} << "On method key, if no body is provided, then HTTP method must be GET";
+
+    return make.query (query_stream.str ());
+}
+
+net::HTTP::response handle_key (server &p,
     net::HTTP::method http_method, map<UTF8, UTF8> query,
     const maybe<net::HTTP::content> &content_type,
     const data::bytes &body)     {
@@ -26,44 +58,19 @@ net::HTTP::response key (server &p,
     if (!key_name.valid ())
         return error_response (400, method::KEY, problem::invalid_parameter, "parameter 'name' must be alpha alnum+");
 
-    key_generation_method Method;
-
-    {
-        const UTF8 *method_val = query.contains ("method");
-        if (bool (method_val)) {
-            std::string method_san = sanitize (*method_val);
-            if (method_san == "random") Method = key_generation_method::random;
-            else if (method_san == "expression") Method = key_generation_method::expression;
-            else return error_response (400, method::KEY, problem::invalid_query, "invalid parameter 'type'");
-        }
-
-        if (bool (content_type)) {
-            if (bool (method_val) && Method == key_generation_method::random)
-                return error_response (400, method::KEY, problem::invalid_query);
-            Method = key_generation_method::expression;
-        } else {
-            if (bool (method_val) && Method == key_generation_method::expression)
-                return error_response (400, method::KEY, problem::invalid_query);
-            Method = key_generation_method::random;
-        }
-    }
-
-    // after this point, Method is set as some definite value and is not garbage.
-
     key_type KeyType {key_type::unset};
 
     const UTF8 *key_type = query.contains ("type");
     if (bool (key_type)) {
-        if (Method == key_generation_method::expression)
-            return error_response (400, method::KEY, problem::invalid_query);
         std::string key_type_san = sanitize (*key_type);
         if (key_type_san == "secp256k1") KeyType = key_type::secp256k1;
         else if (key_type_san == "wif") KeyType = key_type::WIF;
         else if (key_type_san == "xpriv") KeyType = key_type::xpriv;
-        else return error_response (400, method::KEY, problem::invalid_query, "invalid parameter 'type'");
+        else if (key_type_san != "unset")
+            return error_response (400, method::KEY, problem::invalid_query, "invalid parameter 'type'");
     }
 
-    if (Method == key_generation_method::expression && KeyType != key_type::unset)
+    if (bool (content_type) && KeyType != key_type::unset)
         return error_response (400, method::KEY, problem::invalid_query);
 
     Bitcoin::net net = Bitcoin::net::Main;
@@ -75,7 +82,7 @@ net::HTTP::response key (server &p,
         else return error_response (400, method::KEY, problem::invalid_query, "invalid parameter 'net'");
     }
 
-    if (Method == key_generation_method::expression && bool (net_type_param))
+    if (bool (content_type) && bool (net_type_param))
         return error_response (400, method::KEY, problem::invalid_query);
 
     bool compressed = true;
@@ -87,7 +94,7 @@ net::HTTP::response key (server &p,
         compressed = *maybe_compressed;
     }
 
-    if (bool (compressed_param) && (Method == key_generation_method::expression ||
+    if (bool (compressed_param) && (bool (content_type) ||
         (KeyType != key_type::WIF && KeyType != key_type::xpriv)))
         return error_response (400, method::KEY, problem::invalid_query);
 
@@ -112,11 +119,11 @@ net::HTTP::response key (server &p,
 
         key_expression key_expr;
 
-        if (Method == key_generation_method::expression) {
+        if (bool (content_type)) {
             if (KeyType != key_type::unset)
                 return error_response (400, method::KEY, problem::invalid_query, "key type will be inferred from the expression provided");
 
-            if (!bool (content_type) || *content_type != net::HTTP::content::type::text_plain)
+            if (*content_type != net::HTTP::content::type::text_plain)
                 return error_response (400, method::KEY, problem::invalid_content_type, "expected content-type:text/plain");
 
             key_expr = key_expression {data::string (body)};

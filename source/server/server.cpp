@@ -203,7 +203,7 @@ net::HTTP::response process_method (
     if (m == method::INVERT_HASH) return invert_hash (p, http_method, query, content_type, body); 
 
     // Associate a secret key with a name. The key could be anything; private, public, or symmetric. 
-    if (m == method::KEY) return key (p, http_method, query, content_type, body);
+    if (m == method::KEY) return handle_key (p, http_method, query, content_type, body);
 
     if (m == method::TO_PRIVATE) {
         if (http_method == net::HTTP::method::post) {

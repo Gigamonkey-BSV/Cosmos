@@ -13,11 +13,11 @@ bool options::offline () const {
     return this->has ("offline");
 }
 
-bool has_accept_remote (const options &o) {
+bool has_accept_remote (const arg_parser &o) {
     return o.has ("accept_remote");
 }
 
-maybe<net::IP::TCP::endpoint> read_endpoint_option (const options &o) {
+maybe<net::IP::TCP::endpoint> read_endpoint_option (const arg_parser &o) {
     maybe<net::IP::TCP::endpoint> endpoint;
     o.get ("endpoint", endpoint);
     if (!bool (endpoint)) {
@@ -32,7 +32,7 @@ maybe<net::IP::TCP::endpoint> read_endpoint_option (const options &o) {
     return endpoint;
 }
 
-maybe<net::IP::address> read_ip_address_option (const options &o) {
+maybe<net::IP::address> read_ip_address_option (const arg_parser &o) {
     maybe<net::IP::address> ip_address;
     
     o.get ("ip_address", ip_address);
@@ -48,23 +48,20 @@ maybe<net::IP::address> read_ip_address_option (const options &o) {
     return ip_address;
 }
 
-maybe<uint16> read_port_option (const options &o) {
+maybe<uint16> read_port_option (const arg_parser &o) {
     maybe<uint16> port_number;
 
     o.get ("port", port_number);
     if (!bool (port_number)) {
-        std::cout << "no port number provided on arg string" << std::endl;
         const char *pn = std::getenv ("COSMOS_WALLET_PORT_NUMBER");
 
         if (bool (pn)) {
-            std::cout << "found env port number \"" << pn << "\"" << std::endl;
             unsigned int read_port_number;
             auto [_, ec] = std::from_chars (pn, pn + std::strlen (pn), read_port_number);
             if (ec != std::errc ()) throw data::exception {} << "invalid port number " << pn;
             if (read_port_number > std::numeric_limits<uint16>::max ())
                 throw data::exception {} << "Port number is too big to be a uint16";
             port_number = static_cast<uint16> (read_port_number);
-            std::cout << "port_number is " << port_number << std::endl;
         }
     }
 
@@ -107,7 +104,6 @@ net::IP::address options::ip_address () const {
 
 uint16 options::port () const {
     maybe<net::IP::TCP::endpoint> endpoint = read_endpoint_option (*this);
-    std::cout << "reading port option" << std::endl;
     maybe<uint16> port = read_port_option (*this);
 
     // if these are both provided, they must be consistent. 
@@ -181,7 +177,7 @@ db_options options::db_options () const {
         throw data::exception {} << "No SQLite database path provided.";
 
     if (param_in_memory)
-        std::cout << "warning: SQLite database is in-memory. All information will be erased on program exit." << std::endl; 
+        std::cout << "WARNING: SQLite database is in-memory. All information will be erased on program exit." << std::endl;
 
     return sqlite;
 }

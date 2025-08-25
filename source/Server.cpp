@@ -321,7 +321,7 @@ R"--(<!DOCTYPE html>
   <h2>Basic Functions</h2>
 
   <details>
-    <summary>version</summary>
+    <summary>Version</summary>
     <p>Get version string.</p>
     <code>GET /version</code>
     <form id="form-version">
@@ -331,7 +331,7 @@ R"--(<!DOCTYPE html>
   </details>
 
   <details>
-  <summary>help</summary>
+  <summary>Help</summary>
     <p>General help or get help with a specific function.</p>
     <p>
       <code>GET /help</code>
@@ -345,7 +345,7 @@ R"--(<!DOCTYPE html>
       <br>
       <label><input type="radio" name="method" value="invert_hash" onclick="toggleRadio(this)">invert_hash</label>
       <br>
-      <label><input type="radio" name="ethod" value="add_key" onclick="toggleRadio(this)">add_key</label>
+      <label><input type="radio" name="method" value="add_key" onclick="toggleRadio(this)">add_key</label>
       <br>
       <label><input type="radio" name="method" value="to_private" onclick="toggleRadio(this)">to_private</label>
       <br>
@@ -367,7 +367,7 @@ R"--(<!DOCTYPE html>
   </details>
 
   <details>
-    <summary>shutdown</summary>
+    <summary>Shutdown</summary>
     <p>
       Shutdown the program.
     </p>
@@ -381,7 +381,7 @@ R"--(<!DOCTYPE html>
   </details>
 
   <details>
-    <summary>add_entropy</summary>
+    <summary>Add Entropy</summary>
     <p>
       The cryptographic random number generator needs entropy periodically. Here we add it manually.
       Type in some random text with your fingers to provide it.
@@ -471,9 +471,9 @@ R"--(<!DOCTYPE html>
       <br>
       <label><input type="radio" name="method-type" value="random-xpriv">random xpriv</label>
       <br>
-      <button type="button" id="submit-set_key" onclick="callKey ()">Set Key</button>
+      <button type="button" id="submit-key" onclick="callKey ()">Set Key</button>
     </form>
-    <pre id="output-set_key"></pre>
+    <pre id="output-key"></pre>
   </details>
 
   <details>
@@ -544,6 +544,19 @@ R"--(<!DOCTYPE html>
     <p>
       Generate a wallet.
     </p>
+    <p>
+      <code>POST /generate/<i>wallet name</i>?<i>option</i>=<i>value</i>&<i>...</i></code>
+      <br>
+      Query options:
+      <ul>
+        <li><code>wallet_style=BIP_44|BIP_44+|experimental</code></li>
+        <li><code>derivation_style=BIP_44|centbee</code><li>
+        <li><code>coin_type=Bitcoin|Bitcoin_Cash|Bitcoin_SV|none</code>
+        <li><code>mnemonic_style=BIP_39|Electrum_SV|none</code></li>
+        <li><code>number_of_words=12|24</code></li>
+      </ul>
+      Response is an error if the operation fails. If it succeeds, it is the mnemonic string if one was requested, otherwise it is empty.
+    </p>
     <form id="form-generate">
       <b>wallet name: </b><input name="wallet_name" type="text">
       <br>
@@ -568,15 +581,15 @@ R"--(<!DOCTYPE html>
       <label>
       </label>
       <br>
-      <label><input type="radio" name="wallet_type" value="BIP_44" onclick="toggleRadio(this)">
+      <label><input type="radio" name="wallet_style" value="BIP_44" onclick="toggleRadio(this)">
         bip 44
       </label>
       <br>
-      <label><input type="radio" name="wallet_type" value="BIP_44+" onclick="toggleRadio(this)" checked>
+      <label><input type="radio" name="wallet_style" value="BIP_44+" onclick="toggleRadio(this)" checked>
         bip 44+
       </label>
       <br>
-      <label><input type="radio" name="wallet_type" value="experimental" onclick="toggleRadio(this)">
+      <label><input type="radio" name="wallet_style" value="experimental" onclick="toggleRadio(this)">
         experimental
       </label>
       <br>

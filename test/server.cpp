@@ -9,8 +9,8 @@
 
 std::atomic<bool> Shutdown {false};
 
-int arg_count = 0;
-const char *const arg_values[] = {};
+constexpr const int arg_count = 1;
+constexpr const char *const arg_values[arg_count] = {"--sqlite_in_memory"};
 
 server get_test_server () {
     Shutdown = false;
@@ -34,7 +34,6 @@ TEST (ServerTest, TestShutdown) {
     EXPECT_TRUE (Shutdown);
 }
 
-net::HTTP::request make_generate_random_key_request (const std::string &, key_type = key_type::unset);
 net::HTTP::request make_set_entropy_request (const string &entropy);
 bool is_bool_response (bool expected, const net::HTTP::response &);
 
@@ -42,7 +41,7 @@ TEST (ServerTest, TestEntropy) {
     auto test_server = get_test_server ();
 
     // fail to generate a random key.
-    ASSERT_TRUE (is_error (make_request (test_server,  make_generate_random_key_request ("X"))));
+    ASSERT_TRUE (is_error (make_request (test_server,  get_key_request ("X"))));
 
     // initialize random number generator.
     auto initialize_response = make_request (test_server, make_set_entropy_request ("abcd"));
@@ -50,7 +49,7 @@ TEST (ServerTest, TestEntropy) {
     ASSERT_TRUE (is_bool_response (true, initialize_response));
 
     // suceed at generating a random key
-    EXPECT_FALSE (is_error (make_request (test_server, make_generate_random_key_request ("X"))));
+    EXPECT_FALSE (is_error (make_request (test_server,  get_key_request ("X"))));
 }
 
 server prepare (server, const string &entropy = "abcdwxyz");
@@ -74,8 +73,6 @@ TEST (ServerTest, TestInvertHash) {
 
 }
 
-net::HTTP::request make_retrieve_key_request (const std::string &key_name);
-
 // TODO these are incomplete.
 net::HTTP::request make_to_private_get_request (const key_expression &k) {
     return net::HTTP::request (net::HTTP::request::make {}.method (net::HTTP::method::get).path ("/to_private"));
@@ -91,20 +88,20 @@ TEST (ServerTest, TestKey) {
     auto test_server = prepare (get_test_server ());
 
     // attempt to retrieve a key that hasn't been entered yet.
-    EXPECT_TRUE (is_error (make_request (test_server, make_retrieve_key_request ("X"))));
+    EXPECT_TRUE (is_error (make_request (test_server, get_key_request ("X"))));
 
     // generate keys of different types and retrieve them.
-    EXPECT_TRUE (is_error (make_request (test_server, make_generate_random_key_request ("X", key_type::secp256k1))));
-    EXPECT_TRUE (is_error (make_request (test_server, make_generate_random_key_request ("Y", key_type::WIF))));
-    EXPECT_TRUE (is_error (make_request (test_server, make_generate_random_key_request ("Z", key_type::xpriv))));
+    EXPECT_TRUE (is_error (make_request (test_server, post_key_request ("X", key_type::secp256k1))));
+    EXPECT_TRUE (is_error (make_request (test_server, post_key_request ("Y", key_type::WIF))));
+    EXPECT_TRUE (is_error (make_request (test_server, post_key_request ("Z", key_type::xpriv))));
 
     key_expression secret_X;
     key_expression secret_Y;
     key_expression secret_Z;
 
-    EXPECT_NO_THROW (secret_X = read_key_expression (make_request (test_server, make_retrieve_key_request ("X"))));
-    EXPECT_NO_THROW (secret_Y = read_key_expression (make_request (test_server, make_retrieve_key_request ("Y"))));
-    EXPECT_NO_THROW (secret_Z = read_key_expression (make_request (test_server, make_retrieve_key_request ("Z"))));
+    EXPECT_NO_THROW (secret_X = read_key_expression (make_request (test_server, get_key_request ("X"))));
+    EXPECT_NO_THROW (secret_Y = read_key_expression (make_request (test_server, get_key_request ("Y"))));
+    EXPECT_NO_THROW (secret_Z = read_key_expression (make_request (test_server, get_key_request ("Z"))));
 
     EXPECT_TRUE (data::valid (secret_X));
     EXPECT_TRUE (data::valid (secret_Y));
@@ -145,22 +142,22 @@ TEST (ServerTest, TestGenerate) {
     // generate a wallet of each type
     // we should simply get a bool response when we don't request the restoration words.
     EXPECT_TRUE (is_bool_response (true, make_request (test_server,
-        generate_options {}.name ("A").wallet_style (wallet_style::BIP_44))));
+        generate_request_options {"A"}.wallet_style (wallet_style::BIP_44))));
     EXPECT_TRUE (is_bool_response (true, make_request (test_server,
-        generate_options {}.name ("B").wallet_style (wallet_style::BIP_44_plus))));
+        generate_request_options {"B"}.wallet_style (wallet_style::BIP_44_plus))));
     EXPECT_TRUE (is_bool_response (true, make_request (test_server,
-        generate_options {}.name ("C").wallet_style (wallet_style::experimental))));
+        generate_request_options {"C"}.wallet_style (wallet_style::experimental))));
 
     maybe<std::string> maybe_words_D = read_string (make_request (test_server,
-        generate_options {}.name ("D").wallet_style (wallet_style::BIP_44).mnemonic_style (mnemonic_style::BIP_39)));
+        generate_request_options {"D"}.wallet_style (wallet_style::BIP_44).mnemonic_style (mnemonic_style::BIP_39)));
     EXPECT_TRUE (bool (maybe_words_D));
 
     maybe<std::string> maybe_words_E = read_string (make_request (test_server,
-        generate_options {}.name ("E").wallet_style (wallet_style::BIP_44_plus).mnemonic_style (mnemonic_style::BIP_39)));
+        generate_request_options {"E"}.wallet_style (wallet_style::BIP_44_plus).mnemonic_style (mnemonic_style::BIP_39)));
     EXPECT_TRUE (bool (maybe_words_E));
 
     maybe<std::string> maybe_words_F = read_string (make_request (test_server,
-        generate_options {}.name ("F").wallet_style (wallet_style::experimental).mnemonic_style (mnemonic_style::BIP_39)));
+        generate_request_options {"F"}.wallet_style (wallet_style::experimental).mnemonic_style (mnemonic_style::BIP_39)));
     EXPECT_TRUE (bool (maybe_words_F));
 
     // for each wallet, generate a new address of receive and change
@@ -251,7 +248,11 @@ maybe<std::string> read_string (const net::HTTP::response &r) {
 }
 
 net::HTTP::request make_shutdown_request () {
-    return net::HTTP::request (net::HTTP::request::make {}.method (net::HTTP::method::get).path ("/shutdown"));
+    return net::HTTP::request::make {}.method (
+        net::HTTP::method::get
+    ).path (
+        "/shutdown"
+    ).host ("localhost");
 }
 
 net::error read_error (const net::HTTP::response &r) {
@@ -281,19 +282,14 @@ net::HTTP::request make_set_entropy_request (const string &entropy) {
         ).body (bytes (entropy)));
 }
 
-net::HTTP::request make_generate_random_key_request (const std::string &x, key_type k) {
-    return net::HTTP::request (net::HTTP::request::make ().method (net::HTTP::method::post).path ("/key").query (
-        data::string::write ("method=random&type=", k, "&name=", x)));
-}
-
 template <size_t x> net::HTTP::request request_get_invert_hash (const data::crypto::digest<x> &d, digest_format format) {
-    return net::HTTP::request (net::HTTP::request::make ().method (net::HTTP::method::get).path ("/invert_hash").query (
-        data::string::write ("digest_format=", format, "&digest=", encoding::hex::write (d))));
+    return net::HTTP::request::make ().method (net::HTTP::method::get).path ("/invert_hash").query (
+        data::string::write ("digest_format=", format, "&digest=", encoding::hex::write (d))).host ("localhost");
 }
 
 template <size_t x> net::HTTP::request request_post_invert_hash (Cosmos::hash_function f, const std::string &data) {
-    return net::HTTP::request (net::HTTP::request::make ().method (net::HTTP::method::post).path ("/invert_hash").query (
-        data::string::write ("function=", f)).body (data));
+    return net::HTTP::request::make ().method (net::HTTP::method::post).path ("/invert_hash").query (
+        data::string::write ("function=", f)).body (data).host ("localhost");
 }
 
 template <size_t x> maybe<data::crypto::digest<x>> read_digest (const net::HTTP::response &r) {
@@ -306,11 +302,6 @@ template <size_t x> maybe<data::crypto::digest<x>> read_digest (const net::HTTP:
     if (!bool (data) || data->size () != x) return {};
     std::copy (data->begin (), data->end (), d.begin ());
     return d;
-}
-
-net::HTTP::request make_retrieve_key_request (const std::string &key_name) {
-    return net::HTTP::request (net::HTTP::request::make ().method (net::HTTP::method::get).path ("/key").query (
-        data::string::write ("name=", key_name)));
 }
 
 key_expression read_key_expression (const net::HTTP::response &r) {
