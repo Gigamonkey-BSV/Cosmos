@@ -18,10 +18,10 @@ server get_test_server () {
 }
 
 net::HTTP::request make_shutdown_request ();
-net::error read_error (const net::HTTP::response &);
+maybe<net::error> read_error (const net::HTTP::response &);
 
 bool is_error (const net::HTTP::response &r) {
-    return read_error (r).valid ();
+    return bool (read_error (r));
 }
 
 net::HTTP::response make_request (server &x, const net::HTTP::request &r) {
@@ -37,6 +37,10 @@ TEST (ServerTest, TestShutdown) {
 net::HTTP::request make_set_entropy_request (const string &entropy);
 bool is_bool_response (bool expected, const net::HTTP::response &);
 
+bool is_ok_response (const net::HTTP::response &r) {
+    return !bool (r.content_type ()) && r.Body == bytes {} && r.Status == 204;
+}
+
 TEST (ServerTest, TestEntropy) {
     auto test_server = get_test_server ();
 
@@ -44,9 +48,7 @@ TEST (ServerTest, TestEntropy) {
     ASSERT_TRUE (is_error (make_request (test_server,  get_key_request ("X"))));
 
     // initialize random number generator.
-    auto initialize_response = make_request (test_server, make_set_entropy_request ("abcd"));
-    ASSERT_FALSE (is_error (initialize_response));
-    ASSERT_TRUE (is_bool_response (true, initialize_response));
+    ASSERT_TRUE (is_ok_response (make_request (test_server, make_set_entropy_request ("abcd"))));
 
     // suceed at generating a random key
     EXPECT_FALSE (is_error (make_request (test_server,  get_key_request ("X"))));
@@ -249,15 +251,23 @@ maybe<std::string> read_string (const net::HTTP::response &r) {
 
 net::HTTP::request make_shutdown_request () {
     return net::HTTP::request::make {}.method (
-        net::HTTP::method::get
+        net::HTTP::method::put
     ).path (
         "/shutdown"
     ).host ("localhost");
 }
 
-net::error read_error (const net::HTTP::response &r) {
-    if (auto ct = r.content_type (); !bool (ct) || *ct != "application/problem+json") return {JSON ()};
-    return {JSON::parse (r.Body)};
+maybe<net::error> read_error (const net::HTTP::response &r) {
+    auto ct = r.content_type ();
+    if (!bool (ct)) return {};
+
+    if (*ct != "application/problem+json") return {};
+
+    auto j = JSON::parse (string (r.Body));
+
+    if (!net::error::valid (j)) return {};
+
+    return j;
 }
 
 maybe<bool> read_bool_response (const net::HTTP::response &r) {
@@ -274,12 +284,11 @@ bool is_bool_response (bool expected, const net::HTTP::response &r) {
 }
 
 net::HTTP::request make_set_entropy_request (const string &entropy) {
-    return net::HTTP::request (
-        net::HTTP::request::make {}.method (
+    return net::HTTP::request::make {}.method (
             net::HTTP::method::post
         ).path (
             "/set_entropy"
-        ).body (bytes (entropy)));
+        ).body (bytes (entropy)).host ("localhost");
 }
 
 template <size_t x> net::HTTP::request request_get_invert_hash (const data::crypto::digest<x> &d, digest_format format) {

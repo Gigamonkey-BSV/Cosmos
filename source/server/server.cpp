@@ -115,7 +115,7 @@ awaitable<net::HTTP::response> server::operator () (const net::HTTP::request &re
 
     if (m == method::HELP) {
         if (req.Method != net::HTTP::method::get)
-            co_return error_response (405, method::HELP, problem::invalid_method, "use get");
+            co_return error_response (405, method::HELP, problem::invalid_method, "use get with method help");
 
         if (path.size () == 1) co_return help_response ();
         else {
@@ -128,7 +128,7 @@ awaitable<net::HTTP::response> server::operator () (const net::HTTP::request &re
 
     if (m == method::SHUTDOWN) {
         if (req.Method != net::HTTP::method::put)
-            co_return error_response (405, method::SHUTDOWN, problem::invalid_method, "use put");
+            co_return error_response (405, method::SHUTDOWN, problem::invalid_method, "use put with method shutdown");
 
         Shutdown = true;
         co_return ok_response ();
@@ -136,7 +136,7 @@ awaitable<net::HTTP::response> server::operator () (const net::HTTP::request &re
 
     if (m == method::ADD_ENTROPY) {
         if (req.Method != net::HTTP::method::post)
-            co_return error_response (405, method::ADD_ENTROPY, problem::invalid_method, "use post");
+            co_return error_response (405, method::ADD_ENTROPY, problem::invalid_method, "use post with method add_entropy");
 
         maybe<net::HTTP::content> content_type = req.content_type ();
         if (!bool (content_type) || (

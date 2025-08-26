@@ -12,13 +12,22 @@ std::ostream &operator << (std::ostream &o, key_type k) {
 }
 
 key_request_options::operator net::HTTP::request () const {
-    auto make = net::HTTP::request::make {}.path ("/key").host ("localhost");
-    std::stringstream query_stream;
-    query_stream << "?name=" << KeyName;
 
     if (!bool (HTTPMethod)) throw data::exception {} << "No HTTP method provided for method key";
 
-    make = make.method (*HTTPMethod);
+    if (*HTTPMethod == net::HTTP::method::post) {
+        if (bool (Body) && bool (KeyType))
+            throw data::exception {} << "with HTTP method POST in method key, either HTTP body or parameter key type should be provided, not both";
+        if (!bool (Body) && !bool (KeyType))
+            throw data::exception {} << "with HTTP method POST in method key, either an HTTP body or parameter type key must be provided.";
+    } else if (*HTTPMethod == net::HTTP::method::get) {
+        if (bool (Body) || bool (KeyType))
+            throw data::exception {} << "HTTP body and parameter type are only allowed with HTTP method POST";
+    } else throw data::exception {} << "Only GET or POST is allowed with method key";
+
+    auto make = net::HTTP::request::make {}.path ("/key").host ("localhost").method (*HTTPMethod);
+    std::stringstream query_stream;
+    query_stream << "name=" << KeyName;
 
     if (bool (KeyType)) {
         query_stream << "&type=" << KeyType;
@@ -28,17 +37,7 @@ key_request_options::operator net::HTTP::request () const {
         }
     }
 
-    if (bool (Body)) {
-        if (*HTTPMethod != net::HTTP::method::post) throw data::exception {} << "On method key, if a body is provided then HTTP method must be POST";
-        if (bool (KeyType) && *KeyType != key_type::unset)
-            throw data::exception {} << "On method key, if a body is provided then key_type must not be provided";
-    } else if (!bool (KeyType) || *KeyType == key_type::unset)
-        throw data::exception {} << "On method key, no key_type provided";
-
-    make = make.body (Body);
-
-    if (*HTTPMethod != net::HTTP::method::get)
-        throw data::exception {} << "On method key, if no body is provided, then HTTP method must be GET";
+    if (bool (Body)) make = make.body (Body);
 
     return make.query (query_stream.str ());
 }
@@ -46,7 +45,9 @@ key_request_options::operator net::HTTP::request () const {
 net::HTTP::response handle_key (server &p,
     net::HTTP::method http_method, map<UTF8, UTF8> query,
     const maybe<net::HTTP::content> &content_type,
-    const data::bytes &body)     {
+    const data::bytes &body) {
+
+    std::cout << "responding to method key" << std::endl;
 
     const UTF8 *key_name_param = query.contains ("name");
     if (!bool (key_name_param))
@@ -129,12 +130,13 @@ net::HTTP::response handle_key (server &p,
             key_expr = key_expression {data::string (body)};
 
         } else {
+            std::cout << "Randomly generate a key" << std::endl;
             if (KeyType != key_type::unset)
                 return error_response (400, method::KEY, problem::invalid_query, "need a key type to tell us what to generate");
 
             if (bool (content_type))
                 return error_response (400, method::KEY, problem::invalid_query, "no body when we generate random keys");
-
+            std::cout << "byuuub zuuub" << std::endl;
             crypto::entropy &random = p.get_secure_random ();
             secp256k1::secret key;
             random >> key.Value;
