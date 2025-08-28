@@ -114,26 +114,26 @@ namespace sqlite_orm {
     };
 
     template <size_t size>
-    struct type_printer<data::crypto::digest<size>> {
+    struct type_printer<data::digest<size>> {
         static std::string print () {
             return "TEXT";
         }
     };
 
     template <size_t size>
-    struct statement_binder<data::crypto::digest<size>> {
-        int bind (sqlite3_stmt *stmt, int index, const data::crypto::digest<size> &value) const {
+    struct statement_binder<data::digest<size>> {
+        int bind (sqlite3_stmt *stmt, int index, const data::digest<size> &value) const {
             return sqlite3_bind_text (stmt, index, data::encoding::hex::write (value).c_str (), static_cast<int> (value.size () * 2), SQLITE_TRANSIENT);
         }
     };
 
     template <size_t size>
-    struct field_printer<data::crypto::digest<size>> {
-        static void print (std::ostream &os, const data::crypto::digest<size> &value) {
+    struct field_printer<data::digest<size>> {
+        static void print (std::ostream &os, const data::digest<size> &value) {
             os << "<text of size " << (value.size () * 2) << ">";
         }
 
-        std::string operator () (const data::crypto::digest<size>& value) const {
+        std::string operator () (const data::digest<size>& value) const {
             std::stringstream ss;
             ss << value;
             return ss.str ();
@@ -141,10 +141,10 @@ namespace sqlite_orm {
     };
 
     template <size_t size>
-    struct row_extractor<data::crypto::digest<size>> {
-        data::crypto::digest<size> extract (sqlite3_stmt *stmt, int columnIndex) const {
+    struct row_extractor<data::digest<size>> {
+        data::digest<size> extract (sqlite3_stmt *stmt, int columnIndex) const {
             std::string hex_text = std::string {reinterpret_cast<const char*> (sqlite3_column_text (stmt, columnIndex))};
-            return data::crypto::digest<size> {hex_text};
+            return data::digest<size> {hex_text};
         }
     };
 
@@ -252,7 +252,7 @@ namespace Cosmos::SQLite {
     using namespace std;
     using string = std::string;
     using namespace sqlite_orm;
-    using data::crypto::digest256;
+    using data::digest256;
 
     // database version.
     struct Version {

@@ -88,7 +88,10 @@ find_package (gigamonkey CONFIG REQUIRED)
 find_package (diophant CONFIG REQUIRED)
 
 add_library (
-    cosmos_lib STATIC
+    cosmos_lib
+
+    STATIC
+
     source/Cosmos/database/write.cpp
     source/Cosmos/database/price_data.cpp
     source/Cosmos/database/txdb.cpp
@@ -115,7 +118,17 @@ add_library (
 
 target_include_directories (cosmos_lib PUBLIC include)
 
-target_link_libraries (cosmos_lib PUBLIC nlohmann_json argh diophant gigamonkey Data::data secp256k1)
+target_link_libraries (
+  cosmos_lib
+
+  PUBLIC
+
+  diophant
+  Gigamonkey::gigamonkey
+  Data::data
+  nlohmann_json
+  argh
+  secp256k1)
 
 target_compile_features (cosmos_lib PUBLIC cxx_std_23)
 set_target_properties (cosmos_lib PROPERTIES CXX_EXTENSIONS OFF)
@@ -150,9 +163,13 @@ add_executable (
 #)
 
 target_link_libraries (
-    CosmosWalletServer PUBLIC
-    SQLite::SQLite3
-    cosmos_lib
+  CosmosWalletServer
+
+  PUBLIC
+
+  cosmos_lib
+  SQLite::SQLite3
+  Gigamonkey::gigamonkey
 )
 
 target_include_directories (

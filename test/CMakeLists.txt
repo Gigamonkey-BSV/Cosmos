@@ -8,18 +8,19 @@ endif ()
 
 include (GoogleTest)
 
-add_executable (unit_tests
-    ../source/random.cpp
-    ../source/Cosmos/database/SQLite.cpp
-    ../source/server/db.cpp
-    ../source/server/options.cpp
-    ../source/server/problem.cpp
-    ../source/server/method.cpp
-    ../source/server/server.cpp
-    ../source/server/key.cpp
-    ../source/server/invert_hash.cpp
-    ../source/server/generate.cpp
-    server.cpp
+add_executable (
+  unit_tests
+  ../source/random.cpp
+  ../source/Cosmos/database/SQLite.cpp
+  ../source/server/db.cpp
+  ../source/server/options.cpp
+  ../source/server/problem.cpp
+  ../source/server/method.cpp
+  ../source/server/server.cpp
+  ../source/server/key.cpp
+  ../source/server/invert_hash.cpp
+  ../source/server/generate.cpp
+  server.cpp
 )
 
 target_include_directories (
@@ -29,11 +30,13 @@ target_include_directories (
 )
 
 target_link_libraries (
-    unit_tests
-    PRIVATE
-    SQLite::SQLite3
-    cosmos_lib
-    gtest_main
+  unit_tests
+
+  PRIVATE
+
+  SQLite::SQLite3
+  cosmos_lib
+  gtest_main
 )
 
 gtest_discover_tests (unit_tests)

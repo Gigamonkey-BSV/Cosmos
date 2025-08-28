@@ -21,8 +21,8 @@ struct server {
 
     void add_entropy (const bytes &);
 
-    crypto::entropy &get_secure_random ();
-    crypto::entropy &get_casual_random ();
+    data::entropy &get_secure_random ();
+    data::entropy &get_casual_random ();
 
     Cosmos::spend_options SpendOptions;
 
@@ -53,10 +53,10 @@ struct server {
 private:
     // TODO it would be good to have a way of doing deterministic randomness
     // to make testing easier.
-    ptr<crypto::fixed_entropy> FixedEntropy {nullptr};
-    ptr<crypto::entropy> Entropy {nullptr};
+    ptr<data::fixed_entropy> FixedEntropy {nullptr};
+    ptr<data::entropy> Entropy {nullptr};
     ptr<crypto::NIST::DRBG> SecureRandom {nullptr};
-    ptr<crypto::linear_combination_random> CasualRandom {nullptr};
+    ptr<data::linear_combination_random> CasualRandom {nullptr};
 
 };
 

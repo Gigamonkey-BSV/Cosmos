@@ -5,23 +5,24 @@
 #  GMP_LIBRARIES_DIR     - directory where the GMP libraries are located
 #  GMP_LIBRARIES         - Link these to use GMP
 
-
-function(define_imported_target library headers)
-  if(NOT TARGET GMP::GMP)
-  add_library(GMP::GMP UNKNOWN IMPORTED)
-  set_target_properties(GMP::GMP PROPERTIES
+function (define_imported_target library headers)
+  if (NOT TARGET GMP::GMP)
+  add_library (GMP::GMP UNKNOWN IMPORTED)
+  set_target_properties (GMP::GMP PROPERTIES
     IMPORTED_LOCATION ${library}
     INTERFACE_INCLUDE_DIRECTORIES ${headers}
   )
+
   set(GMP_FOUND 1 CACHE INTERNAL "GMP found" FORCE)
   set(GMP_LIBRARIES ${library}
       CACHE STRING "Path to gmp library" FORCE)
   set(GMP_INCLUDES ${headers}
       CACHE STRING "Path to gmp headers" FORCE)
-  mark_as_advanced(FORCE GMP_LIBRARIES)
-  mark_as_advanced(FORCE GMP_INCLUDES)
-  endif()
-endfunction()
+  mark_as_advanced (FORCE GMP_LIBRARIES)
+  mark_as_advanced (FORCE GMP_INCLUDES)
+
+  endif ()
+endfunction ()
 
 # Accepting user-provided paths and reusing cached values
 if (GMP_LIBRARIES AND GMP_INCLUDES)
@@ -34,14 +35,14 @@ if(GMP_FIND_QUIETLY)
   set(QUIET_ARG QUIET)
 endif()
 
-set(REQUIRED_ARG)
-if(GMP_FIND_REQUIRED)
-  set(REQUIRED_ARG REQUIRED)
-endif()
+set (REQUIRED_ARG)
+if (GMP_FIND_REQUIRED)
+  set (REQUIRED_ARG REQUIRED)
+endif ()
 
-file(TO_CMAKE_PATH "$ENV{GMP_DIR}" _GMP_DIR)
+file (TO_CMAKE_PATH "$ENV{GMP_DIR}" _GMP_DIR)
 
-include(FindPackageHandleStandardArgs)
+include (FindPackageHandleStandardArgs)
 
   find_path(GMP_INCLUDE_DIR
             NAMES gmp.h

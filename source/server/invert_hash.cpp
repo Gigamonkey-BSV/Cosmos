@@ -17,9 +17,9 @@ std::ostream &operator << (std::ostream &o, digest_format form) {
 }
 
 template <size_t size>
-std::function<bytes (data::byte_slice)> inline get_hash_fn (crypto::digest<size> (*hash_fn) (data::byte_slice)) {
+std::function<bytes (data::byte_slice)> inline get_hash_fn (data::digest<size> (*hash_fn) (data::byte_slice)) {
     return [hash_fn] (data::byte_slice bb) -> bytes {
-        crypto::digest<size> dig = hash_fn (bb);
+        data::digest<size> dig = hash_fn (bb);
         bytes d;
         d.resize (size);
         std::copy (dig.begin (), dig.end (), d.begin ());

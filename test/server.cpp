@@ -56,14 +56,14 @@ TEST (ServerTest, TestEntropy) {
 
 server prepare (server, const string &entropy = "abcdwxyz");
 
-template <size_t x> net::HTTP::request request_get_invert_hash (const data::crypto::digest<x> &d, digest_format format = digest_format::HEX);
+template <size_t x> net::HTTP::request request_get_invert_hash (const data::digest<x> &d, digest_format format = digest_format::HEX);
 template <size_t x> net::HTTP::request request_post_invert_hash (Cosmos::hash_function, const std::string &data);
-template <size_t x> maybe<data::crypto::digest<x>> read_digest (const net::HTTP::response &);
+template <size_t x> maybe<data::digest<x>> read_digest (const net::HTTP::response &);
 
 TEST (ServerTest, TestInvertHash) {
     auto test_server = prepare (get_test_server ());
     std::string data_A = "Hi, this string will be hashed.";
-    data::crypto::digest256 digest_A = data::crypto::SHA2_256 (data_A);
+    data::digest256 digest_A = data::crypto::SHA2_256 (data_A);
 
     // attempt to retrieve data before it has been entered.
     ASSERT_TRUE (is_error (make_request (test_server, request_get_invert_hash (digest_A))));
@@ -291,7 +291,7 @@ net::HTTP::request make_set_entropy_request (const string &entropy) {
         ).body (bytes (entropy)).host ("localhost");
 }
 
-template <size_t x> net::HTTP::request request_get_invert_hash (const data::crypto::digest<x> &d, digest_format format) {
+template <size_t x> net::HTTP::request request_get_invert_hash (const data::digest<x> &d, digest_format format) {
     return net::HTTP::request::make ().method (net::HTTP::method::get).path ("/invert_hash").query (
         data::string::write ("digest_format=", format, "&digest=", encoding::hex::write (d))).host ("localhost");
 }
@@ -301,12 +301,12 @@ template <size_t x> net::HTTP::request request_post_invert_hash (Cosmos::hash_fu
         data::string::write ("function=", f)).body (data).host ("localhost");
 }
 
-template <size_t x> maybe<data::crypto::digest<x>> read_digest (const net::HTTP::response &r) {
+template <size_t x> maybe<data::digest<x>> read_digest (const net::HTTP::response &r) {
     auto j = read_JSON_response (r);
     if (!bool (j) || !j->is_object () || !j->contains ("data")) return {};
     const JSON &jd = (*j)["data"];
     if (!jd.is_string ()) return {};
-    data::crypto::digest<x> d;
+    data::digest<x> d;
     maybe<bytes> data = encoding::base64::read (std::string ((*j)["data"]));
     if (!bool (data) || data->size () != x) return {};
     std::copy (data->begin (), data->end (), d.begin ());

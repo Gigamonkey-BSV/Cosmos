@@ -137,7 +137,7 @@ net::HTTP::response handle_key (server &p,
             if (bool (content_type))
                 return error_response (400, method::KEY, problem::invalid_query, "no body when we generate random keys");
             std::cout << "byuuub zuuub" << std::endl;
-            crypto::entropy &random = p.get_secure_random ();
+            data::entropy &random = p.get_secure_random ();
             secp256k1::secret key;
             random >> key.Value;
 
