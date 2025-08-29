@@ -69,7 +69,7 @@ key_request_options inline &key_request_options::post () {
 }
 
 key_request_options inline &key_request_options::key_type (::key_type kk) {
-    KeyType == kk;
+    KeyType = kk;
     return *this;
 }
 

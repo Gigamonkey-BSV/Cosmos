@@ -34,24 +34,22 @@ TEST (ServerTest, TestShutdown) {
     EXPECT_TRUE (Shutdown);
 }
 
-net::HTTP::request make_set_entropy_request (const string &entropy);
+net::HTTP::request make_add_entropy_request (const string &entropy);
+bool is_ok_response (const net::HTTP::response &r);
 bool is_bool_response (bool expected, const net::HTTP::response &);
-
-bool is_ok_response (const net::HTTP::response &r) {
-    return !bool (r.content_type ()) && r.Body == bytes {} && r.Status == 204;
-}
+bool is_string_response (const net::HTTP::response &);
 
 TEST (ServerTest, TestEntropy) {
     auto test_server = get_test_server ();
 
     // fail to generate a random key.
-    ASSERT_TRUE (is_error (make_request (test_server,  get_key_request ("X"))));
+    ASSERT_TRUE (is_error (make_request (test_server, post_key_request ("X", key_type::secp256k1))));
 
     // initialize random number generator.
-    ASSERT_TRUE (is_ok_response (make_request (test_server, make_set_entropy_request ("abcd"))));
+    ASSERT_TRUE (is_ok_response (make_request (test_server, make_add_entropy_request ("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"))));
 
     // suceed at generating a random key
-    EXPECT_FALSE (is_error (make_request (test_server,  get_key_request ("X"))));
+    EXPECT_TRUE (is_string_response (make_request (test_server, post_key_request ("X", key_type::secp256k1))));
 }
 
 server prepare (server, const string &entropy = "abcdwxyz");
@@ -68,7 +66,7 @@ TEST (ServerTest, TestInvertHash) {
     // attempt to retrieve data before it has been entered.
     ASSERT_TRUE (is_error (make_request (test_server, request_get_invert_hash (digest_A))));
 
-    EXPECT_TRUE (is_bool_response (true, make_request (test_server,
+    EXPECT_TRUE (is_ok_response (make_request (test_server,
         request_post_invert_hash<32> (Cosmos::hash_function::SHA2_256, data_A))));
 
     EXPECT_EQ (digest_A, read_digest<32> (make_request (test_server, request_get_invert_hash (digest_A))));
@@ -214,8 +212,29 @@ TEST (ServerTest, TestWallet) {
 }
 
 server prepare (server x, const string &entropy) {
-    data::synced (&server::operator (), &x, make_set_entropy_request ("entropy"));
+    data::synced (&server::operator (), &x,
+        make_add_entropy_request ("entropyABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"));
     return x;
+}
+
+bool is_ok_response (const net::HTTP::response &r) {
+    bool ok = !bool (r.content_type ()) && r.Body == bytes {} && r.Status == 204;
+    if (ok) return true;
+    // check if this is an error response instead.
+    maybe<net::error> err = read_error (r);
+    if (bool (err))
+        std::cout << "Expected ok response but got error response " << *err << std::endl;
+    return false;
+}
+
+bool is_string_response (const net::HTTP::response &r) {
+    bool ok = bool (r.content_type ()) && *r.content_type () == "text/plain" && r.Status == 200;
+    if (ok) return true;
+    // check if this is an error response instead.
+    maybe<net::error> err = read_error (r);
+    if (bool (err))
+        std::cout << "Expected string response but got error response " << *err << std::endl;
+    return false;
 }
 
 net::HTTP::request make_list_wallets_request () {
@@ -283,11 +302,11 @@ bool is_bool_response (bool expected, const net::HTTP::response &r) {
     return *result = expected;
 }
 
-net::HTTP::request make_set_entropy_request (const string &entropy) {
+net::HTTP::request make_add_entropy_request (const string &entropy) {
     return net::HTTP::request::make {}.method (
             net::HTTP::method::post
         ).path (
-            "/set_entropy"
+            "/add_entropy"
         ).body (bytes (entropy)).host ("localhost");
 }
 

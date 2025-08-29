@@ -11,6 +11,9 @@ std::ostream &operator << (std::ostream &o, problem p) {
         case problem::invalid_target: return o << "could not read target to wallet resource";
         case problem::invalid_wallet_name: return o << "name argument required. Should be alpha alnum+";
         case problem::invalid_query: return o << "invalid query";
+        case problem::invalid_expression: return o << "invalid expression";
+        case problem::missing_parameter: return o << "missing_parameter";
+        case problem::invalid_parameter: return o << "invalid_parameter";
         case problem::failed: return o << "failed";
         case problem::unimplemented: return o << "unimplemented method";
         default: throw data::exception {} << "invalid problem...";

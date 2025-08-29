@@ -36,11 +36,7 @@ std::string sanitize (const std::string &in) {
 }
 
 method read_method (const UTF8 &p) {
-    UTF8 m = p;
-    std::transform (m.begin (), m.end (), m.begin (),
-        [] (unsigned char c) {
-            return std::tolower (c);
-        });
+    UTF8 m = sanitize (p);
 
     if (m == "help") return method::HELP;
     if (m == "version") return method::VERSION;

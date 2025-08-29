@@ -189,8 +189,10 @@ awaitable<net::HTTP::response> server::operator () (const net::HTTP::request &re
 
     } catch (const data::entropy::fail &) {
         co_return error_response (500, m, problem::need_entropy);
-    } catch (const Diophant::parse_error &) {
-        co_return error_response (400, m, problem::invalid_expression);
+    } catch (const Diophant::parse_error &w) {
+        co_return error_response (400, m,
+            problem::invalid_expression,
+            string::write ("an invalid Diophant expression was generated: ", w.what ()));
     }
 }
 

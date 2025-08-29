@@ -1,35 +1,6 @@
 # to build, use 'docker build -t cosmos .'.
 
-ENV DEBIAN_FRONTEND=noninteractive
-ARG DATA_VERSION
-ARG GIGAMONKEY_VERSION
-ARG NUM_JOBS=8
-
-RUN cmake --version
-
-# data
-WORKDIR /tmp
-ADD https://api.github.com/repos/DanielKrawisz/data/git/refs/heads/master /root/data.json
-RUN git clone --depth 1 --branch master https://github.com/DanielKrawisz/data.git
-WORKDIR /tmp/Gigamonkey
-RUN cmake -G Ninja -B build -S . -DPACKAGE_TESTS=OFF -DCMAKE_BUILD_TYPE=Release
-RUN cmake --build build -j 10
-RUN cmake --install build
-
-# Gigamonkey
-WORKDIR /tmp
-ADD https://api.github.com/repos/Gigamonkey-BSV/Gigamonkey/git/refs/heads/master /root/gigamonkey_version.json
-RUN git clone --depth 1 --branch master https://github.com/Gigamonkey-BSV/Gigamonkey.git
-WORKDIR /tmp/Gigamonkey
-RUN cmake -G Ninja -B build -S . -DPACKAGE_TESTS=OFF -DCMAKE_BUILD_TYPE=Release
-RUN cmake --build build -j 10
-RUN cmake --install build
-
-# Note: the below line should be uncommented as soon as a v2.5
-# exists. The above sections labeled data and Gigamonkey can be
-# commented out.
-
-# FROM gigamonkey/gigamonkey-lib:v2.5 AS build
+FROM gigamonkey/gigamonkey-lib:v2.5 AS build
 
 # Bitcoin Calculator
 WORKDIR /tmp

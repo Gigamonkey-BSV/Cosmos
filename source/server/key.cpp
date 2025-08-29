@@ -19,7 +19,7 @@ key_request_options::operator net::HTTP::request () const {
         if (bool (Body) && bool (KeyType))
             throw data::exception {} << "with HTTP method POST in method key, either HTTP body or parameter key type should be provided, not both";
         if (!bool (Body) && !bool (KeyType))
-            throw data::exception {} << "with HTTP method POST in method key, either an HTTP body or parameter type key must be provided.";
+            throw data::exception {} << "with HTTP method POST in method key, either an HTTP body or parameter type key must be provided";
     } else if (*HTTPMethod == net::HTTP::method::get) {
         if (bool (Body) || bool (KeyType))
             throw data::exception {} << "HTTP body and parameter type are only allowed with HTTP method POST";
@@ -30,7 +30,7 @@ key_request_options::operator net::HTTP::request () const {
     query_stream << "name=" << KeyName;
 
     if (bool (KeyType)) {
-        query_stream << "&type=" << KeyType;
+        query_stream << "&type=" << *KeyType;
         if (*KeyType != key_type::unset && *KeyType != key_type::secp256k1) {
             if (Net == Bitcoin::net::Main) query_stream << "&net=main";
             else query_stream << "&net=test";
@@ -47,8 +47,6 @@ net::HTTP::response handle_key (server &p,
     const maybe<net::HTTP::content> &content_type,
     const data::bytes &body) {
 
-    std::cout << "responding to method key" << std::endl;
-
     const UTF8 *key_name_param = query.contains ("name");
     if (!bool (key_name_param))
         return error_response (400, method::KEY, problem::missing_parameter, "required parameter 'name' not present");
@@ -64,6 +62,7 @@ net::HTTP::response handle_key (server &p,
     const UTF8 *key_type = query.contains ("type");
     if (bool (key_type)) {
         std::string key_type_san = sanitize (*key_type);
+        std::cout << "read key type " << key_type_san << std::endl;
         if (key_type_san == "secp256k1") KeyType = key_type::secp256k1;
         else if (key_type_san == "wif") KeyType = key_type::WIF;
         else if (key_type_san == "xpriv") KeyType = key_type::xpriv;
@@ -130,16 +129,16 @@ net::HTTP::response handle_key (server &p,
             key_expr = key_expression {data::string (body)};
 
         } else {
-            std::cout << "Randomly generate a key" << std::endl;
-            if (KeyType != key_type::unset)
+            if (KeyType == key_type::unset)
                 return error_response (400, method::KEY, problem::invalid_query, "need a key type to tell us what to generate");
 
             if (bool (content_type))
                 return error_response (400, method::KEY, problem::invalid_query, "no body when we generate random keys");
-            std::cout << "byuuub zuuub" << std::endl;
+
             data::entropy &random = p.get_secure_random ();
             secp256k1::secret key;
             random >> key.Value;
+            std::cout << "key generated" << std::endl;
 
             switch (KeyType) {
                 case (key_type::WIF): {
@@ -156,7 +155,11 @@ net::HTTP::response handle_key (server &p,
             }
         }
 
-        if (p.DB->set_key (key_name, key_expr)) return ok_response ();
+        if (p.DB->set_key (key_name, key_expr)) {
+            // we return the key if it was generated randomly.
+            if (bool (content_type)) return ok_response ();
+            return string_response (std::string (key_expr));
+        }
         return error_response (500, method::KEY, problem::failed, "could not create key");
     } else return error_response (405, method::KEY, problem::invalid_method, "use get or post");
 

@@ -949,12 +949,8 @@ namespace Cosmos::SQLite {
         }
 
         bool set_key (const std::string &key_name, const key_expression &k) final override {
-
             try {
-                storage.insert (
-                    sqlite_orm::into<Secret> (),
-                    columns (&Secret::name, &Secret::key),
-                    values (key_name, std::string (k)));
+                storage.replace (Secret (key_name, std::string (k)));
             } catch (const std::system_error &e) {
                 return false;
             }

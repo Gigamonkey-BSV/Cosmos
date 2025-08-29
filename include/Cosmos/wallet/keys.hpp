@@ -107,7 +107,7 @@ namespace Cosmos {
     }
 
     inline key_expression::key_expression (const secp256k1::secret &x) {
-        *this = expression {data::string::write ("secret ", std::dec, x)};
+        *this = expression {data::string::write ("secret ", std::dec, x.Value)};
     }
 
     inline key_expression::key_expression (const secp256k1::pubkey &p) {
