@@ -79,6 +79,10 @@ net::HTTP::response inline string_response (const string &str) {
     return net::HTTP::response (200, {{"content-type", "text/plain"}}, bytes (str));
 }
 
+net::HTTP::response inline data_response (const bytes &str) {
+    return net::HTTP::response (200, {{"content-type", "application/octet-stream"}}, str);
+}
+
 net::HTTP::response inline boolean_response (bool b) {
     return JSON_response (b);
 }

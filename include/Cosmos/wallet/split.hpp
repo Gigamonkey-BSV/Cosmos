@@ -23,7 +23,7 @@ namespace Cosmos {
 
         // the user provides the outputs to split and this function does the rest.
         spend::spent operator () (
-            data::crypto::entropy &, account,
+            data::entropy &, account,
             list<entry<Bitcoin::outpoint, redeemable>> selected,
             double fee_rate) const;
 /*
@@ -33,7 +33,7 @@ namespace Cosmos {
         };
 
         // this function handles everything other than updating the addresses.
-        result operator () (data::crypto::random &, keychain, pubkeys,
+        result operator () (data::random &, keychain, pubkeys,
             address_sequence, list<entry<Bitcoin::outpoint, redeemable>> selected, double fee_rate) const;*/
 
         struct result_outputs {
@@ -43,7 +43,7 @@ namespace Cosmos {
         };
 
         // construct only the outputs.
-        result_outputs operator () (data::crypto::entropy &r, address_source key,
+        result_outputs operator () (data::entropy &r, address_source key,
             Bitcoin::satoshi value, double fee_rate) const;
 
         struct log_triangular_distribution {
@@ -73,7 +73,7 @@ namespace Cosmos {
         Bitcoin::satoshi MinimumCreateValue {spend_options::DefaultMinChangeValue};
 
         // construct a set of change outputs.
-        change operator () (address_source x, Bitcoin::satoshi sats, satoshis_per_byte fees, data::crypto::entropy &rand) const;
+        change operator () (address_source x, Bitcoin::satoshi sats, satoshis_per_byte fees, data::entropy &rand) const;
         using split::operator ();
 
         split_change_parameters (
@@ -88,7 +88,7 @@ namespace Cosmos {
             split_change_parameters {o.MinChangeValue, o.MinSatsPerOutput, o.MaxSatsPerOutput, o.MeanSatsPerOutput} {}
     };
 /*
-    spend::spent inline split::operator () (data::crypto::entropy &rand, account acc,
+    spend::spent inline split::operator () (data::entropy &rand, account acc,
         list<entry<Bitcoin::outpoint, redeemable>> selected, double fee_rate) const {
         result rr = (*this) (rand, k, w.Pubkeys, w.Addresses.change (), selected, fee_rate);
         return spend::spent {rr.Transactions, w.Addresses.update (w.Addresses.Change, rr.Last)};

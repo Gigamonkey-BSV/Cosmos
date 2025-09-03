@@ -202,10 +202,7 @@ net::HTTP::response process_method (
     const maybe<net::HTTP::content> &content_type,
     const data::bytes &body) {
 
-    if (m == method::INVERT_HASH) return invert_hash (p, http_method, query, content_type, body); 
-
-    // Associate a secret key with a name. The key could be anything; private, public, or symmetric. 
-    if (m == method::KEY) return handle_key (p, http_method, query, content_type, body);
+    if (m == method::INVERT_HASH) return handle_invert_hash (p, http_method, query, content_type, body);
 
     if (m == method::TO_PRIVATE) {
         if (http_method == net::HTTP::method::post) {
@@ -271,7 +268,10 @@ net::HTTP::response process_wallet_method (
     // make sure the wallet name is a valid string.
     if (!wallet_name.valid ()) return error_response (400, m, problem::invalid_wallet_name, "name argument must be alpha alnum+");
 
-    if (m == method::MAKE_WALLET) {
+    // Associate a secret key with a name. The key could be anything; private, public, or symmetric.
+    if (m == method::KEY) return handle_key (p, wallet_name, http_method, query, content_type, body);
+
+    if (m == method::CREATE_WALLET) {
         if (http_method != net::HTTP::method::post)
             return error_response (405, m, problem::invalid_method, "use post");
 
@@ -367,13 +367,13 @@ net::HTTP::response process_wallet_method (
 
             // hot wallet
             if (next_secret.valid ()) {
-                p.DB->set_key (next_secret.encode (), next_expression);
+                p.DB->set_key (wallet_name, next_secret.encode (), next_expression);
                 Bitcoin::pubkey next_pubkey = next_secret.to_public ();
                 p.DB->set_to_private (string (next_pubkey), next_expression);
                 net = next_secret.Network;
             // cold wallet
             } else if (next_pubkey = Bitcoin::pubkey (next_key); next_pubkey.valid ()) {
-                p.DB->set_key (string (next_pubkey), next_expression);
+                p.DB->set_key (wallet_name, string (next_pubkey), next_expression);
             } else return error_response (400, m, problem::failed);
 
             digest160 next_address_hash = next_pubkey.address_hash ();

@@ -43,15 +43,15 @@ namespace Cosmos {
         virtual bool set_invert_hash (slice<const byte> digest, hash_function, slice<const byte> data) = 0;
         virtual maybe<tuple<hash_function, bytes>> get_invert_hash (slice<const byte>) = 0;
 
-        virtual bool set_key (const std::string &key_name, const key_expression &k) = 0;
-        virtual key_expression get_key (const std::string &key_name) = 0;
-
-        // set the private key for a given public key.
-        virtual bool set_to_private (const std::string &key_name, const key_expression &k) = 0;
-        virtual key_expression get_to_private (const std::string &key_name) = 0;
-
         virtual bool make_wallet (const std::string &name) = 0;
         virtual data::list<std::string> list_wallet_names () = 0;
+
+        virtual bool set_key (const std::string &wallet_name, const std::string &key_name, const key_expression &k) = 0;
+        virtual key_expression get_key (const std::string &wallet_name, const std::string &key_name) = 0;
+
+        // set the private key for a given public key.
+        virtual bool set_to_private (const key_expression &key_name, const key_expression &k) = 0;
+        virtual key_expression get_to_private (const key_expression &key_name) = 0;
 
         // TODO there needs to be a time limit for these things.
         virtual void set_wallet_unused (const std::string &wallet_name, const std::string &key_name) = 0;
@@ -87,11 +87,11 @@ namespace Cosmos {
         switch (f) {
             case hash_function::SHA1: return o << "SHA1";
             case hash_function::MD5: return o << "MD5";
-            case hash_function::SHA2_256: return o << "SHA2 256";
-            case hash_function::SHA2_512: return o << "SHA2 512";
+            case hash_function::SHA2_256: return o << "SHA2_256";
+            case hash_function::SHA2_512: return o << "SHA2_512";
             case hash_function::RIPEMD160: return o << "RIPEMD160";
-            case hash_function::SHA3_256: return o << "SHA3 256";
-            case hash_function::SHA3_512: return o << "SHA3 512";
+            case hash_function::SHA3_256: return o << "SHA3_256";
+            case hash_function::SHA3_512: return o << "SHA3_512";
             case hash_function::Hash256: return o << "Hash256";
             case hash_function::Hash160: return o << "Hash160";
             default: return o << "invalid hash function";

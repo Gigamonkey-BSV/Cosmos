@@ -93,7 +93,7 @@ net::HTTP::response handle_generate (server &p,
     auto master = HD::BIP_32::secret::from_seed (HD::BIP_39::read (wallet_words));
 
     key_expression master_key_expr {master};
-    std::string master_key_name = static_cast<std::string> (wallet_name) + "_master";
+    std::string master_key_name = "Master";
 
     HD::BIP_32::pubkey account;
     string account_derivation_string;
@@ -109,10 +109,10 @@ net::HTTP::response handle_generate (server &p,
     key_expression account_key_expr {account};
     key_expression account_derivation {account_derivation_string};
 
-    std::string account_name = static_cast<std::string> (wallet_name) + "_account_0";
+    std::string account_name = "Account0";
 
-    p.DB->set_key (master_key_name, master_key_expr);
-    p.DB->set_key (account_name, account_key_expr);
+    p.DB->set_key (wallet_name, master_key_name, master_key_expr);
+    p.DB->set_key (wallet_name, account_name, account_key_expr);
     p.DB->set_to_private (account_name, account_derivation);
 
     p.DB->set_wallet_derivation (wallet_name, "receive",

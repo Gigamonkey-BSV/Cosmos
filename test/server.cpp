@@ -38,40 +38,121 @@ net::HTTP::request make_add_entropy_request (const string &entropy);
 bool is_ok_response (const net::HTTP::response &r);
 bool is_bool_response (bool expected, const net::HTTP::response &);
 bool is_string_response (const net::HTTP::response &);
+bool is_data_response (const bytes &expected, const net::HTTP::response &);
+
+net::HTTP::request make_list_wallets_request ();
+bool is_JSON_response (const JSON &, const net::HTTP::response &r);
+
+net::HTTP::request inline make_create_wallet_request (const string &wallet_name) {
+    return net::HTTP::request::make ().method (net::HTTP::method::post).target (string::write ("/create_wallet/", wallet_name)).host ("localhost");
+}
+
+template <size_t x> maybe<data::digest<x>> read_digest (const net::HTTP::response &);
+
+TEST (ServerTest, TestInvertHash) {
+    auto test_server = get_test_server ();
+    string data_A = "Hi, this string will be hashed.";
+    string data_B = "Hi, this string will not have the same hash.";
+
+    data::digest256 SHA256_A = data::crypto::SHA2_256 (data_A);
+    data::digest256 SHA256_B = data::crypto::SHA2_256 (data_B);
+
+    data::digest160 Hash160_A = data::crypto::Bitcoin_160 (data_A);
+    data::digest160 Hash160_B = data::crypto::Bitcoin_160 (data_B);
+
+    // attempt to retrieve data before it has been entered.
+    ASSERT_TRUE (is_error (make_request (test_server, get_invert_hash_request (SHA256_A))));
+    ASSERT_TRUE (is_error (make_request (test_server, get_invert_hash_request (Hash160_A))));
+
+    // attempt to input the wrong hash
+    ASSERT_TRUE (is_error (make_request (test_server,
+        put_invert_hash_request (Cosmos::hash_function::SHA2_256, bytes (data_B), SHA256_A))));
+
+    std::cout << "### try to make an inverse hash entry! " << std::endl;
+    EXPECT_TRUE (is_ok_response (make_request (test_server,
+        put_invert_hash_request (Cosmos::hash_function::SHA2_256, bytes (data_A), SHA256_A))));
+
+    std::cout << "### try to retrieve " << data_A << " from database with digest " << SHA256_A << std::endl;
+    ASSERT_TRUE (is_data_response (bytes (data_A), make_request (test_server, get_invert_hash_request (SHA256_A))));
+
+    // this should still fail
+    ASSERT_TRUE (is_error (make_request (test_server, get_invert_hash_request (Hash160_A))));
+
+    // attempt to overwrite data that already exists.
+    // this should succeed because it's a put.
+    EXPECT_TRUE (is_ok_response (make_request (test_server,
+        put_invert_hash_request (Cosmos::hash_function::SHA2_256, bytes (data_A)))));
+
+    // provide another hash for the same data.
+    EXPECT_TRUE (is_ok_response (make_request (test_server,
+        put_invert_hash_request (Cosmos::hash_function::Hash160, bytes (data_A)))));
+
+    EXPECT_TRUE (is_data_response (bytes (data_A), make_request (test_server, get_invert_hash_request (SHA256_A))));
+
+}
+
+TEST (ServerTest, TestCreateWallet) {
+    auto test_server = get_test_server ();
+
+    // list_wallets should return an empty list.
+    EXPECT_TRUE (is_JSON_response (JSON::array_t (), make_request (test_server, make_list_wallets_request ())));
+
+    // Make a wallet.
+    ASSERT_TRUE (is_ok_response (make_request (test_server, make_create_wallet_request ("Wally"))));
+
+    // list wallets should now be a non-empty list.
+    EXPECT_TRUE (is_JSON_response (JSON::array_t {"Wally"}, make_request (test_server, make_list_wallets_request ())));
+
+    // try to make the wallet again and fail.
+    ASSERT_TRUE (is_error (make_request (test_server, make_create_wallet_request ("Wally"))));
+
+}
 
 TEST (ServerTest, TestEntropy) {
     auto test_server = get_test_server ();
 
-    // fail to generate a random key.
-    ASSERT_TRUE (is_error (make_request (test_server, post_key_request ("X", key_type::secp256k1))));
+    // fail to load a key because the wallet doesn't exist.
+    ASSERT_TRUE (is_error (make_request (test_server,
+        get_key_request ("Wally", "X"))));
+
+    // fail to generate a random key because the wallet doesn't exist
+    ASSERT_TRUE (is_error (make_request (test_server,
+        post_key_request ("Wally", "X", key_type::secp256k1))));
+
+    // Make a wallet.
+    ASSERT_TRUE (is_ok_response (make_request (test_server, make_create_wallet_request ("Wally"))));
+
+    // fail to generate a random key because the random number generator is not set up.
+    ASSERT_TRUE (is_error (make_request (test_server,
+        post_key_request ("Wally", "X", key_type::secp256k1))));
 
     // initialize random number generator.
-    ASSERT_TRUE (is_ok_response (make_request (test_server, make_add_entropy_request ("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"))));
+    ASSERT_TRUE (is_ok_response (make_request (test_server,
+        make_add_entropy_request ("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"))));
 
-    // suceed at generating a random key
-    EXPECT_TRUE (is_string_response (make_request (test_server, post_key_request ("X", key_type::secp256k1))));
+    // succeed at generating a random key
+    auto successfully_create_key = make_request (test_server,
+        post_key_request ("Wally", "X", key_type::secp256k1));
+
+    ASSERT_TRUE (is_string_response (successfully_create_key));
+
+    auto get_new_key = make_request (test_server, get_key_request ("Wally", "X"));
+
+    // successfully retrieve the key.
+    ASSERT_TRUE (is_string_response (get_new_key));
+
+    EXPECT_EQ (successfully_create_key.Body, get_new_key.Body);
+
+    // try to overwrite the key and fail.
+    ASSERT_TRUE (is_error (make_request (test_server,
+        post_key_request ("Wally", "X", key_type::secp256k1))));
 }
 
-server prepare (server, const string &entropy = "abcdwxyz");
+// prepare a server with entropy and an initial wallet.
+server prepare (server, const string &entropy = "entropyABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz");
 
 template <size_t x> net::HTTP::request request_get_invert_hash (const data::digest<x> &d, digest_format format = digest_format::HEX);
 template <size_t x> net::HTTP::request request_post_invert_hash (Cosmos::hash_function, const std::string &data);
-template <size_t x> maybe<data::digest<x>> read_digest (const net::HTTP::response &);
-
-TEST (ServerTest, TestInvertHash) {
-    auto test_server = prepare (get_test_server ());
-    std::string data_A = "Hi, this string will be hashed.";
-    data::digest256 digest_A = data::crypto::SHA2_256 (data_A);
-
-    // attempt to retrieve data before it has been entered.
-    ASSERT_TRUE (is_error (make_request (test_server, request_get_invert_hash (digest_A))));
-
-    EXPECT_TRUE (is_ok_response (make_request (test_server,
-        request_post_invert_hash<32> (Cosmos::hash_function::SHA2_256, data_A))));
-
-    EXPECT_EQ (digest_A, read_digest<32> (make_request (test_server, request_get_invert_hash (digest_A))));
-
-}
 
 // TODO these are incomplete.
 net::HTTP::request make_to_private_get_request (const key_expression &k) {
@@ -88,20 +169,20 @@ TEST (ServerTest, TestKey) {
     auto test_server = prepare (get_test_server ());
 
     // attempt to retrieve a key that hasn't been entered yet.
-    EXPECT_TRUE (is_error (make_request (test_server, get_key_request ("X"))));
+    EXPECT_TRUE (is_error (make_request (test_server, get_key_request ("Wally", "X"))));
 
     // generate keys of different types and retrieve them.
-    EXPECT_TRUE (is_error (make_request (test_server, post_key_request ("X", key_type::secp256k1))));
-    EXPECT_TRUE (is_error (make_request (test_server, post_key_request ("Y", key_type::WIF))));
-    EXPECT_TRUE (is_error (make_request (test_server, post_key_request ("Z", key_type::xpriv))));
+    EXPECT_TRUE (is_error (make_request (test_server, post_key_request ("Wally", "X", key_type::secp256k1))));
+    EXPECT_TRUE (is_error (make_request (test_server, post_key_request ("Wally", "Y", key_type::WIF))));
+    EXPECT_TRUE (is_error (make_request (test_server, post_key_request ("Wally", "Z", key_type::xpriv))));
 
     key_expression secret_X;
     key_expression secret_Y;
     key_expression secret_Z;
 
-    EXPECT_NO_THROW (secret_X = read_key_expression (make_request (test_server, get_key_request ("X"))));
-    EXPECT_NO_THROW (secret_Y = read_key_expression (make_request (test_server, get_key_request ("Y"))));
-    EXPECT_NO_THROW (secret_Z = read_key_expression (make_request (test_server, get_key_request ("Z"))));
+    EXPECT_NO_THROW (secret_X = read_key_expression (make_request (test_server, get_key_request ("wally", "X"))));
+    EXPECT_NO_THROW (secret_Y = read_key_expression (make_request (test_server, get_key_request ("Wally", "Y"))));
+    EXPECT_NO_THROW (secret_Z = read_key_expression (make_request (test_server, get_key_request ("Wally", "Z"))));
 
     EXPECT_TRUE (data::valid (secret_X));
     EXPECT_TRUE (data::valid (secret_Y));
@@ -124,20 +205,14 @@ TEST (ServerTest, TestKey) {
 
 using JSON = data::JSON;
 
-net::HTTP::request make_list_wallets_request ();
-
 net::HTTP::request make_next_address_request (const std::string &wallet_name, const std::string &sequence_name = "receive");
 
 net::HTTP::request make_next_xpub_request (const std::string &wallet_name);
 
-bool is_JSON_response (const JSON &, const net::HTTP::response &r);
 maybe<std::string> read_string (const net::HTTP::response &r);
 
 TEST (ServerTest, TestGenerate) {
     auto test_server = prepare (get_test_server ());
-
-    // list_wallets should return an empty list.
-    EXPECT_TRUE (is_JSON_response (JSON::array_t (), make_request (test_server, make_list_wallets_request ())));
 
     // generate a wallet of each type
     // we should simply get a bool response when we don't request the restoration words.
@@ -213,7 +288,8 @@ TEST (ServerTest, TestWallet) {
 
 server prepare (server x, const string &entropy) {
     data::synced (&server::operator (), &x,
-        make_add_entropy_request ("entropyABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"));
+        make_add_entropy_request (entropy));
+    data::synced (&server::operator (), &x, make_create_wallet_request ("Wally"));
     return x;
 }
 
@@ -238,15 +314,15 @@ bool is_string_response (const net::HTTP::response &r) {
 }
 
 net::HTTP::request make_list_wallets_request () {
-    return net::HTTP::request (net::HTTP::request::make ().path ("/list_wallets"));
+    return net::HTTP::request::make ().path ("/list_wallets").method (net::HTTP::method::get).host ("localhost");
 }
 
 net::HTTP::request make_next_address_request (const std::string &wallet_name, const std::string &sequence_name) {
-    return net::HTTP::request (net::HTTP::request::make ().method (net::HTTP::method::post).path (string::write ("/next_address/", wallet_name)));
+    return net::HTTP::request::make ().method (net::HTTP::method::post).path (string::write ("/next_address/", wallet_name)).host ("localhost");
 }
 
 net::HTTP::request make_next_xpub_request (const std::string &wallet_name) {
-    return net::HTTP::request (net::HTTP::request::make ().method (net::HTTP::method::post).path (string::write ("/next_xpub/", wallet_name)));
+    return net::HTTP::request::make ().method (net::HTTP::method::post).path (string::write ("/next_xpub/", wallet_name)).host ("localhost");
 }
 
 maybe<JSON> read_JSON_response (const net::HTTP::response &r) {
@@ -260,7 +336,7 @@ maybe<JSON> read_JSON_response (const net::HTTP::response &r) {
 bool is_JSON_response (const JSON &expected, const net::HTTP::response &r) {
     maybe<JSON> result = read_JSON_response (r);
     if (!bool (result)) return false;
-    return *result = expected;
+    return *result == expected;
 }
 
 maybe<std::string> read_string (const net::HTTP::response &r) {
@@ -296,10 +372,25 @@ maybe<bool> read_bool_response (const net::HTTP::response &r) {
     return bool (*j);
 }
 
+maybe<bytes> read_data_response (const net::HTTP::response &r) {
+    auto ct = r.content_type ();
+    if (!bool (ct)) return {};
+
+    if (*ct != "application/octet-stream") return {};
+
+    return r.Body;
+}
+
 bool is_bool_response (bool expected, const net::HTTP::response &r) {
     maybe<bool> result = read_bool_response (r);
     if (!bool (result)) return false;
-    return *result = expected;
+    return *result == expected;
+}
+
+bool is_data_response (const bytes &expected, const net::HTTP::response &r) {
+    maybe<bytes> result = read_data_response (r);
+    if (!bool (result)) return false;
+    return *result == expected;
 }
 
 net::HTTP::request make_add_entropy_request (const string &entropy) {
@@ -308,16 +399,6 @@ net::HTTP::request make_add_entropy_request (const string &entropy) {
         ).path (
             "/add_entropy"
         ).body (bytes (entropy)).host ("localhost");
-}
-
-template <size_t x> net::HTTP::request request_get_invert_hash (const data::digest<x> &d, digest_format format) {
-    return net::HTTP::request::make ().method (net::HTTP::method::get).path ("/invert_hash").query (
-        data::string::write ("digest_format=", format, "&digest=", encoding::hex::write (d))).host ("localhost");
-}
-
-template <size_t x> net::HTTP::request request_post_invert_hash (Cosmos::hash_function f, const std::string &data) {
-    return net::HTTP::request::make ().method (net::HTTP::method::post).path ("/invert_hash").query (
-        data::string::write ("function=", f)).body (data).host ("localhost");
 }
 
 template <size_t x> maybe<data::digest<x>> read_digest (const net::HTTP::response &r) {

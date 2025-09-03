@@ -16,7 +16,7 @@ enum class method {
     SHUTDOWN,
     ADD_ENTROPY,      // add entropy to the random number generator.
     LIST_WALLETS,
-    MAKE_WALLET,
+    CREATE_WALLET,
     KEY,
     TO_PRIVATE,
     INVERT_HASH,

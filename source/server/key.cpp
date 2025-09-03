@@ -25,7 +25,7 @@ key_request_options::operator net::HTTP::request () const {
             throw data::exception {} << "HTTP body and parameter type are only allowed with HTTP method POST";
     } else throw data::exception {} << "Only GET or POST is allowed with method key";
 
-    auto make = net::HTTP::request::make {}.path ("/key").host ("localhost").method (*HTTPMethod);
+    auto make = net::HTTP::request::make {}.path (string::write ("/key/", WalletName)).host ("localhost").method (*HTTPMethod);
     std::stringstream query_stream;
     query_stream << "name=" << KeyName;
 
@@ -43,6 +43,7 @@ key_request_options::operator net::HTTP::request () const {
 }
 
 net::HTTP::response handle_key (server &p,
+    const Diophant::symbol &wallet_name,
     net::HTTP::method http_method, map<UTF8, UTF8> query,
     const maybe<net::HTTP::content> &content_type,
     const data::bytes &body) {
@@ -62,7 +63,6 @@ net::HTTP::response handle_key (server &p,
     const UTF8 *key_type = query.contains ("type");
     if (bool (key_type)) {
         std::string key_type_san = sanitize (*key_type);
-        std::cout << "read key type " << key_type_san << std::endl;
         if (key_type_san == "secp256k1") KeyType = key_type::secp256k1;
         else if (key_type_san == "wif") KeyType = key_type::WIF;
         else if (key_type_san == "xpriv") KeyType = key_type::xpriv;
@@ -138,7 +138,6 @@ net::HTTP::response handle_key (server &p,
             data::entropy &random = p.get_secure_random ();
             secp256k1::secret key;
             random >> key.Value;
-            std::cout << "key generated" << std::endl;
 
             switch (KeyType) {
                 case (key_type::WIF): {
@@ -155,7 +154,7 @@ net::HTTP::response handle_key (server &p,
             }
         }
 
-        if (p.DB->set_key (key_name, key_expr)) {
+        if (p.DB->set_key (wallet_name, key_name, key_expr)) {
             // we return the key if it was generated randomly.
             if (bool (content_type)) return ok_response ();
             return string_response (std::string (key_expr));

@@ -307,12 +307,25 @@ namespace Cosmos::SQLite {
         digest256 script_hash;
     };
 
+    struct Wallet {
+        int id;
+        std::string name;
+    };
+
     // this could be a private key or a shared secret.
     // we interpret it based on the string we read, so
     // it could be WIF, HD, or some encrypted format as
     // long as we can distinguish them.
     struct Secret {
+        int id;
+
+        // every key is associated with a wallet.
+        int wallet;
+
+        // the name of the key.
         std::string name;
+
+        // the actual key.
         std::string key;
     };
 
@@ -336,11 +349,6 @@ namespace Cosmos::SQLite {
     struct RedeemKey {
         Bitcoin::outpoint prevout;
         std::string key;
-    };
-
-    struct Wallet {
-        int id;
-        std::string name;
     };
 
     // an output belonging to a wallet.
@@ -455,7 +463,9 @@ namespace Cosmos::SQLite {
             ),
 
             make_table ("secrets",
-                make_column ("name", &Secret::name, primary_key ()),
+                make_column ("id", &Secret::id, primary_key ().autoincrement ()),
+                make_column ("wallet", &Secret::wallet),
+                make_column ("name", &Secret::name),
                 make_column ("key", &Secret::key)
             ),
 
@@ -917,12 +927,9 @@ namespace Cosmos::SQLite {
         bool set_invert_hash (data::slice<const data::byte> digest, hash_function f, data::slice<const data::byte> data) final override {
 
             if (!supported (f)) return false;
-            
+
             try {
-                storage.insert (
-                    sqlite_orm::into<Digest> (), 
-                    columns (&Digest::digest, &Digest::function, &Digest::data), 
-                    values (data::bytes {digest}, data::byte (f), data::bytes {data}));
+                storage.replace (Digest {data::bytes {digest}, data::byte (f), data::bytes {data}});
             } catch (const std::system_error &e) {
                 return false;
             }
@@ -948,29 +955,58 @@ namespace Cosmos::SQLite {
             }};
         }
 
-        bool set_key (const std::string &key_name, const key_expression &k) final override {
+        bool set_key (const std::string &wallet_name, const std::string &key_name, const key_expression &k) final override {
+
             try {
-                storage.replace (Secret (key_name, std::string (k)));
+                return storage.transaction([&] {
+                    // 1. Look up the user id
+                    auto rows = storage.select (&Wallet::id, where(c(&Wallet::name) == wallet_name));
+
+                    if (rows.empty ()) return false;
+
+                    int wallet_id = rows.front ();
+
+                    // 2. Insert a secret tied to that user id
+                    storage.insert (Secret {-1, wallet_id, key_name, std::string (k)});
+
+                    return true;  // commit
+                });
             } catch (const std::system_error &e) {
                 return false;
             }
-
-            return true;
         }
 
-        key_expression get_key (const std::string &key_name) final override {
-            auto rows = storage.select (
-                columns (&Secret::name, &Secret::key),
-                where (is_equal (&Secret::name, key_name)), limit (1));
+        key_expression get_key (const std::string &wallet_name, const std::string &key_name) final override {
 
-            if (rows.empty ()) return {};
-            
-            const auto &entry = rows.front ();
+            key_expression result {};
+            try {
+                if (!storage.transaction([&] {
+                    // 1. Look up the user id
+                    auto wrows = storage.select (&Wallet::id, where (c (&Wallet::name) == wallet_name));
 
-            return key_expression {std::get<1> (entry)};
+                    if (wrows.empty ()) return false;
+
+                    int wallet_id = wrows.front ();
+
+                    auto krows = storage.select (
+                        columns (&Secret::name, &Secret::key),
+                        where (c (&Secret::name) == key_name && c (&Secret::wallet) == wallet_id), limit (1));
+
+                    if (krows.empty ()) return false;
+
+                    const auto &entry = krows.front ();
+
+                    result = key_expression {std::get<1> (entry)};
+
+                    return true;
+                })) return {}; else return result;
+            } catch (const std::system_error &e) {
+                return {};
+            }
         }
 
-        bool set_to_private (const std::string &key_name, const key_expression &k) final override {
+        bool set_to_private (const key_expression &key_name, const key_expression &k) final override {
+            /*
             try {
                 storage.insert (
                     sqlite_orm::into<Pubkey> (),
@@ -981,9 +1017,12 @@ namespace Cosmos::SQLite {
             }
 
             return true;
+            */
+            throw 0;
         }
         
-        key_expression get_to_private (const std::string &key_name) final override {
+        key_expression get_to_private (const key_expression &key_name) final override {
+            /*
             auto rows = storage.select (
                 columns (&Pubkey::name, &Pubkey::key),
                 where (is_equal (&Pubkey::name, key_name)), limit (1));
@@ -993,6 +1032,8 @@ namespace Cosmos::SQLite {
             const auto &entry = rows.front ();
 
             return key_expression {std::get<1> (entry)};
+            */
+            throw 0;
         }
 
         /*

@@ -7,6 +7,7 @@
 #include "server.hpp"
 
 net::HTTP::response handle_key (server &p,
+    const Diophant::symbol &wallet_name,
     net::HTTP::method http_method, map<UTF8, UTF8> query,
     const maybe<net::HTTP::content> &content_type,
     const data::bytes &body);
@@ -21,18 +22,20 @@ enum class key_type {
 
 std::ostream &operator << (std::ostream &, key_type);
 
-net::HTTP::request get_key_request (const std::string &key_name);
-net::HTTP::request post_key_request (const std::string &key_name, key_type);
-net::HTTP::request post_key_request (const std::string &key_name, const key_expression &expr);
+net::HTTP::request get_key_request (const std::string &wallet_name, const std::string &key_name);
+net::HTTP::request post_key_request (const std::string &wallet_name, const std::string &key_name, key_type);
+net::HTTP::request post_key_request (const std::string &wallet_name, const std::string &key_name, const key_expression &expr);
 
 struct key_request_options {
+    const std::string WalletName {};
     const std::string KeyName {};
     maybe<::key_type> KeyType {};
+
     maybe<net::HTTP::method> HTTPMethod {};
     maybe<key_expression> Body {};
     Bitcoin::net Net {Bitcoin::net::Main};
 
-    key_request_options (const std::string &name);
+    key_request_options (const std::string &wallet_name, const std::string &key_name);
 
     key_request_options &get ();
     key_request_options &post ();
@@ -44,19 +47,20 @@ struct key_request_options {
     operator net::HTTP::request () const;
 };
 
-net::HTTP::request inline get_key_request (const std::string &key_name) {
-    return key_request_options {key_name}.get ();
+net::HTTP::request inline get_key_request (const std::string &wallet_name, const std::string &key_name) {
+    return key_request_options {wallet_name, key_name}.get ();
 }
 
-net::HTTP::request inline post_key_request (const std::string &key_name, key_type kt) {
-    return key_request_options {key_name}.post ().key_type (kt);
+net::HTTP::request inline post_key_request (const std::string &wallet_name, const std::string &key_name, key_type kt) {
+    return key_request_options {wallet_name, key_name}.post ().key_type (kt);
 }
 
-net::HTTP::request inline post_key_request (const std::string &key_name, const key_expression &expr) {
-    return key_request_options {key_name}.post ().body (expr);
+net::HTTP::request inline post_key_request (const std::string &wallet_name, const std::string &key_name, const key_expression &expr) {
+    return key_request_options {wallet_name, key_name}.post ().body (expr);
 }
 
-inline key_request_options::key_request_options (const std::string &name): KeyName {name} {}
+inline key_request_options::key_request_options (const std::string &wallet_name, const std::string &name):
+    WalletName {wallet_name}, KeyName {name} {}
 
 key_request_options inline &key_request_options::get () {
     HTTPMethod = net::HTTP::method::get;
