@@ -22,7 +22,7 @@ namespace Cosmos {
         {
             int index = 0;
             deriv.resize (Keys.size ());
-            for (const key_expression &d : Keys) deriv[index++] = Diophant::write (d);
+            for (const key_expression &k : Keys) deriv[index++] = k;
         }
 
         JSON::object_t j;

@@ -12,7 +12,7 @@ generate_request_options::operator net::HTTP::request () const {
     if (MnemonicStyle != mnemonic_style::none)
         query_stream << "&mnemonic_style=" << MnemonicStyle << "&number_of_words=" << NumberOfWords;
     return net::HTTP::request::make {}.path (
-        string::write ("/generate/", Name)).query (query_stream.str ()).host ("localhost");
+        string::write ("/generate/", Name)).query (query_stream.str ()).host ("localhost").method (net::HTTP::method::post);
 }
 
 std::ostream &operator << (std::ostream &o, wallet_style x) {

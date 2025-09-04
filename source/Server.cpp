@@ -160,7 +160,20 @@ void run (const options &program_options) {
 
     auto main_loop = [&]() {
         try {
-            while (!Shutdown) IO.run ();
+            while (!Shutdown) try {
+                IO.run ();
+            } catch (boost::system::system_error &e) {
+                if (e.code () == boost::beast::http::error::bad_method ||
+                    e.code () == boost::beast::http::error::need_more ||
+                    e.code () == boost::beast::http::error::bad_version ||
+                    e.code () == boost::beast::http::error::bad_line_ending ||
+                    e.code () == boost::beast::http::error::bad_target ||
+                    e.code () == boost::beast::http::error::bad_field) {
+                    std::cout << "Unable to read incoming stream from client. "
+                      "This can happen if you try to connect with https (or any other protocol) instead of http. "
+                      "Please ensure you are using the correct protocol and try again." << std::endl;
+                }
+            }
         } catch (...) {
             std::lock_guard<std::mutex> lock (exception_mutex);
             // Capture first exception

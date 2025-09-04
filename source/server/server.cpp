@@ -205,7 +205,7 @@ net::HTTP::response process_method (
     if (m == method::INVERT_HASH) return handle_invert_hash (p, http_method, query, content_type, body);
 
     if (m == method::TO_PRIVATE) {
-        if (http_method == net::HTTP::method::post) {
+        if (http_method == net::HTTP::method::put) {
 
             if (!bool (content_type) || *content_type != net::HTTP::content::type::text_plain)
                 return error_response (400, m, problem::invalid_content_type, "expected content-type:text/plain");
@@ -225,7 +225,7 @@ net::HTTP::response process_method (
             return error_response (500, m, problem::failed, "could not set private key");
         } else if (http_method != net::HTTP::method::get) {
             return error_response (501, m, problem::unimplemented, "GET TO_PRIVATE");
-        } else return error_response (405, m, problem::invalid_method, "use post or get");
+        } else return error_response (405, m, problem::invalid_method, "use pput or get");
     }
 
     return error_response (500, m, problem::invalid_wallet_name, "wallet method called without wallet name");

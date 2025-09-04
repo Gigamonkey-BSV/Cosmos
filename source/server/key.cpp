@@ -112,8 +112,11 @@ net::HTTP::response handle_key (server &p,
         if (bool (content_type))
             return error_response (400, method::KEY, problem::invalid_query);
 
-        // TODO we expect to use content-type text/plain.
-        return error_response (501, method::KEY, problem::unimplemented);
+        key_expression secret = p.DB->get_key (wallet_name, key_name);
+
+        if (secret.valid ()) return string_response (string (secret));
+
+        return error_response (404, method::KEY, problem::failed);
 
     } else if (http_method == net::HTTP::method::post) {
 

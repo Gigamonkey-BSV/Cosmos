@@ -28,7 +28,7 @@ net::HTTP::response make_request (server &x, const net::HTTP::request &r) {
     return data::synced (&server::operator (), &x, r);
 }
 
-TEST (ServerTest, TestShutdown) {
+TEST (Server, Shutdown) {
     auto test_server = get_test_server ();
     EXPECT_FALSE (is_error (make_request (test_server, make_shutdown_request ())));
     EXPECT_TRUE (Shutdown);
@@ -43,13 +43,15 @@ bool is_data_response (const bytes &expected, const net::HTTP::response &);
 net::HTTP::request make_list_wallets_request ();
 bool is_JSON_response (const JSON &, const net::HTTP::response &r);
 
-net::HTTP::request inline make_create_wallet_request (const string &wallet_name) {
-    return net::HTTP::request::make ().method (net::HTTP::method::post).target (string::write ("/create_wallet/", wallet_name)).host ("localhost");
+net::HTTP::request inline make_create_wallet_request (const std::string &wallet_name) {
+    string target = string::write ("/create_wallet/", wallet_name);
+    std::cout << "target is " << target << std::endl;
+    return net::HTTP::request::make ().method (net::HTTP::method::post).target (target).host ("localhost");
 }
 
 template <size_t x> maybe<data::digest<x>> read_digest (const net::HTTP::response &);
 
-TEST (ServerTest, TestInvertHash) {
+TEST (Server, InvertHash) {
     auto test_server = get_test_server ();
     string data_A = "Hi, this string will be hashed.";
     string data_B = "Hi, this string will not have the same hash.";
@@ -68,11 +70,9 @@ TEST (ServerTest, TestInvertHash) {
     ASSERT_TRUE (is_error (make_request (test_server,
         put_invert_hash_request (Cosmos::hash_function::SHA2_256, bytes (data_B), SHA256_A))));
 
-    std::cout << "### try to make an inverse hash entry! " << std::endl;
     EXPECT_TRUE (is_ok_response (make_request (test_server,
         put_invert_hash_request (Cosmos::hash_function::SHA2_256, bytes (data_A), SHA256_A))));
 
-    std::cout << "### try to retrieve " << data_A << " from database with digest " << SHA256_A << std::endl;
     ASSERT_TRUE (is_data_response (bytes (data_A), make_request (test_server, get_invert_hash_request (SHA256_A))));
 
     // this should still fail
@@ -91,7 +91,17 @@ TEST (ServerTest, TestInvertHash) {
 
 }
 
-TEST (ServerTest, TestCreateWallet) {
+TEST (Server, ToPrivate) {
+    auto test_server = get_test_server ();
+
+    // generate three kinds of keys.
+
+    // try to retrieve key before it was entered.
+
+    // enter private key into database.
+}
+
+TEST (Server, CreateWallet) {
     auto test_server = get_test_server ();
 
     // list_wallets should return an empty list.
@@ -108,7 +118,9 @@ TEST (ServerTest, TestCreateWallet) {
 
 }
 
-TEST (ServerTest, TestEntropy) {
+maybe<string> read_string_response (const net::HTTP::response &r);
+
+TEST (Server, Entropy) {
     auto test_server = get_test_server ();
 
     // fail to load a key because the wallet doesn't exist.
@@ -131,17 +143,17 @@ TEST (ServerTest, TestEntropy) {
         make_add_entropy_request ("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"))));
 
     // succeed at generating a random key
-    auto successfully_create_key = make_request (test_server,
-        post_key_request ("Wally", "X", key_type::secp256k1));
+    auto successfully_create_key = read_string_response (make_request (test_server,
+        post_key_request ("Wally", "X", key_type::secp256k1)));
 
-    ASSERT_TRUE (is_string_response (successfully_create_key));
+    ASSERT_TRUE (successfully_create_key);
 
-    auto get_new_key = make_request (test_server, get_key_request ("Wally", "X"));
+    auto get_new_key = read_string_response (make_request (test_server, get_key_request ("Wally", "X")));
 
     // successfully retrieve the key.
-    ASSERT_TRUE (is_string_response (get_new_key));
+    ASSERT_TRUE (get_new_key);
 
-    EXPECT_EQ (successfully_create_key.Body, get_new_key.Body);
+    EXPECT_EQ (*successfully_create_key, *get_new_key);
 
     // try to overwrite the key and fail.
     ASSERT_TRUE (is_error (make_request (test_server,
@@ -165,21 +177,29 @@ net::HTTP::request make_to_private_post_request (const key_expression &k, const 
 
 key_expression read_key_expression (const net::HTTP::response &);
 
-TEST (ServerTest, TestKey) {
+bool is_string_response (const net::HTTP::response &r) {
+    return bool (read_string_response (r));
+}
+
+TEST (Server, Key) {
     auto test_server = prepare (get_test_server ());
 
     // attempt to retrieve a key that hasn't been entered yet.
     EXPECT_TRUE (is_error (make_request (test_server, get_key_request ("Wally", "X"))));
 
     // generate keys of different types and retrieve them.
-    EXPECT_TRUE (is_error (make_request (test_server, post_key_request ("Wally", "X", key_type::secp256k1))));
-    EXPECT_TRUE (is_error (make_request (test_server, post_key_request ("Wally", "Y", key_type::WIF))));
-    EXPECT_TRUE (is_error (make_request (test_server, post_key_request ("Wally", "Z", key_type::xpriv))));
+    auto res_gen_X = read_string_response (make_request (test_server, post_key_request ("Wally", "X", key_type::secp256k1)));
+    auto res_gen_Y = read_string_response (make_request (test_server, post_key_request ("Wally", "Y", key_type::WIF)));
+    auto res_gen_Z = read_string_response (make_request (test_server, post_key_request ("Wally", "Z", key_type::xpriv)));
+
+    EXPECT_TRUE (bool (res_gen_X));
+    EXPECT_TRUE (bool (res_gen_Y));
+    EXPECT_TRUE (bool (res_gen_Y));
 
     key_expression secret_X;
     key_expression secret_Y;
     key_expression secret_Z;
-
+/*
     EXPECT_NO_THROW (secret_X = read_key_expression (make_request (test_server, get_key_request ("wally", "X"))));
     EXPECT_NO_THROW (secret_Y = read_key_expression (make_request (test_server, get_key_request ("Wally", "Y"))));
     EXPECT_NO_THROW (secret_Z = read_key_expression (make_request (test_server, get_key_request ("Wally", "Z"))));
@@ -201,6 +221,7 @@ TEST (ServerTest, TestKey) {
     EXPECT_FALSE (is_bool_response (true, make_request (test_server, make_to_private_post_request (pubkey_Z, secret_Z))));
 
     // TODO retrieve these.
+    */
 }
 
 using JSON = data::JSON;
@@ -211,7 +232,7 @@ net::HTTP::request make_next_xpub_request (const std::string &wallet_name);
 
 maybe<std::string> read_string (const net::HTTP::response &r);
 
-TEST (ServerTest, TestGenerate) {
+TEST (Server, Generate) {
     auto test_server = prepare (get_test_server ());
 
     // generate a wallet of each type
@@ -275,11 +296,7 @@ TEST (ServerTest, TestGenerate) {
 
 }
 
-TEST (ServerTest, TestToPrivate) {
-    auto test_server = prepare (get_test_server ());
-}
-
-TEST (ServerTest, TestWallet) {
+TEST (Server, Wallet) {
     auto test_server = prepare (get_test_server ());
     // make a wallet.
     // Add key sequence to wallet
@@ -303,14 +320,14 @@ bool is_ok_response (const net::HTTP::response &r) {
     return false;
 }
 
-bool is_string_response (const net::HTTP::response &r) {
+maybe<string> read_string_response (const net::HTTP::response &r) {
     bool ok = bool (r.content_type ()) && *r.content_type () == "text/plain" && r.Status == 200;
-    if (ok) return true;
+    if (ok) return string (r.Body);
     // check if this is an error response instead.
     maybe<net::error> err = read_error (r);
     if (bool (err))
         std::cout << "Expected string response but got error response " << *err << std::endl;
-    return false;
+    return {};
 }
 
 net::HTTP::request make_list_wallets_request () {

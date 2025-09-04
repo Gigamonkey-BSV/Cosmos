@@ -333,8 +333,8 @@ namespace Cosmos::SQLite {
     // to_public function application. Thus, key is
     // an expression for a private key.
     struct Pubkey {
-        std::string name;
-        std::string key;
+        std::string pubkey;
+        std::string secret;
     };
 
     // Information on how to redeem an output.
@@ -470,8 +470,8 @@ namespace Cosmos::SQLite {
             ),
 
             make_table ("pubkeys",
-                make_column ("name", &Pubkey::name, primary_key ()),
-                make_column ("key", &Pubkey::key)
+                make_column ("pubkey", &Pubkey::pubkey, primary_key ()),
+                make_column ("secret", &Pubkey::secret)
             ),
 
             make_table ("redeemables",
@@ -487,7 +487,7 @@ namespace Cosmos::SQLite {
 
             make_table ("wallets",
                 make_column ("id", &Wallet::id, primary_key ().autoincrement ()),
-                make_column ("name", &Wallet::name)
+                make_column ("name", &Wallet::name, unique ())
             ),
 
             make_table ("wallet_outputs",
@@ -955,16 +955,50 @@ namespace Cosmos::SQLite {
             }};
         }
 
+        bool set_to_private (const key_expression &pubkey, const key_expression &secret) final override {
+
+            try {
+                storage.insert (
+                    sqlite_orm::into<Pubkey> (),
+                    columns (&Pubkey::pubkey, &Pubkey::secret),
+                    values (std::string (pubkey), std::string (secret)));
+            } catch (const std::system_error &e) {
+                return false;
+            }
+
+            return true;
+        }
+
+        key_expression get_to_private (const key_expression &pubkey) final override {
+            auto rows = storage.select (
+                columns (&Pubkey::pubkey, &Pubkey::secret),
+                where (c (&Pubkey::pubkey) == std::string (pubkey)),
+                limit (1));
+
+            if (rows.empty ()) return {};
+
+            const auto &entry = rows.front ();
+
+            return key_expression {std::get<1> (entry)};
+        }
+
         bool set_key (const std::string &wallet_name, const std::string &key_name, const key_expression &k) final override {
 
             try {
                 return storage.transaction([&] {
                     // 1. Look up the user id
-                    auto rows = storage.select (&Wallet::id, where(c(&Wallet::name) == wallet_name));
+                    auto wrows = storage.select (&Wallet::id, where (c (&Wallet::name) == wallet_name));
 
-                    if (rows.empty ()) return false;
+                    if (wrows.empty ()) return false;
 
-                    int wallet_id = rows.front ();
+                    int wallet_id = wrows.front ();
+
+                    auto krows = storage.select (
+                        columns (&Secret::name, &Secret::key),
+                        where (c (&Secret::name) == key_name && c (&Secret::wallet) == wallet_id),
+                        limit (1));
+
+                    if (!krows.empty ()) return false;
 
                     // 2. Insert a secret tied to that user id
                     storage.insert (Secret {-1, wallet_id, key_name, std::string (k)});
@@ -990,7 +1024,8 @@ namespace Cosmos::SQLite {
 
                     auto krows = storage.select (
                         columns (&Secret::name, &Secret::key),
-                        where (c (&Secret::name) == key_name && c (&Secret::wallet) == wallet_id), limit (1));
+                        where (c (&Secret::name) == key_name && c (&Secret::wallet) == wallet_id),
+                        limit (1));
 
                     if (krows.empty ()) return false;
 
@@ -1003,37 +1038,6 @@ namespace Cosmos::SQLite {
             } catch (const std::system_error &e) {
                 return {};
             }
-        }
-
-        bool set_to_private (const key_expression &key_name, const key_expression &k) final override {
-            /*
-            try {
-                storage.insert (
-                    sqlite_orm::into<Pubkey> (),
-                    columns (&Pubkey::name, &Pubkey::key),
-                    values (key_name, std::string (k)));
-            } catch (const std::system_error &e) {
-                return false;
-            }
-
-            return true;
-            */
-            throw 0;
-        }
-        
-        key_expression get_to_private (const key_expression &key_name) final override {
-            /*
-            auto rows = storage.select (
-                columns (&Pubkey::name, &Pubkey::key),
-                where (is_equal (&Pubkey::name, key_name)), limit (1));
-
-            if (rows.empty ()) return {};
-            
-            const auto &entry = rows.front ();
-
-            return key_expression {std::get<1> (entry)};
-            */
-            throw 0;
         }
 
         /*
