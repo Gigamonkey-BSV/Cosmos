@@ -60,7 +60,6 @@ private:
 
 };
 
-maybe<bool> read_bool (const std::string &utf8);
 bool parse_uint32 (const std::string &str, uint32_t &result);
 
 net::HTTP::response favicon ();

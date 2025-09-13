@@ -68,15 +68,15 @@ FetchContent_MakeAvailable (ctre)
 
 # You can configure this for your need, presumbably you want specify a git tag here instead of a branch
 FetchContent_Declare (sqliteOrm
-  GIT_REPOSITORY https://github.com/fnc12/sqlite_orm
-  GIT_TAG        origin/dev
+    GIT_REPOSITORY https://github.com/fnc12/sqlite_orm
+    GIT_TAG        origin/dev
 )
 
 FetchContent_MakeAvailable (sqliteOrm)
 
 FetchContent_Declare (dotenv
-  GIT_REPOSITORY https://github.com/laserpants/dotenv-cpp
-  GIT_TAG        origin/master  # or a specific tag like v1.0.1
+    GIT_REPOSITORY https://github.com/laserpants/dotenv-cpp
+    GIT_TAG        origin/master  # or a specific tag like v1.0.1
 )
 
 FetchContent_MakeAvailable (dotenv)
@@ -144,6 +144,7 @@ add_executable (
     source/server/server.cpp
     source/server/invert_hash.cpp
     source/server/key.cpp
+    source/server/to_private.cpp
     source/server/generate.cpp
     source/Server.cpp
 )

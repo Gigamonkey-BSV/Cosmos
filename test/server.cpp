@@ -70,9 +70,11 @@ TEST (Server, InvertHash) {
     ASSERT_TRUE (is_error (make_request (test_server,
         put_invert_hash_request (Cosmos::hash_function::SHA2_256, bytes (data_B), SHA256_A))));
 
+    // this is correct so it should succeed.
     EXPECT_TRUE (is_ok_response (make_request (test_server,
         put_invert_hash_request (Cosmos::hash_function::SHA2_256, bytes (data_A), SHA256_A))));
 
+    // now we try to retrieve it.
     ASSERT_TRUE (is_data_response (bytes (data_A), make_request (test_server, get_invert_hash_request (SHA256_A))));
 
     // this should still fail
@@ -327,6 +329,7 @@ maybe<string> read_string_response (const net::HTTP::response &r) {
     maybe<net::error> err = read_error (r);
     if (bool (err))
         std::cout << "Expected string response but got error response " << *err << std::endl;
+    else std::cout << "response is " << r << std::endl;
     return {};
 }
 
@@ -391,9 +394,13 @@ maybe<bool> read_bool_response (const net::HTTP::response &r) {
 
 maybe<bytes> read_data_response (const net::HTTP::response &r) {
     auto ct = r.content_type ();
-    if (!bool (ct)) return {};
-
-    if (*ct != "application/octet-stream") return {};
+    if (!bool (ct) || *ct != "application/octet-stream") {
+        auto err = read_error (r);
+        if (bool (err)) {
+            std::cout << "expected data response but got error " << *err << std::endl;
+        }
+        return {};
+    };
 
     return r.Body;
 }

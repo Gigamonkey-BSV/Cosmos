@@ -21,6 +21,7 @@ enum class key_type {
 };
 
 std::ostream &operator << (std::ostream &, key_type);
+std::istream &operator >> (std::istream &, key_type &);
 
 net::HTTP::request get_key_request (const std::string &wallet_name, const std::string &key_name);
 net::HTTP::request post_key_request (const std::string &wallet_name, const std::string &key_name, key_type);
@@ -30,6 +31,7 @@ struct key_request_options {
     const std::string WalletName {};
     const std::string KeyName {};
     maybe<::key_type> KeyType {};
+    maybe<bool> Compressed {true};
 
     maybe<net::HTTP::method> HTTPMethod {};
     maybe<key_expression> Body {};
@@ -43,6 +45,9 @@ struct key_request_options {
     key_request_options &key_type (::key_type);
     key_request_options &body (const key_expression &k);
     key_request_options &net (Bitcoin::net);
+
+    key_request_options &compressed (bool = true);
+    key_request_options &uncompressed ();
 
     operator net::HTTP::request () const;
 };
@@ -79,6 +84,16 @@ key_request_options inline &key_request_options::key_type (::key_type kk) {
 
 key_request_options inline &key_request_options::body (const key_expression &k) {
     Body = k;
+    return *this;
+}
+
+key_request_options inline &key_request_options::compressed (bool comp) {
+    Compressed = comp;
+    return *this;
+}
+
+key_request_options inline &key_request_options::uncompressed () {
+    Compressed = false;
     return *this;
 }
 

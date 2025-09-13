@@ -7,6 +7,8 @@
 
 #include <data/net/REST.hpp>
 
+#include <data/tools/map_schema.hpp>
+
 using hash_function = Cosmos::hash_function;
 
 namespace base58 = Gigamonkey::base58;
@@ -18,6 +20,18 @@ std::ostream &operator << (std::ostream &o, digest_format form) {
         case digest_format::BASE64: return o << "base64";
         default: return o << "invalid";
     }
+}
+
+std::istream &operator >> (std::istream &i, digest_format &x) {
+    std::string word;
+    i >> word;
+    if (!i) return i;
+    std::string sanitized = sanitize (word);
+    if (sanitized == "hex") x = digest_format::HEX;
+    else if (sanitized == "base58check") x = digest_format::BASE58_CHECK;
+    else if (sanitized == "base64") x = digest_format::BASE64;
+    else i.setstate (std::ios::failbit);
+    return i;
 }
 
 template <typename K, typename V> using map = data::map<K, V>;
@@ -97,59 +111,63 @@ net::HTTP::response handle_invert_hash (server &p,
     if (http_method != net::HTTP::method::put && http_method != net::HTTP::method::get)
         return error_response (405, method::INVERT_HASH, problem::invalid_method, "use put or get");
 
+    // Required if method is PUT, optional otherwise.
     hash_function HashFunction {hash_function::invalid};
 
-    // Which hash function do we use? 
-    const UTF8 *hash_function_param = query.contains ("function");
-    if (bool (hash_function_param)) {
-        std::string sanitized = sanitize (*hash_function_param);
-        if (sanitized == "sha1") HashFunction = hash_function::SHA1;
-        else if (sanitized == "md5") HashFunction = hash_function::MD5;
-        else if (sanitized == "sha2256") HashFunction = hash_function::SHA2_256;
-        else if (sanitized == "sha2512") HashFunction = hash_function::SHA2_512;
-        else if (sanitized == "sha3256") HashFunction = hash_function::SHA3_256;
-        else if (sanitized == "sha3512") HashFunction = hash_function::SHA3_512;
-        else if (sanitized == "ripmd160") HashFunction = hash_function::RIPEMD160;
-        else if (sanitized == "hash256") HashFunction = hash_function::Hash256;
-        else if (sanitized == "hash160") HashFunction = hash_function::Hash160;
-        else return error_response (400, method::INVERT_HASH, problem::invalid_query, "invalid parameter 'function'");
-    } else if (http_method == net::HTTP::method::post)
-        return error_response (400, method::INVERT_HASH, problem::missing_parameter, "missing required parameter 'function'");
-
+    // the other two are required if GET, optional otherwise.
     digest_format DigestFormat {digest_format::unset};
-
-    // there are some options in terms of how the hash digest is formatted.
-    const UTF8 *digest_format_param = query.contains ("format");
-    if (bool (digest_format_param)) {
-        std::string sanitized = sanitize (*digest_format_param);
-        if (sanitized == "hex") DigestFormat = digest_format::HEX;
-        else if (sanitized == "base58check") DigestFormat = digest_format::BASE58_CHECK;
-        else if (sanitized == "base64") DigestFormat = digest_format::BASE64;
-        else return error_response (400, method::INVERT_HASH, problem::invalid_parameter, "invalid parameter 'format'");
-    } else if (http_method == net::HTTP::method::get) 
-        return error_response (400, method::INVERT_HASH, problem::missing_parameter, "missing required parameter 'format'");
 
     // the digest provided by the query. In the case of PUT, this is optional because it can be calculated.
     maybe<bytes> digest;
 
-    const UTF8 *digest_param = query.contains ("digest");
-    if (bool (digest_param)) {
+    maybe<std::string> digest_string;
+
+    if (http_method == net::HTTP::method::put) {
+        auto [f, dig, fmt] = data::schema::validate<> (query,
+            data::schema::key<hash_function> ("function") &
+            *data::schema::key<std::string> ("digest") &
+            *data::schema::key<digest_format> ("format"));
+
+        HashFunction = f.Value;
+
+        // if either of these is present, then they both most be.
+        if (bool (dig) || bool (fmt)) {
+            if (!(bool (dig) && bool (fmt)))
+                return error_response (400, method::INVERT_HASH, problem::invalid_query,
+                    "if parameter digest or format is provided, the other must also be provided");
+
+            digest_string = dig->Value;
+            DigestFormat = fmt->Value;
+        }
+    } else {
+        auto [dig, fmt, hash_func_provided] = data::schema::validate<> (query,
+            data::schema::key<std::string> ("digest") &
+            data::schema::key<digest_format> ("format") &
+            *data::schema::key<hash_function> ("function"));
+
+        if (bool (hash_func_provided))
+            HashFunction = hash_func_provided->Value;
+
+        digest_string = dig.Value;
+        DigestFormat = fmt.Value;
+    }
+
+    if (bool (digest_string)) {
         switch (DigestFormat) {
             case digest_format::HEX: {
-                digest = encoding::hex::read (*digest_param);
+                digest = encoding::hex::read (*digest_string);
             } break;
             case digest_format::BASE58_CHECK: {
-                digest = Gigamonkey::base58::check::decode (*digest_param).payload ();
+                digest = Gigamonkey::base58::check::decode (*digest_string).payload ();
             } break;
             case digest_format::BASE64: {
-                digest = encoding::base64::read (*digest_param);
+                digest = encoding::base64::read (*digest_string);
             } break;
             default: return error_response (400, method::INVERT_HASH, problem::missing_parameter, "missing required parameter 'digest_format'");
         }
 
         if (!bool (digest)) return error_response (400, method::INVERT_HASH, problem::invalid_parameter, "invalid parameter 'digest'");
-    } else if (DigestFormat != digest_format::unset) 
-        return error_response (400, method::INVERT_HASH, problem::missing_parameter, "missing required parameter 'digest'");
+    }
 
     if (!bool (content_type)) {
         if (http_method == net::HTTP::method::put)

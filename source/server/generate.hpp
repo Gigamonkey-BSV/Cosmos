@@ -42,6 +42,8 @@ struct generate_request_options {
     operator net::HTTP::request () const;
 };
 
+std::istream &operator >> (std::istream &, mnemonic_style &);
+std::istream &operator >> (std::istream &, wallet_style &);
 std::ostream &operator << (std::ostream &, wallet_style);
 std::ostream &operator << (std::ostream &, mnemonic_style);
 

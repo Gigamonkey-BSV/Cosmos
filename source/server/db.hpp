@@ -29,4 +29,25 @@ using database = Cosmos::database;
 
 ptr<database> load_DB (const db_options &o);
 
+namespace Cosmos {
+
+    std::ostream &operator << (std::ostream &, hash_function);
+    std::istream &operator >> (std::istream &, hash_function &);
+
+    std::ostream inline &operator << (std::ostream &o, hash_function f) {
+        switch (f) {
+            case hash_function::SHA1: return o << "SHA1";
+            case hash_function::MD5: return o << "MD5";
+            case hash_function::SHA2_256: return o << "SHA2_256";
+            case hash_function::SHA2_512: return o << "SHA2_512";
+            case hash_function::RIPEMD160: return o << "RIPEMD160";
+            case hash_function::SHA3_256: return o << "SHA3_256";
+            case hash_function::SHA3_512: return o << "SHA3_512";
+            case hash_function::Hash256: return o << "Hash256";
+            case hash_function::Hash160: return o << "Hash160";
+            default: throw data::exception {} << "invalid hash function";
+        }
+    }
+}
+
 #endif

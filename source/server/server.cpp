@@ -2,12 +2,15 @@
 #include "method.hpp"
 #include "invert_hash.hpp"
 #include "key.hpp"
+#include "to_private.hpp"
 #include "generate.hpp"
 
 #include <Diophant/parse.hpp>
 #include <Diophant/symbol.hpp>
 
 #include <gigamonkey/schema/random.hpp>
+
+#include <data/tools/map_schema.hpp>
 
 void server::add_entropy (const bytes &b) {
     if (!FixedEntropy) FixedEntropy = std::make_shared<data::fixed_entropy> (b);
@@ -57,13 +60,6 @@ net::HTTP::response version_response () {
     version (ss);
     auto res = net::HTTP::response (200, {{"content-type", "text/plain"}}, bytes (data::string (ss.str ())));
     return res;
-}
-
-maybe<bool> read_bool (const std::string &utf8) {
-    std::string sanitized = sanitize (utf8);
-    if (sanitized == "true") return true;
-    else if (sanitized == "false") return false;
-    else return {};
 }
 
 // for methods that operate on the database 
@@ -136,7 +132,8 @@ awaitable<net::HTTP::response> server::operator () (const net::HTTP::request &re
 
     if (m == method::ADD_ENTROPY) {
         if (req.Method != net::HTTP::method::post)
-            co_return error_response (405, method::ADD_ENTROPY, problem::invalid_method, "use post with method add_entropy");
+            co_return error_response (405, method::ADD_ENTROPY, problem::invalid_method,
+                "use post with method add_entropy");
 
         maybe<net::HTTP::content> content_type = req.content_type ();
         if (!bool (content_type) || (
@@ -192,7 +189,14 @@ awaitable<net::HTTP::response> server::operator () (const net::HTTP::request &re
     } catch (const Diophant::parse_error &w) {
         co_return error_response (400, m,
             problem::invalid_expression,
+            // this is a pretty unhelpful message. However, hopefully we won't throw this in the future.
             string::write ("an invalid Diophant expression was generated: ", w.what ()));
+    } catch (data::schema::missing_key mk) {
+        co_return error_response (400, m, problem::missing_parameter, string::write ("missing parameter ", mk.Key));
+    } catch (data::schema::invalid_value iv) {
+        co_return error_response (400, m, problem::invalid_parameter, string::write ("invalid parameter ", iv.Key));
+    } catch (data::schema::unknown_key uk) {
+        co_return error_response (400, m, problem::invalid_query, string::write ("unknown parameter ", uk.Key));
     }
 }
 
@@ -204,29 +208,7 @@ net::HTTP::response process_method (
 
     if (m == method::INVERT_HASH) return handle_invert_hash (p, http_method, query, content_type, body);
 
-    if (m == method::TO_PRIVATE) {
-        if (http_method == net::HTTP::method::put) {
-
-            if (!bool (content_type) || *content_type != net::HTTP::content::type::text_plain)
-                return error_response (400, m, problem::invalid_content_type, "expected content-type:text/plain");
-
-            const UTF8 *key_name_param = query.contains ("name");
-            if (!bool (key_name_param))
-                return error_response (400, m, problem::missing_parameter, "required parameter 'name' not present");
-
-            Diophant::symbol key_name {*key_name_param};
-
-            if (!key_name.valid ())
-                return error_response (400, m, problem::invalid_parameter, "invalid parameter 'name'");
-
-            key_expression key_expr {data::string (body)};
-
-            if (p.DB->set_to_private (key_name, key_expr)) return ok_response ();
-            return error_response (500, m, problem::failed, "could not set private key");
-        } else if (http_method != net::HTTP::method::get) {
-            return error_response (501, m, problem::unimplemented, "GET TO_PRIVATE");
-        } else return error_response (405, m, problem::invalid_method, "use pput or get");
-    }
+    if (m == method::TO_PRIVATE) handle_to_private (p, http_method, query, content_type, body);
 
     return error_response (500, m, problem::invalid_wallet_name, "wallet method called without wallet name");
 }
@@ -280,6 +262,7 @@ net::HTTP::response process_wallet_method (
         else return error_response (500, m, problem::failed, "could not create wallet");
     }
 
+    // TODO there's something screwed up here.
     if (m == method::KEY_SEQUENCE) {
         if (http_method != net::HTTP::method::post)
             return error_response (405, m, problem::invalid_method, "use post");
@@ -345,9 +328,9 @@ net::HTTP::response process_wallet_method (
         Diophant::symbol sequence_name;
 
         {
-          const UTF8 *sequence_name_param = query.contains ("sequence_name");
-          if (bool (sequence_name_param)) sequence_name = *sequence_name_param;
-          else sequence_name = m == method::NEXT_ADDRESS ? std::string {"receive"} : std::string {"receivex"};
+            const UTF8 *sequence_name_param = query.contains ("sequence_name");
+            if (bool (sequence_name_param)) sequence_name = *sequence_name_param;
+            else sequence_name = m == method::NEXT_ADDRESS ? std::string {"receive"} : std::string {"receivex"};
         }
 
         if (!sequence_name.valid ()) return error_response (400, m, problem::invalid_parameter, "sequence_name");

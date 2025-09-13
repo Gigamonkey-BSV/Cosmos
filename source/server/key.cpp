@@ -1,6 +1,7 @@
 #include "key.hpp"
 #include "method.hpp"
 #include "server.hpp"
+#include <data/tools/map_schema.hpp>
 
 std::ostream &operator << (std::ostream &o, key_type k) {
     switch (k) {
@@ -9,6 +10,18 @@ std::ostream &operator << (std::ostream &o, key_type k) {
         case key_type::xpriv: return o << "xpriv";
         default: return o << "invalid";
     }
+}
+
+std::istream &operator >> (std::istream &i, key_type &x) {
+    std::string word;
+    i >> word;
+    if (!i) return i;
+    std::string key_type_san = sanitize (word);
+    if (key_type_san == "secp256k1") x = key_type::secp256k1;
+    else if (key_type_san == "wif") x = key_type::WIF;
+    else if (key_type_san == "xpriv") x = key_type::xpriv;
+    else i.setstate (std::ios::failbit);
+    return i;
 }
 
 key_request_options::operator net::HTTP::request () const {
@@ -48,121 +61,96 @@ net::HTTP::response handle_key (server &p,
     const maybe<net::HTTP::content> &content_type,
     const data::bytes &body) {
 
-    const UTF8 *key_name_param = query.contains ("name");
-    if (!bool (key_name_param))
-        return error_response (400, method::KEY, problem::missing_parameter, "required parameter 'name' not present");
+    if (http_method != net::HTTP::method::get && http_method != net::HTTP::method::post)
+        return error_response (405, method::KEY, problem::invalid_method, "use get or post");
 
-    Diophant::symbol key_name {*key_name_param};
+    // if the method is get, then we do not have a body.
+    if (http_method == net::HTTP::method::get && bool (content_type))
+        return error_response (400, method::KEY, problem::invalid_query,
+            "When method is GET, no body should be present");
+
+    bool method_random = http_method == net::HTTP::method::post && !bool (content_type);
+
+    // this parameter is always required.
+    Diophant::symbol KeyName;
+
+    // If we are going to generate a key randomly then these remaining parameters may be present.
+
+    // key type is required if we are going to randomly generate.
+    key_type KeyType;
+
+    // these other two are not required and are not allowed if key type is secp256k1.
+    bool Compressed {true};
+    Bitcoin::net Net {Bitcoin::net::Main};
+
+    // in these cases the parameter list is just the key name.
+    if (http_method == net::HTTP::method::get || !method_random) {
+        KeyName = data::schema::validate<> (query, data::schema::key<Diophant::symbol> ("name")).Value;
+    } else {
+        auto [qname, qtype, qnet, qcmp] = data::schema::validate<> (query,
+            data::schema::key<Diophant::symbol> ("name") &
+            data::schema::key<key_type> ("type") &
+            *data::schema::key<Bitcoin::net> ("net") &
+            *data::schema::key<bool> ("compressed"));
+
+        KeyName = qname.Value;
+        KeyType = qtype.Value;
+
+        if (KeyType == key_type::secp256k1) {
+            if (qcmp) error_response (400, method::KEY, problem::invalid_query,
+                "When key type is secp256k1, parameter compressed is not allowed");
+            if (qnet) error_response (400, method::KEY, problem::invalid_query,
+                "When key type is secp256k1, parameter net is not allowed");
+        } else {
+            if (qcmp) Compressed = qcmp->Value;
+            if (qnet) Net = qnet->Value;
+        }
+    }
 
     // make sure the name is a valid symbol name
-    if (!key_name.valid ())
-        return error_response (400, method::KEY, problem::invalid_parameter, "parameter 'name' must be alpha alnum+");
+    if (!KeyName.valid ())
+        return error_response (400, method::KEY, problem::invalid_parameter,
+            "parameter 'name' must be alpha alnum+");
 
-    key_type KeyType {key_type::unset};
-
-    const UTF8 *key_type = query.contains ("type");
-    if (bool (key_type)) {
-        std::string key_type_san = sanitize (*key_type);
-        if (key_type_san == "secp256k1") KeyType = key_type::secp256k1;
-        else if (key_type_san == "wif") KeyType = key_type::WIF;
-        else if (key_type_san == "xpriv") KeyType = key_type::xpriv;
-        else if (key_type_san != "unset")
-            return error_response (400, method::KEY, problem::invalid_query, "invalid parameter 'type'");
-    }
-
-    if (bool (content_type) && KeyType != key_type::unset)
-        return error_response (400, method::KEY, problem::invalid_query);
-
-    Bitcoin::net net = Bitcoin::net::Main;
-    const UTF8 *net_type_param = query.contains ("net");
-    if (bool (net_type_param)) {
-        std::string net_type_san = sanitize (*net_type_param);
-        if (net_type_san == "main") net = Bitcoin::net::Main;
-        else if (net_type_san == "test") net = Bitcoin::net::Test;
-        else return error_response (400, method::KEY, problem::invalid_query, "invalid parameter 'net'");
-    }
-
-    if (bool (content_type) && bool (net_type_param))
-        return error_response (400, method::KEY, problem::invalid_query);
-
-    bool compressed = true;
-    const UTF8 *compressed_param = query.contains ("compressed");
-    if (bool (compressed_param)) {
-        maybe<bool> maybe_compressed = read_bool (*compressed_param);
-        if (!maybe_compressed)
-            return error_response (400, method::KEY, problem::invalid_query, "invalid parameter 'compressed'");
-        compressed = *maybe_compressed;
-    }
-
-    if (bool (compressed_param) && (bool (content_type) ||
-        (KeyType != key_type::WIF && KeyType != key_type::xpriv)))
-        return error_response (400, method::KEY, problem::invalid_query);
-
+    // if the method is get, then we're done here.
     if (http_method == net::HTTP::method::get) {
-        // when we get a key, none of these parameters are needed.
-        if (KeyType != key_type::unset)
-            return error_response (400, method::KEY, problem::invalid_query);
 
-        if (bool (net_type_param))
-            return error_response (400, method::KEY, problem::invalid_query);
-
-        if (bool (compressed_param))
-            return error_response (400, method::KEY, problem::invalid_query);
-
-        if (bool (content_type))
-            return error_response (400, method::KEY, problem::invalid_query);
-
-        key_expression secret = p.DB->get_key (wallet_name, key_name);
+        key_expression secret = p.DB->get_key (wallet_name, KeyName);
 
         if (secret.valid ()) return string_response (string (secret));
 
         return error_response (404, method::KEY, problem::failed);
+    }
 
-    } else if (http_method == net::HTTP::method::post) {
+    // now we have to generate this key expression somehow.
+    key_expression key_expr;
 
-        key_expression key_expr;
+    if (method_random) {
+        data::entropy &random = p.get_secure_random ();
+        secp256k1::secret key;
+        random >> key.Value;
 
-        if (bool (content_type)) {
-            if (KeyType != key_type::unset)
-                return error_response (400, method::KEY, problem::invalid_query, "key type will be inferred from the expression provided");
-
-            if (*content_type != net::HTTP::content::type::text_plain)
-                return error_response (400, method::KEY, problem::invalid_content_type, "expected content-type:text/plain");
-
-            key_expr = key_expression {data::string (body)};
-
-        } else {
-            if (KeyType == key_type::unset)
-                return error_response (400, method::KEY, problem::invalid_query, "need a key type to tell us what to generate");
-
-            if (bool (content_type))
-                return error_response (400, method::KEY, problem::invalid_query, "no body when we generate random keys");
-
-            data::entropy &random = p.get_secure_random ();
-            secp256k1::secret key;
-            random >> key.Value;
-
-            switch (KeyType) {
-                case (key_type::WIF): {
-                    key_expr = key_expression {Bitcoin::secret {net, key, compressed}};
-                } break;
-                case (key_type::xpriv): {
-                    HD::chain_code x;
-                    random >> x;
-                    key_expr = key_expression (HD::BIP_32::secret {key, x, net});
-                } break;
-                default: {
-                    key_expr = key_expression {key};
-                }
+        switch (KeyType) {
+            case (key_type::WIF): {
+                key_expr = key_expression {Bitcoin::secret {Net, key, Compressed}};
+            } break;
+            case (key_type::xpriv): {
+                HD::chain_code x;
+                random >> x;
+                key_expr = key_expression (HD::BIP_32::secret {key, x, Net});
+            } break;
+            default: {
+                key_expr = key_expression {key};
             }
         }
+    } else key_expr = key_expression {data::string (body)};
 
-        if (p.DB->set_key (wallet_name, key_name, key_expr)) {
-            // we return the key if it was generated randomly.
-            if (bool (content_type)) return ok_response ();
-            return string_response (std::string (key_expr));
-        }
-        return error_response (500, method::KEY, problem::failed, "could not create key");
-    } else return error_response (405, method::KEY, problem::invalid_method, "use get or post");
+    if (p.DB->set_key (wallet_name, KeyName, key_expr)) {
+        // we return the key if it was generated randomly.
+        if (!method_random) return ok_response ();
+        return string_response (std::string (key_expr));
+    }
+
+    return error_response (500, method::KEY, problem::failed, "could not create key");
 
 }

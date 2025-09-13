@@ -19,6 +19,7 @@ add_executable (
   ../source/server/server.cpp
   ../source/server/key.cpp
   ../source/server/invert_hash.cpp
+  ../source/server/to_private.cpp
   ../source/server/generate.cpp
   server.cpp
 )

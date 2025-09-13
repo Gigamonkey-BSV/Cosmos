@@ -13,6 +13,7 @@ enum class digest_format {
     BASE64
 };
 
+std::istream &operator >> (std::istream &, digest_format &);
 std::ostream &operator << (std::ostream &, digest_format);
 
 template <size_t size>

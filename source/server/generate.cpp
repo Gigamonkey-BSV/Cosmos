@@ -3,6 +3,7 @@
 #include "generate.hpp"
 
 #include <gigamonkey/schema/bip_39.hpp>
+#include <data/tools/map_schema.hpp>
 
 generate_request_options::operator net::HTTP::request () const {
     std::stringstream query_stream;
@@ -33,55 +34,75 @@ std::ostream &operator << (std::ostream &o, mnemonic_style x) {
     }
 }
 
+std::istream &operator >> (std::istream &i, wallet_style &x) {
+    std::string word;
+    i >> word;
+    if (!i) return i;
+    std::string sanitized = sanitize (word);
+    if (sanitized == "bip44") x = wallet_style::BIP_44;
+    else if (sanitized == "bip44plus") x = wallet_style::BIP_44_plus;
+    // experimental means me generate two secp256k1 keys and use one as the chain code.
+    // this allows us to use bip 32 and hd stuff and future protocols.
+    else if (sanitized == "experimental") x = wallet_style::experimental;
+    else i.setstate (std::ios::failbit);
+    return i;
+}
+
+std::istream &operator >> (std::istream &i, mnemonic_style &x) {
+    std::string word;
+    i >> word;
+    if (!i) return i;
+    std::string sanitized = sanitize (word);
+    if (sanitized == "electrumsv") x = mnemonic_style::Electrum_SV;
+    else if (sanitized == "bip39") x = mnemonic_style::BIP_39;
+    else i.setstate (std::ios::failbit);
+    return i;
+}
+
 net::HTTP::response handle_generate (server &p,
     Diophant::symbol wallet_name, map<UTF8, UTF8> query,
     const maybe<net::HTTP::content> &content_type,
     const data::bytes &body) {
 
-    // first we will determine whether we will return a mnemonic
-    mnemonic_style MnemonicStyle {mnemonic_style::none};
+    auto validated = data::schema::validate<> (query,
+        data::schema::key<wallet_style> ("wallet_style") &
+        data::schema::key<std::string> ("coin_type") &
+        *data::schema::key<uint32> ("number_of_words") &
+        *data::schema::key<mnemonic_style> ("mnemonic_style"));
 
-    const UTF8 *mnemonic_style_param = query.contains ("mnemonic_style");
-    if (bool (mnemonic_style_param)) {
-        std::string sanitized = sanitize (*mnemonic_style_param);
-        if (sanitized == "electrumsv") MnemonicStyle = mnemonic_style::Electrum_SV;
-        else if (sanitized == "bip39") MnemonicStyle = mnemonic_style::BIP_39;
-        else return error_response (400, method::GENERATE, problem::invalid_query, "invalid parameter 'mnemonic_style'");
-    }
-
-    uint32 number_of_words = 24;
-    const UTF8 *number_of_words_param = query.contains ("number_of_words");
-    if (bool (number_of_words_param)) {
-        if (!parse_uint32 (*number_of_words_param, number_of_words))
-            return error_response (400, method::GENERATE, problem::invalid_parameter, "'number_of_words' should be either 12 or 24");
-    }
-
-    if (number_of_words != 12 && number_of_words != 24)
-        return error_response (400, method::GENERATE, problem::invalid_parameter, "'number_of_words' should be either 12 or 24");
-
-    wallet_style WalletStyle {wallet_style::BIP_44};
-
-    const UTF8 *wallet_style_param = query.contains ("wallet_style");
-    if (bool (wallet_style_param)) {
-        std::string sanitized = sanitize (*wallet_style_param);
-        if (sanitized == "bip44") WalletStyle = wallet_style::BIP_44;
-        else if (sanitized == "bip44plus") WalletStyle = wallet_style::BIP_44_plus;
-        // experimental means me generate two secp256k1 keys and use one as the chain code.
-        // this allows us to use bip 32 and hd stuff and future protocols.
-        else if (sanitized == "experimental") WalletStyle = wallet_style::experimental;
-        else return error_response (400, method::GENERATE, problem::invalid_query, "'wallet_style'");
-    }
-
-    if (MnemonicStyle == mnemonic_style::Electrum_SV || WalletStyle == wallet_style::experimental)
-        return error_response (501, method::GENERATE, problem::unimplemented);;
+    // parameter wallet_style, required
+    wallet_style WalletStyle = std::get<0> (validated).Value;
 
     // coin_type is required and it should be either a uint32 or "none".
     maybe<uint32> coin_type;
-    const UTF8 *coin_type_param = query.contains ("coin_type");
-    if (bool (coin_type_param)) {
-        if (*coin_type_param != "none" && !parse_uint32 (*coin_type_param, *coin_type))
+
+    {
+        std::string coin_type_param = std::get<1> (validated).Value;
+        if (coin_type_param != "none" && !parse_uint32 (coin_type_param, *coin_type))
             return error_response (400, method::GENERATE, problem::invalid_parameter, "'coin_type'");
-    } else coin_type = 0;
+    }
+
+    mnemonic_style MnemonicStyle {mnemonic_style::none}; // parameter mnemonic_style
+    uint32 number_of_words = 24;                         // parameter number_of_words
+
+    auto numw = std::get<2> (validated);
+    auto mn = std::get<3> (validated);
+
+    if (bool (numw) || bool (mn)) {
+        if (!(bool (numw) && bool (mn)))
+            return error_response (400, method::GENERATE, problem::invalid_query,
+                "if number_of_words or mnemonic_style is present, the other must also be");
+
+        number_of_words = numw->Value;
+        MnemonicStyle = mn->Value;
+    }
+
+    if (number_of_words != 12 && number_of_words != 24)
+        return error_response (400, method::GENERATE, problem::invalid_parameter,
+            "'number_of_words' should be either 12 or 24");
+
+    if (MnemonicStyle == mnemonic_style::Electrum_SV || WalletStyle == wallet_style::experimental)
+        return error_response (501, method::GENERATE, problem::unimplemented);
 
     // we generate the wallet the same way regardless of whether the user wants words.
     bytes wallet_entropy {};
