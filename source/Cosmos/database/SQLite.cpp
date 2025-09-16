@@ -235,15 +235,71 @@ namespace sqlite_orm {
         }
 
         std::string operator () (const Bitcoin::address &value) const {
-            std::stringstream ss;
-            ss << value;
-            return ss.str ();
+            return std::string (value);
         }
     };
 
     template <> struct row_extractor<Bitcoin::address> {
         Bitcoin::address extract (sqlite3_stmt *stmt, int columnIndex) const {
             return Bitcoin::address {std::string {reinterpret_cast<const char*> (sqlite3_column_text (stmt, columnIndex))}};
+        }
+    };
+
+    template <> struct type_printer<Diophant::symbol> {
+        static std::string print () {
+            return "TEXT";
+        }
+    };
+
+    template <> struct statement_binder<Diophant::symbol> {
+        int bind (sqlite3_stmt *stmt, int index, const Diophant::symbol &value) const {
+            return sqlite3_bind_text (stmt, index, value.c_str (),
+                                      static_cast<int> (value.size ()), SQLITE_TRANSIENT);
+        }
+    };
+
+    template <> struct field_printer<Diophant::symbol> {
+        static void print (std::ostream &os, const Diophant::symbol &value) {
+            os << "<text of size " << value.size () << ">";
+        }
+
+        std::string operator () (const Diophant::symbol &value) const {
+            return std::string (value);
+        }
+    };
+
+    template <> struct row_extractor<Diophant::symbol> {
+        Diophant::symbol extract (sqlite3_stmt *stmt, int columnIndex) const {
+            return Diophant::symbol {std::string {reinterpret_cast<const char*> (sqlite3_column_text (stmt, columnIndex))}};
+        }
+    };
+
+    template <> struct type_printer<Cosmos::key_expression> {
+        static std::string print () {
+            return "TEXT";
+        }
+    };
+
+    template <> struct statement_binder<Cosmos::key_expression> {
+        int bind (sqlite3_stmt *stmt, int index, const Cosmos::key_expression &value) const {
+            return sqlite3_bind_text (stmt, index, value.c_str (),
+                static_cast<int> (value.size ()), SQLITE_TRANSIENT);
+        }
+    };
+
+    template <> struct field_printer<Cosmos::key_expression> {
+        static void print (std::ostream &os, const Cosmos::key_expression &value) {
+            os << "<text of size " << value.size () << ">";
+        }
+
+        std::string operator () (const Cosmos::key_expression &value) const {
+            return std::string (value);
+        }
+    };
+
+    template <> struct row_extractor<Cosmos::key_expression> {
+        Cosmos::key_expression extract (sqlite3_stmt *stmt, int columnIndex) const {
+            return Cosmos::key_expression {std::string {reinterpret_cast<const char*> (sqlite3_column_text (stmt, columnIndex))}};
         }
     };
 }
@@ -316,25 +372,25 @@ namespace Cosmos::SQLite {
     // we interpret it based on the string we read, so
     // it could be WIF, HD, or some encrypted format as
     // long as we can distinguish them.
-    struct Secret {
+    struct Key {
         int id;
 
         // every key is associated with a wallet.
         int wallet;
 
         // the name of the key.
-        std::string name;
+        Diophant::symbol name;
 
         // the actual key.
-        std::string key;
+        key_expression key;
     };
 
     // Define one key as deriving from another via a
     // to_public function application. Thus, key is
     // an expression for a private key.
     struct Pubkey {
-        std::string pubkey;
-        std::string secret;
+        key_expression pubkey;
+        key_expression secret;
     };
 
     // Information on how to redeem an output.
@@ -357,24 +413,22 @@ namespace Cosmos::SQLite {
         std::string wallet_name;
     };
 
-    struct AddressSequence {
+    struct Sequence {
         int id;
 
-        std::string wallet_name;
+        int wallet_id;
 
         // typically 'receive' or 'change'
-        std::string name;
+        Diophant::symbol name;
 
-        int32_t next;
+        int32_t index;
+
+        key_expression key;
 
         // given an index, this string
         // defines a function that transforms a key
         // (either public or private) into another key.
-        std::string derivation_function;
-
-        // this is an expression that gives
-        // us a private key from a master key.
-        std::string key_name;
+        std::string derivation;
     };
 
     struct Event {
@@ -462,11 +516,11 @@ namespace Cosmos::SQLite {
                 unique (&Address::address, &Address::script_hash)
             ),
 
-            make_table ("secrets",
-                make_column ("id", &Secret::id, primary_key ().autoincrement ()),
-                make_column ("wallet", &Secret::wallet),
-                make_column ("name", &Secret::name),
-                make_column ("key", &Secret::key)
+            make_table ("keys",
+                make_column ("id", &Key::id, primary_key ().autoincrement ()),
+                make_column ("wallet", &Key::wallet),
+                make_column ("name", &Key::name),
+                make_column ("key", &Key::key)
             ),
 
             make_table ("pubkeys",
@@ -496,12 +550,12 @@ namespace Cosmos::SQLite {
             ),
 
             make_table ("sequences",
-                make_column ("id", &AddressSequence::id, primary_key ().autoincrement ()),
-                make_column ("wallet_name", &AddressSequence::wallet_name),
-                make_column ("name", &AddressSequence::name),
-                make_column ("next", &AddressSequence::next),
-                make_column ("derivation_function", &AddressSequence::derivation_function),
-                make_column ("key_name", &AddressSequence::key_name)
+                make_column ("id", &Sequence::id, primary_key ().autoincrement ()),
+                make_column ("wallet_id", &Sequence::wallet_id),
+                make_column ("name", &Sequence::name),
+                make_column ("index", &Sequence::index),
+                make_column ("derivation", &Sequence::derivation),
+                make_column ("key", &Sequence::key)
             ),
 
             make_table ("events",
@@ -937,7 +991,8 @@ namespace Cosmos::SQLite {
             return true;
         }
 
-        data::maybe<std::tuple<Cosmos::hash_function, data::bytes>> get_invert_hash (data::slice<const data::byte> dig) final override {
+        data::maybe<std::tuple<Cosmos::hash_function, data::bytes>>
+        get_invert_hash (data::slice<const data::byte> dig) final override {
             
             data::bytes doob {dig};
             
@@ -982,7 +1037,7 @@ namespace Cosmos::SQLite {
             return key_expression {std::get<1> (entry)};
         }
 
-        bool set_key (const std::string &wallet_name, const std::string &key_name, const key_expression &k) final override {
+        bool set_key (const std::string &wallet_name, const Diophant::symbol &key_name, const key_expression &k) final override {
 
             try {
                 return storage.transaction([&] {
@@ -994,27 +1049,26 @@ namespace Cosmos::SQLite {
                     int wallet_id = wrows.front ();
 
                     auto krows = storage.select (
-                        columns (&Secret::name, &Secret::key),
-                        where (c (&Secret::name) == key_name && c (&Secret::wallet) == wallet_id),
+                        columns (&Key::name, &Key::key),
+                        where (c (&Key::name) == key_name && c (&Key::wallet) == wallet_id),
                         limit (1));
 
                     if (!krows.empty ()) return false;
 
                     // 2. Insert a secret tied to that user id
-                    storage.insert (Secret {-1, wallet_id, key_name, std::string (k)});
+                    storage.insert (Key {-1, wallet_id, key_name, k});
 
                     return true;  // commit
                 });
-            } catch (const std::system_error &e) {
-                return false;
-            }
+            } catch (const std::system_error &e) {}
+            return false;
         }
 
-        key_expression get_key (const std::string &wallet_name, const std::string &key_name) final override {
+        key_expression get_key (const std::string &wallet_name, const Diophant::symbol &key_name) final override {
 
-            key_expression result {};
             try {
-                if (!storage.transaction([&] {
+                key_expression result {};
+                if (storage.transaction([&] {
                     // 1. Look up the user id
                     auto wrows = storage.select (&Wallet::id, where (c (&Wallet::name) == wallet_name));
 
@@ -1023,8 +1077,9 @@ namespace Cosmos::SQLite {
                     int wallet_id = wrows.front ();
 
                     auto krows = storage.select (
-                        columns (&Secret::name, &Secret::key),
-                        where (c (&Secret::name) == key_name && c (&Secret::wallet) == wallet_id),
+                        columns (&Key::name, &Key::key),
+                        where (c (&Key::name) == key_name &&
+                            c (&Key::wallet) == wallet_id),
                         limit (1));
 
                     if (krows.empty ()) return false;
@@ -1034,10 +1089,9 @@ namespace Cosmos::SQLite {
                     result = key_expression {std::get<1> (entry)};
 
                     return true;
-                })) return {}; else return result;
-            } catch (const std::system_error &e) {
-                return {};
-            }
+                })) return result;
+            } catch (const std::system_error &e) {}
+            return {};
         }
 
         /*
@@ -1060,16 +1114,58 @@ namespace Cosmos::SQLite {
             return names;
         }
 
-        bool set_wallet_derivation (const std::string &wallet_name, const std::string &deriv_name, const derivation &) {
-            throw data::method::unimplemented {"SQLite::set_derivation"};
+        bool set_wallet_sequence (
+            const std::string &wallet_name,
+            const Diophant::symbol &sequence_name,
+            const key_sequence &sequence,
+            int index) final override {
+
+            try {
+                return storage.transaction ([&] {
+                    // 1. Look up the user id
+                    auto wrows = storage.select (&Wallet::id, where (c (&Wallet::name) == wallet_name));
+
+                    if (wrows.empty ()) return false;
+
+                    storage.replace (Sequence {-1, wrows.front (), sequence_name, index, sequence.Key, sequence.Derivation});
+                    return true;
+                });
+            } catch (const std::system_error &e) {
+                return false;
+            }
         }
 
-        list<derivation> get_wallet_derivations (const std::string &wallet_name) final override {
-            throw data::method::unimplemented {"SQLite::get_wallet_derivations"};
-        };
+        maybe<key_source> get_wallet_sequence (const std::string &wallet_name, const std::string &key_name) final override {
 
-        maybe<derivation> get_wallet_derivation (const std::string &wallet_name, const std::string &deriv_name) final override {
-            throw data::method::unimplemented {"SQLite::get_wallet_derivation"};
+            try {
+                key_source result;
+                if (storage.transaction ([&] {
+                    // 1. Look up the user id
+                    auto wrows = storage.select (&Wallet::id, where (c (&Wallet::name) == wallet_name));
+
+                    if (wrows.empty ()) return false;
+
+                    int wallet_id = wrows.front ();
+
+                    auto rows = storage.select (
+                        columns (&Sequence::key, &Sequence::derivation, &Sequence::index),
+                        where (c (&Sequence::wallet_id) == wallet_id &&
+                            c (&Sequence::name) == std::string (key_name)),
+                            limit (1));
+
+                    if (rows.empty ()) return false;
+
+                    const auto &entry = rows.front ();
+
+                    result = key_source {
+                        std::get<2> (entry), key_sequence {
+                            std::get<0> (entry),
+                            key_derivation {std::get<1> (entry)}}};
+
+                    return true;
+                })) return result;
+            } catch (const std::system_error &e) {}
+            return {};
         };
 
         Cosmos::account get_wallet_account (const std::string &wallet_name) final override {

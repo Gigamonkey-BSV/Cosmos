@@ -4,6 +4,8 @@
 #include <gigamonkey/types.hpp>
 #include <gigamonkey/schema/hd.hpp>
 
+#include <Diophant/symbol.hpp>
+
 namespace secp256k1 = Gigamonkey::secp256k1;
 namespace Bitcoin = Gigamonkey::Bitcoin;
 namespace HD = Gigamonkey::HD;
@@ -64,28 +66,32 @@ namespace Cosmos {
         }
     };
 
+    // a function that derives an ith key from a given key.
     struct key_derivation : string {
         using string::string;
         key_expression operator () (key_expression, int32) const;
-        static key_derivation HD_key_derivation (const HD::BIP_32::pubkey &, int32 = 0);
     };
 
     struct key_sequence {
-        key_derivation Pubkey;
-        key_derivation Secret;
+        key_expression Key;
+        key_derivation Derivation;
 
-        key_expression pubkey (int32) const;
-        key_expression secret (int32) const;
+        key_expression operator () (int32) const;
+
+        operator std::string () const;
     };
 
     struct key_source {
-        int32_t Last;
+        int32_t Index;
         key_sequence Sequence;
 
-        key_source next () const;
+        key_source operator + () const;
 
-        key_expression last_public () const;
-        key_expression last_private () const;
+        key_expression operator * () const;
+
+        key_source &operator ++ ();
+
+        operator std::string () const;
     };
 
     inline key_expression::key_expression (const Bitcoin::secret &x):
@@ -105,6 +111,10 @@ namespace Cosmos {
 
     inline key_expression::key_expression (const secp256k1::pubkey &p):
         string {static_cast<string> (encoding::hex::write (p))} {}
+
+    key_expression inline key_sequence::operator () (int32 i) const {
+        return Derivation (Key, i);
+    }
 
 }
 

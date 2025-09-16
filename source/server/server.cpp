@@ -12,6 +12,14 @@
 
 #include <data/tools/map_schema.hpp>
 
+#include <Cosmos/Diophant.hpp>
+
+server::server (const options &o) {
+    SpendOptions = o.spend_options ();
+    DB = load_DB (o.db_options ());
+    Cosmos::initialize (DB);
+}
+
 void server::add_entropy (const bytes &b) {
     if (!FixedEntropy) FixedEntropy = std::make_shared<data::fixed_entropy> (b);
     else {
@@ -20,11 +28,6 @@ void server::add_entropy (const bytes &b) {
     }
 
     if (!Entropy) Entropy = std::make_shared<data::entropy_sum> (FixedEntropy, std::make_shared<Gigamonkey::bitcoind_entropy> ());
-}
-
-server::server (const options &o) {
-    SpendOptions = o.spend_options ();
-    DB = load_DB (o.db_options ());
 }
 
 data::entropy &server::get_secure_random () {
@@ -262,40 +265,57 @@ net::HTTP::response process_wallet_method (
         else return error_response (500, m, problem::failed, "could not create wallet");
     }
 
-    // TODO there's something screwed up here.
     if (m == method::KEY_SEQUENCE) {
-        if (http_method != net::HTTP::method::post)
-            return error_response (405, m, problem::invalid_method, "use post");
+        if (http_method != net::HTTP::method::post && http_method != net::HTTP::method::get)
+            return error_response (405, m, problem::invalid_method, "use post or get");
 
-        const UTF8 *key_name_param = query.contains ("key_name");
-        if (!bool (key_name_param))
-            return error_response (400, m, problem::invalid_query, "required parameter 'key_name' not present");
-
-        Diophant::symbol key_name {*key_name_param};
-
-        // make sure the name is a valid symbol name
-        if (!data::valid (key_name)) return error_response (400, m, problem::invalid_parameter, "key_name parameter must be alpha alnum+");
-
-        const UTF8 *name_param = query.contains ("name");
-        if (!bool (name_param))
-            return error_response (400, m, problem::invalid_query, "required parameter 'name' not present");
-
-        Diophant::symbol name {*name_param};
-
-        // make sure the name is a valid symbol name
-        if (!data::valid (name)) return error_response (400, m, problem::invalid_parameter, "name parameter must be alpha alnum+");
-
+        Diophant::symbol name;
+        key_expression key;
+        key_derivation derivation;
         uint32 index = 0;
-        const UTF8 *index_param = query.contains ("index");
-        if (bool (index_param)) {
-            if (!parse_uint32 (*index_param, index))
-                return error_response (400, m, problem::invalid_parameter, "'index'");
+
+        if (http_method == net::HTTP::method::get) {
+
+            name = data::schema::validate<> (query,
+                data::schema::key<Diophant::symbol> ("name")).Value;
+
+        } else {
+            auto [name_param, key_param, deriv_param, index_param] = data::schema::validate<> (query,
+                data::schema::key<Diophant::symbol> ("name") &
+                data::schema::key<key_expression> ("key") &
+                data::schema::key<key_derivation> ("derivation") &
+                *data::schema::key<uint32> ("index"));
+
+            name = name_param.Value;
+            key = key_param.Value;
+            derivation = deriv_param.Value;
+
+            if (index_param) index = index_param->Value;
         }
 
-        key_derivation key_deriv {data::string (body)};
+        // make sure the name is a valid symbol name
+        if (!data::valid (name))
+            return error_response (400, m, problem::invalid_parameter, "key_name parameter must be alpha alnum+");
 
-        if (p.DB->set_wallet_derivation (wallet_name, name, database::derivation {key_deriv, key_name, index})) return ok_response ();
-        return error_response (500, m, problem::failed, "could not set wallet derivation");
+        if (http_method == net::HTTP::method::get) {
+            auto seq = p.DB->get_wallet_sequence (wallet_name, name);
+            if (!seq) return error_response (404, m, problem::failed,
+                string::write ("Could not find sequence ", wallet_name, ".", name));
+
+            return string_response (std::string (*seq));
+        }
+
+        if (!key.valid ())
+            return error_response (400, m, problem::invalid_parameter, "name parameter must be alpha alnum+");
+
+        if (!data::valid (derivation))
+            return error_response (400, m, problem::invalid_parameter, "name parameter must be alpha alnum+");
+
+        if (!p.DB->set_wallet_sequence (wallet_name, name,
+            Cosmos::key_sequence {key, derivation}, index))
+            return error_response (400, m, problem::invalid_parameter, string::write ("wallet ", wallet_name, " does not exist."));
+
+        return ok_response ();
     }
 
     if (m == method::VALUE) {
@@ -323,53 +343,70 @@ net::HTTP::response process_wallet_method (
     if (m == method::NEXT_ADDRESS || m == method::NEXT_XPUB) {
         if (http_method != net::HTTP::method::post)
             return error_response (405, m, problem::invalid_method, "use post");
+
+        // TODO check if the wallet name is valid or else some errors would result that
+        // will not be handled properly with what we have now.
         
         // look at the receive key sequence.
         Diophant::symbol sequence_name;
 
         {
-            const UTF8 *sequence_name_param = query.contains ("sequence_name");
+            const UTF8 *sequence_name_param = query.contains ("name");
             if (bool (sequence_name_param)) sequence_name = *sequence_name_param;
             else sequence_name = m == method::NEXT_ADDRESS ? std::string {"receive"} : std::string {"receivex"};
         }
 
-        if (!sequence_name.valid ()) return error_response (400, m, problem::invalid_parameter, "sequence_name");
+        if (!sequence_name.valid ())
+            return error_response (400, m, problem::invalid_parameter, "sequence_name");
         
         // do we have a sequence by this name? 
-        maybe<database::derivation> seq = p.DB->get_wallet_derivation (wallet_name, sequence_name);
+        maybe<Cosmos::key_source> seq = p.DB->get_wallet_sequence (wallet_name, sequence_name);
         if (!bool (seq)) return error_response (400, m, problem::invalid_query);
 
         // generate a new key. 
-        key_expression next_expression = seq->increment ();
-        Cosmos::key_expression next_key {Cosmos::evaluate (*p.DB, p.Machine, next_expression)};
+        Cosmos::key_expression next_key {**seq};
+
+        net::HTTP::response res;
 
         if (m == method::NEXT_ADDRESS) {
-            Bitcoin::net net {Bitcoin::net::Main}; // just assume Main if we don't know.
-            Bitcoin::secret next_secret (next_key);
-            Bitcoin::pubkey next_pubkey {};
+            Bitcoin::pubkey next_pubkey = Bitcoin::pubkey (next_key);
 
-            // hot wallet
-            if (next_secret.valid ()) {
-                p.DB->set_key (wallet_name, next_secret.encode (), next_expression);
-                Bitcoin::pubkey next_pubkey = next_secret.to_public ();
-                p.DB->set_to_private (string (next_pubkey), next_expression);
-                net = next_secret.Network;
-            // cold wallet
-            } else if (next_pubkey = Bitcoin::pubkey (next_key); next_pubkey.valid ()) {
-                p.DB->set_key (wallet_name, string (next_pubkey), next_expression);
-            } else return error_response (400, m, problem::failed);
+            if (!next_pubkey.valid ())
+                return error_response (500, method::NEXT_ADDRESS, problem::failed);
 
             digest160 next_address_hash = next_pubkey.address_hash ();
             p.DB->set_invert_hash (next_address_hash, Cosmos::hash_function::Hash160, next_pubkey);
 
+            Bitcoin::net net {Bitcoin::net::Main}; // just assume Main if we don't know.
+            Bitcoin::secret next_secret = Bitcoin::secret (next_key);
+
+            // if this is not valid, then we are working with a cold wallet
+            // so it's not an error.
+            if (next_secret.valid ()) net = next_secret.Network;
+
             Bitcoin::address next_address {net, next_address_hash};
+
+            res = JSON_response (JSON (std::string (next_address)));
 
             p.DB->set_wallet_unused (wallet_name, next_address);
 
-            return JSON_response (JSON (std::string (next_address)));
-        } else { // else it's NEXT_XPUB
-            return error_response (501, m, problem::unimplemented);
+            p.DB->set_to_private (next_key, Cosmos::to_private (next_key));
+        } else {
+            // we have to be able to generate this or else something is wrong with the system.
+            HD::BIP_32::pubkey next_xpub (next_key);
+            if (!next_xpub.valid ())
+                return error_response (500, method::NEXT_XPUB, problem::failed);
+
+            p.DB->set_to_private (next_xpub, Cosmos::to_private (next_key));
+
+            auto next_xpub_str = std::string (next_xpub.write ());
+            res = JSON_response (JSON (next_xpub_str));
+            p.DB->set_wallet_unused (wallet_name, next_xpub_str);
         }
+
+        p.DB->set_wallet_sequence (wallet_name, sequence_name, seq->Sequence, seq->Index);
+
+        return res;
     }
 
     if (m == method::IMPORT) {

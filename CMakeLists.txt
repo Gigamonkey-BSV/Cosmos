@@ -102,12 +102,12 @@ add_library (
     source/Cosmos/network.cpp
     source/Cosmos/files.cpp
 
-    source/Cosmos/wallet/keys.cpp
     source/Cosmos/wallet/account.cpp
     source/Cosmos/wallet/restore.cpp
     source/Cosmos/wallet/select.cpp
     source/Cosmos/wallet/change.cpp
     source/Cosmos/wallet/sign.cpp
+    source/Cosmos/Diophant.cpp
     #source/Cosmos/wallet/spend.cpp
     #source/Cosmos/wallet/split.cpp
     source/Cosmos/history.cpp

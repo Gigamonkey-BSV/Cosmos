@@ -202,7 +202,7 @@ TEST (Server, Key) {
     key_expression secret_Y;
     key_expression secret_Z;
 /*
-    EXPECT_NO_THROW (secret_X = read_key_expression (make_request (test_server, get_key_request ("wally", "X"))));
+    EXPECT_NO_THROW (secret_X = read_key_expression (make_request (test_server, get_key_request ("Wally", "X"))));
     EXPECT_NO_THROW (secret_Y = read_key_expression (make_request (test_server, get_key_request ("Wally", "Y"))));
     EXPECT_NO_THROW (secret_Z = read_key_expression (make_request (test_server, get_key_request ("Wally", "Z"))));
 
@@ -223,7 +223,7 @@ TEST (Server, Key) {
     EXPECT_FALSE (is_bool_response (true, make_request (test_server, make_to_private_post_request (pubkey_Z, secret_Z))));
 
     // TODO retrieve these.
-    */
+*/
 }
 
 using JSON = data::JSON;

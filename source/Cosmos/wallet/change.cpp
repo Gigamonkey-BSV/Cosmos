@@ -24,8 +24,8 @@ namespace Cosmos {
 
                 uint64 expected_size = pay_to_address::redeem_expected_size (true);
 
-                entry<Bitcoin::address, signing> derived = pay_to_address_signing (x.last_private ());
-                x = x.next ();
+                entry<Bitcoin::address, signing> derived = pay_to_address_signing (*x);
+                ++x;
 
                 cx <<= redeemable {
                     Bitcoin::output {next_value, pay_to_address::script (derived.Key.digest ())},
@@ -35,7 +35,7 @@ namespace Cosmos {
             }
         }
 
-        return change {data::cross<redeemable> (cx), x.Last};
+        return change {data::cross<redeemable> (cx), x.Index};
 
     }
 }

@@ -24,7 +24,7 @@ namespace Cosmos {
 
         while (true) {
             // generate next address
-            entry<Bitcoin::address, signing> next = pay_to_address_signing (m.secret (i));
+            entry<Bitcoin::address, signing> next = pay_to_address_signing (m (i));
             const Bitcoin::address &new_addr = next.Key;
 
             std::cout << "  recovering address " << new_addr << std::endl;

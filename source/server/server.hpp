@@ -12,6 +12,7 @@ namespace HD = Gigamonkey::HD;
 
 using key_expression = Cosmos::key_expression;
 using key_derivation = Cosmos::key_derivation;
+using key_sequence = Cosmos::key_sequence;
 
 struct server {
 
@@ -27,8 +28,6 @@ struct server {
     Cosmos::spend_options SpendOptions;
 
     ptr<database> DB;
-
-    Diophant::machine Machine;
 
     struct make_wallet_options {};
 

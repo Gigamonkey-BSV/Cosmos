@@ -59,6 +59,10 @@ std::istream &operator >> (std::istream &i, mnemonic_style &x) {
     return i;
 }
 
+std::string write_derivation (list<uint32>) {
+    throw data::method::unimplemented {"write_derivation"};
+}
+
 net::HTTP::response handle_generate (server &p,
     Diophant::symbol wallet_name, map<UTF8, UTF8> query,
     const maybe<net::HTTP::content> &content_type,
@@ -68,7 +72,8 @@ net::HTTP::response handle_generate (server &p,
         data::schema::key<wallet_style> ("wallet_style") &
         data::schema::key<std::string> ("coin_type") &
         *data::schema::key<uint32> ("number_of_words") &
-        *data::schema::key<mnemonic_style> ("mnemonic_style"));
+        *data::schema::key<mnemonic_style> ("mnemonic_style") &
+        *data::schema::key<uint32> ("accounts"));
 
     // parameter wallet_style, required
     wallet_style WalletStyle = std::get<0> (validated).Value;
@@ -104,47 +109,81 @@ net::HTTP::response handle_generate (server &p,
     if (MnemonicStyle == mnemonic_style::Electrum_SV || WalletStyle == wallet_style::experimental)
         return error_response (501, method::GENERATE, problem::unimplemented);
 
+    uint32 total_accounts = 1;
+    auto acc = std::get<4> (validated);
+    if (bool (acc)) total_accounts = acc->Value;
+
     // we generate the wallet the same way regardless of whether the user wants words.
     bytes wallet_entropy {};
     wallet_entropy.resize (number_of_words * 4 / 3);
 
+    // generate master key.
     p.get_secure_random () >> wallet_entropy;
     std::string wallet_words = HD::BIP_39::generate (wallet_entropy);
 
     auto master = HD::BIP_32::secret::from_seed (HD::BIP_39::read (wallet_words));
 
     key_expression master_key_expr {master};
-    std::string master_key_name = "Master";
 
-    HD::BIP_32::pubkey account;
-    string account_derivation_string;
+    p.DB->set_key (wallet_name, Diophant::symbol {"master"}, master_key_expr);
 
-    if (bool (coin_type)) {
-        account = HD::BIP_44::from_root (master, *coin_type, 0).to_public ();
-        account_derivation_string = string::write ("(", master_key_expr, ") / `44 / `", std::to_string (*coin_type), " / `0");
-    } else {
-        account = HD::BIP_44::from_root (master, *coin_type, 0).to_public ();
-        account_derivation_string = string::write ("(", master_key_expr, ") / `44 / `0");
+    // if coin type is none, then we make a centbee-style account.
+    list<uint32> root_derivation = bool (coin_type) ?
+        list<uint32> {HD::BIP_44::purpose, *coin_type}:
+        list<uint32> {HD::BIP_44::purpose};
+
+    string account_name {"account"};
+
+    // set a sequence for the accounts.
+    p.DB->set_wallet_sequence (wallet_name, account_name,
+        key_sequence {
+            key_expression {string::write ("(", master_key_expr, ") ", write_derivation (root_derivation))},
+            key_derivation {string::write ("@ key index -> key / harden (index)")}},
+        total_accounts);
+
+
+    if (WalletStyle == wallet_style::BIP_44_plus) {
+        Diophant::symbol receive_x_symbol {"receivex"};
+        p.DB->set_wallet_sequence (wallet_name, receive_x_symbol,
+            key_sequence {
+                key_expression {string::write ("(", master_key_expr, ") ", write_derivation (root_derivation))},
+                key_derivation {"@ key index -> key / `index"}}, 0);
     }
 
-    key_expression account_key_expr {account};
-    key_expression account_derivation {account_derivation_string};
+    // generate all the accounts.
+    for (uint32 account_number = 0; account_number < total_accounts; account_number++) {
 
-    std::string account_name = "Account0";
+        list<uint32> account_derivation = root_derivation << HD::BIP_32::harden (account_number);
 
-    p.DB->set_key (wallet_name, master_key_name, master_key_expr);
-    p.DB->set_key (wallet_name, account_name, account_key_expr);
-    p.DB->set_to_private (account_name, account_derivation);
+        list<uint32> receive_derivation = account_derivation << 0;
+        list<uint32> change_derivation = account_derivation << 1;
 
-    p.DB->set_wallet_derivation (wallet_name, "receive",
-        database::derivation {key_derivation {"@ name index -> name / 0 / index"}, account_name});
+        key_expression receive_pubkey = key_expression {master.derive (receive_derivation).to_public ()};
+        key_expression change_pubkey = key_expression {master.derive (change_derivation).to_public ()};
 
-    p.DB->set_wallet_derivation (wallet_name, "change",
-        database::derivation {key_derivation {"@ name index -> name / 1 / index"}, account_name});
+        p.DB->set_to_private (receive_pubkey,
+            key_expression {string::write ("(", master_key_expr, ") ",
+                write_derivation (receive_derivation))});
 
-    if (WalletStyle == wallet_style::BIP_44_plus)
-        p.DB->set_wallet_derivation (wallet_name, "receivex",
-            database::derivation {key_derivation {"@ name index -> name / 0 / `index"}, account_name});
+        p.DB->set_to_private (change_pubkey,
+            key_expression {string::write ("(", master_key_expr, ") ",
+                write_derivation (change_derivation))});
+
+        string receive_name = string::write ("receive_", account_number);
+        string change_name = string::write ("change_", account_number);
+
+        // note that each of these returns a regular pubkey rather than an xpub.
+        p.DB->set_wallet_sequence (wallet_name, receive_name,
+            key_sequence {
+                receive_pubkey,
+                key_derivation {"@ key index -> pubkey (key / index)"}}, 0);
+
+        p.DB->set_wallet_sequence (wallet_name, change_name,
+            key_sequence {
+                change_pubkey,
+                key_derivation {"@ key index -> pubkey (key / index)"}}, 0);
+
+    }
 
     if (MnemonicStyle != mnemonic_style::none) return string_response (wallet_words);
     return ok_response ();
