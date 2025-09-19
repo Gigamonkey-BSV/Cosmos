@@ -1038,7 +1038,6 @@ namespace Cosmos::SQLite {
         }
 
         bool set_key (const std::string &wallet_name, const Diophant::symbol &key_name, const key_expression &k) final override {
-
             try {
                 return storage.transaction([&] {
                     // 1. Look up the user id

@@ -69,7 +69,7 @@ void command_restore (const arg_parser &p) {
             if (!bool (bip_39_words)) throw exception {} << "need to supply --words";
         }
 
-        if (! HD::BIP_39::valid (*bip_39_words)) throw exception {} << "words are not valid";
+        if (!HD::BIP_39::valid (*bip_39_words)) throw exception {} << "words are not valid";
 
         // there may be a password.
         maybe<string> bip_39_password;
@@ -199,7 +199,7 @@ void command_restore (const arg_parser &p) {
     maybe<uint32> bip_44_account;
     if (wallet_type != restore_wallet_type::unset || key_type == master_key_type::BIP44_master) bip_44_account = 0;
 
-    // at this point we have enough informaiton to generate a key and derivation paths to generate addresses
+    // at this point we have enough information to generate a key and derivation paths to generate addresses
     // to check.
 
     // the list of derivations we will look at to restore the wallet.

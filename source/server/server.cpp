@@ -4,6 +4,7 @@
 #include "key.hpp"
 #include "to_private.hpp"
 #include "generate.hpp"
+#include "restore.hpp"
 
 #include <Diophant/parse.hpp>
 #include <Diophant/symbol.hpp>
@@ -11,8 +12,11 @@
 #include <gigamonkey/schema/random.hpp>
 
 #include <data/tools/map_schema.hpp>
+#include <data/container.hpp>
 
 #include <Cosmos/Diophant.hpp>
+
+namespace schema = data::schema;
 
 server::server (const options &o) {
     SpendOptions = o.spend_options ();
@@ -194,12 +198,15 @@ awaitable<net::HTTP::response> server::operator () (const net::HTTP::request &re
             problem::invalid_expression,
             // this is a pretty unhelpful message. However, hopefully we won't throw this in the future.
             string::write ("an invalid Diophant expression was generated: ", w.what ()));
-    } catch (data::schema::missing_key mk) {
+    } catch (schema::missing_key mk) {
         co_return error_response (400, m, problem::missing_parameter, string::write ("missing parameter ", mk.Key));
-    } catch (data::schema::invalid_value iv) {
+    } catch (schema::invalid_value iv) {
         co_return error_response (400, m, problem::invalid_parameter, string::write ("invalid parameter ", iv.Key));
-    } catch (data::schema::unknown_key uk) {
+    } catch (schema::unknown_key uk) {
         co_return error_response (400, m, problem::invalid_query, string::write ("unknown parameter ", uk.Key));
+    } catch (schema::incomplete_match uk) {
+        co_return error_response (400, m, problem::unexpected_parameter,
+            string::write ("unexpected parameter ", uk.Key));
     }
 }
 
@@ -266,56 +273,50 @@ net::HTTP::response process_wallet_method (
     }
 
     if (m == method::KEY_SEQUENCE) {
-        if (http_method != net::HTTP::method::post && http_method != net::HTTP::method::get)
-            return error_response (405, m, problem::invalid_method, "use post or get");
 
-        Diophant::symbol name;
-        key_expression key;
-        key_derivation derivation;
-        uint32 index = 0;
-
-        if (http_method == net::HTTP::method::get) {
-
-            name = data::schema::validate<> (query,
-                data::schema::key<Diophant::symbol> ("name")).Value;
-
-        } else {
-            auto [name_param, key_param, deriv_param, index_param] = data::schema::validate<> (query,
-                data::schema::key<Diophant::symbol> ("name") &
-                data::schema::key<key_expression> ("key") &
-                data::schema::key<key_derivation> ("derivation") &
-                *data::schema::key<uint32> ("index"));
-
-            name = name_param.Value;
-            key = key_param.Value;
-            derivation = deriv_param.Value;
-
-            if (index_param) index = index_param->Value;
-        }
+        auto [name, post_key_sequence] = schema::validate<> (query,
+            schema::key<Diophant::symbol> ("name") &
+            *(schema::key<key_expression> ("key") &
+                schema::key<key_derivation> ("derivation") &
+                *schema::key<uint32> ("index")));
 
         // make sure the name is a valid symbol name
         if (!data::valid (name))
-            return error_response (400, m, problem::invalid_parameter, "key_name parameter must be alpha alnum+");
+            return error_response (400, m, problem::invalid_parameter,
+                "key_name parameter must be alpha alnum+");
 
-        if (http_method == net::HTTP::method::get) {
-            auto seq = p.DB->get_wallet_sequence (wallet_name, name);
-            if (!seq) return error_response (404, m, problem::failed,
-                string::write ("Could not find sequence ", wallet_name, ".", name));
+        if (post_key_sequence) {
+            if (http_method != net::HTTP::method::post)
+                return error_response (405, m, problem::invalid_method, "use POST");
 
-            return string_response (std::string (*seq));
+            auto [key, derivation, index_param] = *post_key_sequence;
+            uint32 index = bool (index_param) ? *index_param : 0;
+
+            if (!key.valid ())
+                return error_response (400, m, problem::invalid_parameter,
+                    "name parameter must be alpha alnum+");
+
+            if (!data::valid (derivation))
+                return error_response (400, m, problem::invalid_parameter,
+                    "name parameter must be alpha alnum+");
+
+            if (!p.DB->set_wallet_sequence (wallet_name, name,
+                Cosmos::key_sequence {key, derivation}, index))
+                return error_response (400, m, problem::invalid_parameter,
+                    string::write ("wallet ", wallet_name, " does not exist."));
+
+            return ok_response ();
+
         }
 
-        if (!key.valid ())
-            return error_response (400, m, problem::invalid_parameter, "name parameter must be alpha alnum+");
+        if (http_method != net::HTTP::method::get)
+            return error_response (405, m, problem::invalid_method, "use GET");
 
-        if (!data::valid (derivation))
-            return error_response (400, m, problem::invalid_parameter, "name parameter must be alpha alnum+");
+        auto seq = p.DB->get_wallet_sequence (wallet_name, name);
+        if (!seq) return error_response (404, m, problem::failed,
+            string::write ("Could not find sequence ", wallet_name, ".", name));
 
-        if (!p.DB->set_wallet_sequence (wallet_name, name,
-            Cosmos::key_sequence {key, derivation}, index))
-            return error_response (400, m, problem::invalid_parameter, string::write ("wallet ", wallet_name, " does not exist."));
-
-        return ok_response ();
+        return string_response (std::string (*seq));
     }
 
     if (m == method::VALUE) {
@@ -344,17 +345,14 @@ net::HTTP::response process_wallet_method (
         if (http_method != net::HTTP::method::post)
             return error_response (405, m, problem::invalid_method, "use post");
 
-        // TODO check if the wallet name is valid or else some errors would result that
-        // will not be handled properly with what we have now.
+        if (!data::contains (p.DB->list_wallet_names (), static_cast<const std::string &> (wallet_name)))
+            return error_response (400, m, problem::invalid_parameter,
+                string::write ("cannot find wallet named ", wallet_name));
         
         // look at the receive key sequence.
-        Diophant::symbol sequence_name;
-
-        {
-            const UTF8 *sequence_name_param = query.contains ("name");
-            if (bool (sequence_name_param)) sequence_name = *sequence_name_param;
-            else sequence_name = m == method::NEXT_ADDRESS ? std::string {"receive"} : std::string {"receivex"};
-        }
+        Diophant::symbol sequence_name =
+            schema::validate<> (query,
+                schema::key<Diophant::symbol> ("name"));
 
         if (!sequence_name.valid ())
             return error_response (400, m, problem::invalid_parameter, "sequence_name");
@@ -455,14 +453,14 @@ net::HTTP::response process_wallet_method (
         } else return error_response (400, m, problem::invalid_query, "invalid parameter 'pay_to'");
     }
 
-    return error_response (501, m, problem::unimplemented);
-
     if (m == method::RESTORE) {
         if (http_method != net::HTTP::method::put)
             return error_response (405, m, problem::invalid_method, "use put");
 
-        return error_response (501, m, problem::unimplemented);
+        return handle_generate (p, wallet_name, query, content_type, body);
     }
+
+    return error_response (501, m, problem::unimplemented);
 
     if (m == method::BOOST) {
         if (http_method != net::HTTP::method::post)

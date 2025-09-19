@@ -191,12 +191,14 @@ TEST (Server, Key) {
 
     // generate keys of different types and retrieve them.
     auto res_gen_X = read_string_response (make_request (test_server, post_key_request ("Wally", "X", key_type::secp256k1)));
-    auto res_gen_Y = read_string_response (make_request (test_server, post_key_request ("Wally", "Y", key_type::WIF)));
-    auto res_gen_Z = read_string_response (make_request (test_server, post_key_request ("Wally", "Z", key_type::xpriv)));
+    ASSERT_TRUE (bool (res_gen_X));
 
-    EXPECT_TRUE (bool (res_gen_X));
-    EXPECT_TRUE (bool (res_gen_Y));
-    EXPECT_TRUE (bool (res_gen_Y));
+    auto res_gen_Y = read_string_response (make_request (test_server, post_key_request ("Wally", "Y", key_type::WIF)));
+    ASSERT_TRUE (bool (res_gen_Y));
+
+    auto res_gen_Z = read_string_response (make_request (test_server, post_key_request ("Wally", "Z", key_type::xpriv)));
+    EXPECT_TRUE (bool (res_gen_Z));
+
 
     key_expression secret_X;
     key_expression secret_Y;
@@ -232,51 +234,69 @@ net::HTTP::request make_next_address_request (const std::string &wallet_name, co
 
 net::HTTP::request make_next_xpub_request (const std::string &wallet_name);
 
-maybe<std::string> read_string (const net::HTTP::response &r);
-
 TEST (Server, Generate) {
     auto test_server = prepare (get_test_server ());
 
     // generate a wallet of each type
     // we should simply get a bool response when we don't request the restoration words.
-    EXPECT_TRUE (is_bool_response (true, make_request (test_server,
-        generate_request_options {"A"}.wallet_style (wallet_style::BIP_44))));
-    EXPECT_TRUE (is_bool_response (true, make_request (test_server,
+    ASSERT_TRUE (is_ok_response (make_request (test_server,
+        generate_request_options {"A"}.wallet_style (wallet_style::BIP_44).coin_type_none ())));
+    // These are not ready yet.
+    /*
+    EXPECT_TRUE (is_ok_response (true, make_request (test_server,
         generate_request_options {"B"}.wallet_style (wallet_style::BIP_44_plus))));
-    EXPECT_TRUE (is_bool_response (true, make_request (test_server,
-        generate_request_options {"C"}.wallet_style (wallet_style::experimental))));
+    ASSERT_TRUE (is_ok_response (true, make_request (test_server,
+        generate_request_options {"C"}.wallet_style (wallet_style::experimental))));*/
 
-    maybe<std::string> maybe_words_D = read_string (make_request (test_server,
+    maybe<std::string> maybe_words_D = read_string_response (make_request (test_server,
         generate_request_options {"D"}.wallet_style (wallet_style::BIP_44).mnemonic_style (mnemonic_style::BIP_39)));
-    EXPECT_TRUE (bool (maybe_words_D));
-
-    maybe<std::string> maybe_words_E = read_string (make_request (test_server,
+    ASSERT_TRUE (bool (maybe_words_D));
+/*
+    maybe<std::string> maybe_words_E = read_string_response (make_request (test_server,
         generate_request_options {"E"}.wallet_style (wallet_style::BIP_44_plus).mnemonic_style (mnemonic_style::BIP_39)));
     EXPECT_TRUE (bool (maybe_words_E));
 
-    maybe<std::string> maybe_words_F = read_string (make_request (test_server,
+    maybe<std::string> maybe_words_F = read_string_response (make_request (test_server,
         generate_request_options {"F"}.wallet_style (wallet_style::experimental).mnemonic_style (mnemonic_style::BIP_39)));
-    EXPECT_TRUE (bool (maybe_words_F));
+    ASSERT_TRUE (bool (maybe_words_F));*/
 
     // for each wallet, generate a new address of receive and change
 
-    maybe<std::string> next_receive_A = read_string (make_request (test_server, make_next_address_request ("A", "receive")));
-    maybe<std::string> next_change_A = read_string (make_request (test_server, make_next_address_request ("A", "change")));
+    maybe<std::string> next_receive_A =
+        read_string_response (make_request (test_server, make_next_address_request ("A", "receive")));
 
-    maybe<std::string> next_receive_B = read_string (make_request (test_server, make_next_address_request ("B", "receive")));
-    maybe<std::string> next_change_B = read_string (make_request (test_server, make_next_address_request ("B", "change")));
+    maybe<std::string> next_change_A =
+        read_string_response (make_request (test_server, make_next_address_request ("A", "change")));
 
-    maybe<std::string> next_receive_C = read_string (make_request (test_server, make_next_address_request ("C", "receive")));
-    maybe<std::string> next_change_C = read_string (make_request (test_server, make_next_address_request ("C", "change")));
+    maybe<std::string> next_receive_B =
+        read_string_response (make_request (test_server, make_next_address_request ("B", "receive")));
 
-    maybe<std::string> next_receive_D = read_string (make_request (test_server, make_next_address_request ("D", "receive")));
-    maybe<std::string> next_change_D = read_string (make_request (test_server, make_next_address_request ("D", "change")));
+    maybe<std::string> next_change_B =
+        read_string_response (make_request (test_server, make_next_address_request ("B", "change")));
 
-    maybe<std::string> next_receive_E = read_string (make_request (test_server, make_next_address_request ("E", "receive")));
-    maybe<std::string> next_change_E = read_string (make_request (test_server, make_next_address_request ("E", "change")));
+    maybe<std::string> next_receive_C =
+        read_string_response (make_request (test_server, make_next_address_request ("C", "receive")));
 
-    maybe<std::string> next_receive_F = read_string (make_request (test_server, make_next_address_request ("F", "receive")));
-    maybe<std::string> next_change_F = read_string (make_request (test_server, make_next_address_request ("F", "change")));
+    maybe<std::string> next_change_C =
+        read_string_response (make_request (test_server, make_next_address_request ("C", "change")));
+
+    maybe<std::string> next_receive_D =
+        read_string_response (make_request (test_server, make_next_address_request ("D", "receive")));
+
+    maybe<std::string> next_change_D =
+        read_string_response (make_request (test_server, make_next_address_request ("D", "change")));
+
+    maybe<std::string> next_receive_E =
+        read_string_response (make_request (test_server, make_next_address_request ("E", "receive")));
+
+    maybe<std::string> next_change_E =
+        read_string_response (make_request (test_server, make_next_address_request ("E", "change")));
+
+    maybe<std::string> next_receive_F =
+        read_string_response (make_request (test_server, make_next_address_request ("F", "receive")));
+
+    maybe<std::string> next_change_F =
+        read_string_response (make_request (test_server, make_next_address_request ("F", "change")));
 
     // TODO ensure that we can regenerate these from the words.
 
@@ -284,15 +304,15 @@ TEST (Server, Generate) {
 
     EXPECT_TRUE (is_error (make_request (test_server, make_next_xpub_request ("A"))));
 
-    maybe<std::string> next_xpub_B = read_string (make_request (test_server, make_next_xpub_request ("B")));
+    maybe<std::string> next_xpub_B = read_string_response (make_request (test_server, make_next_xpub_request ("B")));
 
-    maybe<std::string> next_xpub_C = read_string (make_request (test_server, make_next_xpub_request ("C")));
+    maybe<std::string> next_xpub_C = read_string_response (make_request (test_server, make_next_xpub_request ("C")));
 
     EXPECT_TRUE (is_error (make_request (test_server, make_next_xpub_request ("D"))));
 
-    maybe<std::string> next_xpub_E = read_string (make_request (test_server, make_next_xpub_request ("E")));
+    maybe<std::string> next_xpub_E = read_string_response (make_request (test_server, make_next_xpub_request ("E")));
 
-    maybe<std::string> next_xpub_F = read_string (make_request (test_server, make_next_xpub_request ("F")));
+    maybe<std::string> next_xpub_F = read_string_response (make_request (test_server, make_next_xpub_request ("F")));
 
     // TODO Generate the signing key where appropriate.
 

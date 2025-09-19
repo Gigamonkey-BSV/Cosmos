@@ -5,21 +5,39 @@
 #include <gigamonkey/schema/bip_39.hpp>
 #include <data/tools/map_schema.hpp>
 
+namespace schema = data::schema;
+
+coin_type::coin_type (coin_type::value v): maybe<uint32> {} {
+    switch (v) {
+        case Bitcoin: {
+            *this = HD::BIP_44::coin_type_Bitcoin;
+            return;
+        }
+        case Bitcoin_Cash: {
+            *this = HD::BIP_44::coin_type_Bitcoin_Cash;
+            return;
+        }
+        case Bitcoin_SV: {
+            *this = HD::BIP_44::coin_type_Bitcoin_SV;
+        }
+    }
+}
+
 generate_request_options::operator net::HTTP::request () const {
     std::stringstream query_stream;
-    query_stream << "?wallet_style=" << WalletStyle;
+    query_stream << "style=" << WalletStyle;
     if (!bool (CoinTypeDerivationParameter)) query_stream << "&coin_type=none";
     else query_stream << "&coin_type=" << *CoinTypeDerivationParameter;
     if (MnemonicStyle != mnemonic_style::none)
-        query_stream << "&mnemonic_style=" << MnemonicStyle << "&number_of_words=" << NumberOfWords;
+        query_stream << "&mnemonic=" << MnemonicStyle << "&number_of_words=" << NumberOfWords;
     return net::HTTP::request::make {}.path (
         string::write ("/generate/", Name)).query (query_stream.str ()).host ("localhost").method (net::HTTP::method::post);
 }
 
 std::ostream &operator << (std::ostream &o, wallet_style x) {
     switch (x) {
-        case wallet_style::BIP_44: return o << "BIP 44";
-        case wallet_style::BIP_44_plus: return o << "BIP 44 plus";
+        case wallet_style::BIP_44: return o << "BIP44";
+        case wallet_style::BIP_44_plus: return o << "BIP44plus";
         case wallet_style::experimental: return o << "experimental";
         default: throw 0;
     }
@@ -28,8 +46,8 @@ std::ostream &operator << (std::ostream &o, wallet_style x) {
 std::ostream &operator << (std::ostream &o, mnemonic_style x) {
     switch (x) {
         case mnemonic_style::none: return o << "none";
-        case mnemonic_style::BIP_39: return o << "BIP 39";
-        case mnemonic_style::Electrum_SV: return o << "Electrum SV";
+        case mnemonic_style::BIP_39: return o << "BIP39";
+        case mnemonic_style::Electrum_SV: return o << "ElectrumSV";
         default: throw 0;
     }
 }
@@ -59,8 +77,52 @@ std::istream &operator >> (std::istream &i, mnemonic_style &x) {
     return i;
 }
 
-std::string write_derivation (list<uint32>) {
-    throw data::method::unimplemented {"write_derivation"};
+std::istream &operator >> (std::istream &i, derivation_style &x) {
+    std::string word;
+    i >> word;
+    if (!i) return i;
+    std::string sanitized = sanitize (word);
+    if (sanitized == "bip44") x = derivation_style::BIP_44;
+    else if (sanitized == "centbee") x = derivation_style::CentBee;
+    else i.setstate (std::ios::failbit);
+    return i;
+}
+
+std::istream &operator >> (std::istream &i, restore_wallet_type &x) {
+    std::string word;
+    i >> word;
+    if (!i) return i;
+    std::string sanitized = sanitize (word);
+    if (sanitized == "moneybutton") x = restore_wallet_type::Money_Button;
+    else if (sanitized == "relayx") x = restore_wallet_type::RelayX;
+    else if (sanitized == "simplycash") x = restore_wallet_type::Simply_Cash;
+    else if (sanitized == "electrumsv") x = restore_wallet_type::Electrum_SV;
+    else if (sanitized == "centbee") x = restore_wallet_type::CentBee;
+    else i.setstate (std::ios::failbit);
+    return i;
+}
+
+std::istream &operator >> (std::istream &i, coin_type &x) {
+    std::string word;
+    i >> word;
+    if (!i) return i;
+    std::string sanitized = sanitize (word);
+    if (sanitized == "none") x = coin_type {};
+    else if (sanitized == "bitcoin") x = coin_type {coin_type::Bitcoin};
+    else if (sanitized == "bitcoincash") x = coin_type {coin_type::Bitcoin_Cash};
+    else if (sanitized == "bitcoinsv") x = coin_type {coin_type::Bitcoin_SV};
+    else if (!parse_uint32 (word, *x)) i.setstate (std::ios::failbit);
+    return i;
+}
+
+std::string write_derivation (list<uint32> d) {
+    std::stringstream ss;
+    for (const uint32 &u : d) {
+        ss << " / ";
+        if (HD::BIP_32::hardened (u)) ss << "`" << HD::BIP_32::soften (u);
+        else ss << u;
+    }
+    return ss.str ();
 }
 
 net::HTTP::response handle_generate (server &p,
@@ -68,50 +130,98 @@ net::HTTP::response handle_generate (server &p,
     const maybe<net::HTTP::content> &content_type,
     const data::bytes &body) {
 
-    auto validated = data::schema::validate<> (query,
-        data::schema::key<wallet_style> ("wallet_style") &
-        data::schema::key<std::string> ("coin_type") &
-        *data::schema::key<uint32> ("number_of_words") &
-        *data::schema::key<mnemonic_style> ("mnemonic_style") &
-        *data::schema::key<uint32> ("accounts"));
+    // either we have a use an existing wallet style
+    // that has options built in or we specify certain
+    // things about the derivation path. In particular,
+    // there are differences of opinion in what should
+    // be used as the coin_type parameter in a BIP44
+    // derivation path.
+    auto derivation_path_schema = schema::key<restore_wallet_type> ("format") |
+        (schema::key<wallet_style> ("style") &
+        *schema::key<derivation_style> ("derivation_style") &
+        *schema::key<coin_type> ("coin_type"));
 
-    // parameter wallet_style, required
-    wallet_style WalletStyle = std::get<0> (validated).Value;
+    // we may not use a mnemonic at all but if we do
+    // there are some options that apply. In particular
+    // ElectrumSV uses a special set of words.
+    auto mnemonic_schema = schema::key<mnemonic_style> ("mnemonic") &
+        *schema::key<uint32> ("number_of_words") &
+        *schema::key<std::string> ("password");
 
-    // coin_type is required and it should be either a uint32 or "none".
-    maybe<uint32> coin_type;
+    auto generate_schema = *mnemonic_schema & *schema::key<uint32> ("accounts") & derivation_path_schema;
 
-    {
-        std::string coin_type_param = std::get<1> (validated).Value;
-        if (coin_type_param != "none" && !parse_uint32 (coin_type_param, *coin_type))
-            return error_response (400, method::GENERATE, problem::invalid_parameter, "'coin_type'");
+    auto [mnemonic_options, accounts_param, wallet_generation] =
+        schema::validate<> (query, generate_schema);
+
+    wallet_style WalletStyle;
+    coin_type CoinType;
+
+    switch (wallet_generation.index ()) {
+        case 0: {
+            WalletStyle = wallet_style::BIP_44;
+            restore_wallet_type WalletType = std::get<0> (wallet_generation);
+            switch (WalletType) {
+                case restore_wallet_type::Money_Button: {
+
+                } break;
+                case restore_wallet_type::RelayX: {
+
+                } break;
+                case restore_wallet_type::Simply_Cash: {
+
+                } break;
+                case restore_wallet_type::Electrum_SV: {
+
+                } break;
+                case restore_wallet_type::CentBee: {
+                    CoinType = coin_type {};
+                }
+            };
+        } break;
+        case 1: {
+            maybe<derivation_style> dstyle;
+            maybe<coin_type> ct;
+            std::tie (WalletStyle, dstyle, ct) = std::get<1> (wallet_generation);
+
+            if (bool (dstyle)) {
+                if (*dstyle == derivation_style::BIP_44) {
+                    if (!bool (ct) || !bool (*ct))
+                        return error_response (400, method::GENERATE, problem::invalid_parameter,
+                            "If derivation_style is BIP_44, then coin_type must be povided and not be 'none'");
+                } else if (bool (ct) && bool (*ct))
+                    return error_response (400, method::GENERATE, problem::invalid_parameter,
+                        "If derivation_style is CentBee, then coin_type, if provided, must be 'none'");
+            } else if (!bool (ct))
+                return error_response (400, method::GENERATE, problem::invalid_parameter,
+                    "Either derivation_style or coin_type must be provided");
+
+            if (bool (ct)) CoinType = *ct;
+        };
     }
 
     mnemonic_style MnemonicStyle {mnemonic_style::none}; // parameter mnemonic_style
-    uint32 number_of_words = 24;                         // parameter number_of_words
+    uint32 number_of_words {24};                              // parameter number_of_words
+    maybe<std::string> password;
 
-    auto numw = std::get<2> (validated);
-    auto mn = std::get<3> (validated);
+    if (mnemonic_options) {
+        maybe<uint32> num_words;
+        std::tie (MnemonicStyle, num_words, password) = *mnemonic_options;
 
-    if (bool (numw) || bool (mn)) {
-        if (!(bool (numw) && bool (mn)))
-            return error_response (400, method::GENERATE, problem::invalid_query,
-                "if number_of_words or mnemonic_style is present, the other must also be");
+        if (MnemonicStyle == mnemonic_style::none && bool (num_words))
+            return error_response (400, method::GENERATE, problem::invalid_parameter,
+                "if mnemonic is none, then number_of_words must not be present");
 
-        number_of_words = numw->Value;
-        MnemonicStyle = mn->Value;
+        if (bool (num_words)) number_of_words = *num_words;
     }
 
     if (number_of_words != 12 && number_of_words != 24)
         return error_response (400, method::GENERATE, problem::invalid_parameter,
-            "'number_of_words' should be either 12 or 24");
+            string::write ("'number_of_words' should be either 12 or 24 and instead is ", number_of_words));
 
-    if (MnemonicStyle == mnemonic_style::Electrum_SV || WalletStyle == wallet_style::experimental)
+    if (MnemonicStyle == mnemonic_style::Electrum_SV || WalletStyle == wallet_style::experimental || bool (password))
         return error_response (501, method::GENERATE, problem::unimplemented);
 
-    uint32 total_accounts = 1;
-    auto acc = std::get<4> (validated);
-    if (bool (acc)) total_accounts = acc->Value;
+    uint32 total_accounts = bool (accounts_param) ? *accounts_param : 1;
 
     // we generate the wallet the same way regardless of whether the user wants words.
     bytes wallet_entropy {};
@@ -128,8 +238,8 @@ net::HTTP::response handle_generate (server &p,
     p.DB->set_key (wallet_name, Diophant::symbol {"master"}, master_key_expr);
 
     // if coin type is none, then we make a centbee-style account.
-    list<uint32> root_derivation = bool (coin_type) ?
-        list<uint32> {HD::BIP_44::purpose, *coin_type}:
+    list<uint32> root_derivation = bool (CoinType) ?
+        list<uint32> {HD::BIP_44::purpose, *CoinType}:
         list<uint32> {HD::BIP_44::purpose};
 
     string account_name {"account"};
@@ -185,7 +295,9 @@ net::HTTP::response handle_generate (server &p,
 
     }
 
-    if (MnemonicStyle != mnemonic_style::none) return string_response (wallet_words);
+    if (MnemonicStyle != mnemonic_style::none)
+        return string_response (wallet_words);
+
     return ok_response ();
 
 }

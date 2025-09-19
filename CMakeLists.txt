@@ -146,6 +146,7 @@ add_executable (
     source/server/key.cpp
     source/server/to_private.cpp
     source/server/generate.cpp
+    source/server/restore.cpp
     source/Server.cpp
 )
 

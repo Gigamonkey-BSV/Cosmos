@@ -5,7 +5,7 @@ namespace Cosmos {
     maybe<Diophant::machine> machine {};
 
     void initialize (ptr<database>) {
-        if (bool (machine)) throw data::exception {} << "Diophant machine is already initialized";
+        if (bool (machine)) return;
         machine = Diophant::initialize ();
 
         // TODO set up functions

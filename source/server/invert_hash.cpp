@@ -13,6 +13,8 @@ using hash_function = Cosmos::hash_function;
 
 namespace base58 = Gigamonkey::base58;
 
+namespace schema = data::schema;
+
 std::ostream &operator << (std::ostream &o, digest_format form) {
     switch (form) {
         case digest_format::HEX: return o << "hex";
@@ -109,7 +111,7 @@ net::HTTP::response handle_invert_hash (server &p,
     const data::bytes &body) {
 
     if (http_method != net::HTTP::method::put && http_method != net::HTTP::method::get)
-        return error_response (405, method::INVERT_HASH, problem::invalid_method, "use put or get");
+        return error_response (405, method::INVERT_HASH, problem::invalid_method, "use PUT or GET");
 
     // Required if method is PUT, optional otherwise.
     hash_function HashFunction {hash_function::invalid};
@@ -123,33 +125,28 @@ net::HTTP::response handle_invert_hash (server &p,
     maybe<std::string> digest_string;
 
     if (http_method == net::HTTP::method::put) {
-        auto [f, dig, fmt] = data::schema::validate<> (query,
-            data::schema::key<hash_function> ("function") &
-            *data::schema::key<std::string> ("digest") &
-            *data::schema::key<digest_format> ("format"));
+        auto validated = schema::validate<> (query,
+            schema::key<hash_function> ("function") &
+                *(schema::key<std::string> ("digest") &
+                    schema::key<digest_format> ("format")));
 
-        HashFunction = f.Value;
+        HashFunction = std::get<0> (validated);
+        auto dig = std::get<1> (validated);
 
         // if either of these is present, then they both most be.
-        if (bool (dig) || bool (fmt)) {
-            if (!(bool (dig) && bool (fmt)))
-                return error_response (400, method::INVERT_HASH, problem::invalid_query,
-                    "if parameter digest or format is provided, the other must also be provided");
-
-            digest_string = dig->Value;
-            DigestFormat = fmt->Value;
+        if (bool (dig)) {
+            // we need to do this in order to initialize it.
+            digest_string = "";
+            std::tie (*digest_string, DigestFormat) = *dig;
         }
     } else {
-        auto [dig, fmt, hash_func_provided] = data::schema::validate<> (query,
-            data::schema::key<std::string> ("digest") &
-            data::schema::key<digest_format> ("format") &
-            *data::schema::key<hash_function> ("function"));
+        maybe<hash_function> func;
+        std::tie (digest_string, DigestFormat, func) = schema::validate<> (query,
+            schema::key<std::string> ("digest") &
+            schema::key<digest_format> ("format") &
+                *schema::key<hash_function> ("function"));
 
-        if (bool (hash_func_provided))
-            HashFunction = hash_func_provided->Value;
-
-        digest_string = dig.Value;
-        DigestFormat = fmt.Value;
+        if (bool (func)) HashFunction = *func;
     }
 
     if (bool (digest_string)) {

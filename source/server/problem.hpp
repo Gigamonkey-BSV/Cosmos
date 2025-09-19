@@ -15,6 +15,7 @@ enum class problem {
     invalid_expression,
     missing_parameter,
     invalid_parameter,
+    unexpected_parameter,
     failed,
     unimplemented
 };

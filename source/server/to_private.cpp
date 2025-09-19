@@ -7,7 +7,7 @@ net::HTTP::response handle_to_private (
     server &p, net::HTTP::method http_method, map<UTF8, UTF8> query,
     const maybe<net::HTTP::content> &content_type, const data::bytes &body) {
 
-    Diophant::symbol key_name = data::schema::validate<> (query, data::schema::key<Diophant::symbol> ("name")).Value;
+    Diophant::symbol key_name = data::schema::validate<> (query, data::schema::key<Diophant::symbol> ("name"));
 
     if (!key_name.valid ())
         return error_response (400, method::TO_PRIVATE, problem::invalid_parameter,
