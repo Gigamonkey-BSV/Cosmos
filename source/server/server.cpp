@@ -207,6 +207,8 @@ awaitable<net::HTTP::response> server::operator () (const net::HTTP::request &re
     } catch (schema::incomplete_match uk) {
         co_return error_response (400, m, problem::unexpected_parameter,
             string::write ("unexpected parameter ", uk.Key));
+    } catch (data::method::unimplemented un) {
+        co_return error_response (501, m, problem::unimplemented, un.what ());
     }
 }
 

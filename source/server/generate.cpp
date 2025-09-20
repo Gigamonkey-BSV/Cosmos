@@ -162,20 +162,21 @@ net::HTTP::response handle_generate (server &p,
             restore_wallet_type WalletType = std::get<0> (wallet_generation);
             switch (WalletType) {
                 case restore_wallet_type::Money_Button: {
-
+                    CoinType = HD::BIP_44::moneybutton_coin_type;
                 } break;
                 case restore_wallet_type::RelayX: {
-
+                    CoinType = HD::BIP_44::relay_x_coin_type;
                 } break;
                 case restore_wallet_type::Simply_Cash: {
-
+                    CoinType = HD::BIP_44::simply_cash_coin_type;
                 } break;
                 case restore_wallet_type::Electrum_SV: {
-
+                    CoinType = HD::BIP_44::electrum_sv_coin_type;
                 } break;
                 case restore_wallet_type::CentBee: {
                     CoinType = coin_type {};
-                }
+                } break;
+                default: throw data::method::unimplemented {"wallet types for GENERATE method"};
             };
         } break;
         case 1: {
@@ -235,6 +236,10 @@ net::HTTP::response handle_generate (server &p,
 
     key_expression master_key_expr {master};
 
+    if (!p.DB->make_wallet (wallet_name))
+        return error_response (500, method::GENERATE, problem::failed,
+            string::write ("wallet ", wallet_name, " already exists"));
+
     p.DB->set_key (wallet_name, Diophant::symbol {"master"}, master_key_expr);
 
     // if coin type is none, then we make a centbee-style account.
@@ -250,7 +255,6 @@ net::HTTP::response handle_generate (server &p,
             key_expression {string::write ("(", master_key_expr, ") ", write_derivation (root_derivation))},
             key_derivation {string::write ("@ key index -> key / harden (index)")}},
         total_accounts);
-
 
     if (WalletStyle == wallet_style::BIP_44_plus) {
         Diophant::symbol receive_x_symbol {"receivex"};

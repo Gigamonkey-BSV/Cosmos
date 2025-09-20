@@ -15,7 +15,7 @@ enum class mnemonic_style {
 
 enum class wallet_style {
     invalid,
-    single,
+    single_address,
     HD_sequence,
     BIP_44,
     // same as bip 44 except that we have a new derivation path for
@@ -70,6 +70,8 @@ std::istream &operator >> (std::istream &, restore_wallet_type &);
 
 std::ostream &operator << (std::ostream &, coin_type);
 std::istream &operator >> (std::istream &, coin_type &);
+
+std::string write_derivation (list<uint32> d);
 
 struct generate_request_options {
     std::string Name;

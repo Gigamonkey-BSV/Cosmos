@@ -1,7 +1,23 @@
 #include "restore.hpp"
+#include "method.hpp"
 #include <data/tools/map_schema.hpp>
 
+#include <gigamonkey/wif.hpp>
+
 namespace schema = data::schema;
+
+std::istream &operator >> (std::istream &i, master_key_type &x) {
+    std::string word;
+    i >> word;
+    if (!i) return i;
+    std::string sanitized = sanitize (word);
+    if (sanitized == "single_address") x = master_key_type::single_address;
+    else if (sanitized == "hdsequence") x = master_key_type::HD_sequence;
+    else if (sanitized == "bip44account") x = master_key_type::BIP44_account;
+    else if (sanitized == "bip44master") x = master_key_type::BIP44_master;
+    else i.setstate (std::ios::failbit);
+    return i;
+}
 
 template <typename X>
 X inline set_with_default (const maybe<X> &opt, const X &def) {
@@ -23,8 +39,11 @@ net::HTTP::response handle_restore (server &p,
             *schema::key<wallet_style> ("wallet_style") &
             *schema::key<derivation_style> ("derivation_style") &
             *schema::key<coin_type> ("coin_type"))) &
-        (schema::key<std::string> ("key") & *schema::key<std::string> ("key_type") |
-            (*schema::key<std::string> ("password") &
+        (schema::key<std::string> ("key") &
+            *schema::key<master_key_type> ("key_type") |
+            (*(schema::key<std::string> ("password") |
+                schema::key<uint16> ("CentBee_PIN") |
+                schema::key<bool> ("guess_CentBee_PIN")) &
                 (schema::key<bytes> ("entropy") |
                     schema::key<std::string> ("mnemonic") &
                     *schema::key<std::string> ("mnemonic_style")))) &
@@ -43,22 +62,54 @@ net::HTTP::response handle_restore (server &p,
     // we need to figure out what kind of key it is.
     master_key_type KeyType {master_key_type::invalid};
 
-    throw data::method::unimplemented {"handle_restore"};
+    wallet_style WalletStyle {wallet_style::invalid};
+    coin_type CoinType {};
 
     {
         bool derive_from_mnemonic = key_options.index () == 1;
-        wallet_style WalletStyle {wallet_style::invalid};
-        coin_type CoinType {};
 
         switch (derivation_options.index ()) {
             case 0: {
                 restore_wallet_type restore_type = std::get<0> (derivation_options);
+                WalletStyle = wallet_style::BIP_44;
+                switch (restore_type) {
+                    case restore_wallet_type::Money_Button: {
+                        CoinType = HD::BIP_44::moneybutton_coin_type;
+                    } break;
+                    case restore_wallet_type::RelayX: {
+                        CoinType = HD::BIP_44::relay_x_coin_type;
+                    } break;
+                    case restore_wallet_type::Simply_Cash: {
+                        CoinType = HD::BIP_44::simply_cash_coin_type;
+                    } break;
+                    case restore_wallet_type::Electrum_SV: {
+                        CoinType = HD::BIP_44::electrum_sv_coin_type;
+                    } break;
+                    case restore_wallet_type::CentBee: {
+                        CoinType = coin_type {};
+                    } break;
+                    default: throw data::method::unimplemented {"wallet types for GENERATE method"};
+                }
             } break;
             case 1: {
-                auto [wallet_style_option, derivation_style_option, coin_type_option] = std::get<1> (derivation_options);
-
                 // we need either derivation_style_option or coin_type_option
                 // and if we have both, they need to be consistent.
+                auto [wallet_style_option, derivation_style_option, coin_type_option] = std::get<1> (derivation_options);
+
+                if (bool (derivation_style_option)) {
+                    if (*derivation_style_option == derivation_style::BIP_44) {
+                        if (!bool (coin_type_option) || !bool (*coin_type_option))
+                            return error_response (400, method::RESTORE, problem::invalid_parameter,
+                                "If derivation_style is BIP_44, then coin_type must be povided and not be 'none'");
+                    } else if (bool (coin_type_option) && bool (*coin_type_option))
+                        return error_response (400, method::RESTORE, problem::invalid_parameter,
+                            "If derivation_style is CentBee, then coin_type, if provided, must be 'none'");
+                } else if (!bool (coin_type_option))
+                    return error_response (400, method::RESTORE, problem::invalid_parameter,
+                        "Either derivation_style or coin_type must be provided");
+
+                if (bool (coin_type_option)) CoinType = *coin_type_option;
+                if (bool (wallet_style_option)) WalletStyle = *wallet_style_option;
 
             } break;
             default: throw data::exception {} << "Should not be able to get here";
@@ -66,9 +117,58 @@ net::HTTP::response handle_restore (server &p,
 
         if (derive_from_mnemonic) {
             auto [password_option, mnemonic_options] = std::get<1> (key_options);
-            std::string password;
+
+            maybe<std::string> password;
+            bool guess_CentBee_PIN {false};
+            if (bool (password_option)) {
+                switch (password_option->index ()) {
+                    case 0: {
+                        password = std::get<0> (*password_option);
+                    } break;
+                    case 1: {
+                        uint16 centbee_PIN = std::get<1> (*password_option);
+
+                        // must be in the correct range.
+                        if (centbee_PIN > 9999)
+                            return error_response (400, method::RESTORE, problem::invalid_query, "Invalid CentBee PIN range");
+
+                        // TODO write it out as a string.
+                        throw data::method::unimplemented {"CentBee PIN to password"};
+
+                    } break;
+                    case 2: {
+                        guess_CentBee_PIN = std::get<2> (*password_option);
+                        if (!guess_CentBee_PIN)
+                            return error_response (400, method::RESTORE, problem::invalid_query,
+                                "");
+                    }
+
+                    if (password_option->index () != 1) {
+                        if (KeyType == master_key_type::invalid) KeyType = master_key_type::BIP44_master;
+                        else if (KeyType != master_key_type::BIP44_master)
+                            return error_response (400, method::RESTORE, problem::invalid_query,
+                                "CentBee option implies that key_type must be BIP_44_master");
+
+                        if (WalletStyle == wallet_style::invalid) WalletStyle = wallet_style::BIP_44;
+                        else if (WalletStyle != wallet_style::BIP_44)
+                            return error_response (400, method::RESTORE, problem::invalid_query,
+                                "CentBee option implies that wallet_style must be BIP_44");
+                    }
+                }
+            }
 
             bytes entropy;
+
+            switch (WalletStyle) {
+                case wallet_style::invalid: {
+                    // assume bip 44 in this case.
+                    WalletStyle == wallet_style::BIP_44;
+                } break;
+                case wallet_style::single_address:
+                case wallet_style::HD_sequence:
+                    return error_response (400, method::RESTORE, problem::invalid_query,
+                        "derivation from mnemonic is incompatible with single address or hd sequence wallet styles.");
+            }
 
             switch (mnemonic_options.index ()) {
                 case 0: {
@@ -81,19 +181,155 @@ net::HTTP::response handle_restore (server &p,
                 }
             }
 
+            // TODO
             // now we have entropy so we derive key from entropy.
 
             // derive pubkey from secret key.
+            throw data::method::unimplemented {"what to do if wallet style isn't provided in method::GENERATE"};
 
         } else {
             auto [key_option, type_option] = std::get<0> (key_options);
 
-            // TODO
+            if (Bitcoin::address perhaps_address {key_option}; perhaps_address.valid ()) {
+                if (bool (type_option)) {
+                    if (*type_option != master_key_type::single_address)
+                        return error_response (400, method::RESTORE, problem::invalid_query,
+                            "Restoring a bitcoin address is only compatible with key type single_address");
+                } else KeyType = master_key_type::single_address;
+
+                throw data::method::unimplemented {"method::GENERATE, single address restore"};
+            } else if (Bitcoin::pubkey perhaps_pubkey {key_option}; perhaps_pubkey.valid ()) {
+                if (bool (type_option)) {
+                    if (*type_option != master_key_type::single_address)
+                        return error_response (400, method::RESTORE, problem::invalid_query,
+                            "Restoring a bitcoin pubkey is only compatible with key type single_address");
+                } else KeyType = master_key_type::single_address;
+
+                throw data::method::unimplemented {"method::GENERATE, single address restore"};
+            } else if (Bitcoin::secret perhaps_WIF {key_option}; perhaps_WIF.valid ()) {
+                if (bool (type_option)) {
+                    if (*type_option != master_key_type::single_address)
+                        return error_response (400, method::RESTORE, problem::invalid_query,
+                            "Restoring a bitcoin WIF is only compatible with key type single_address");
+                } else KeyType = master_key_type::single_address;
+
+                throw data::method::unimplemented {"method::GENERATE, single address restore"};
+            } else if (HD::BIP_32::pubkey perhaps_HD_pubkey {key_option}; perhaps_HD_pubkey.valid ()) {
+                if (bool (type_option)) {
+                    if (*type_option == master_key_type::single_address)
+                        return error_response (400, method::RESTORE, problem::invalid_query,
+                            "HD pubkey is incompatible with key type single_address");
+                }
+
+                pk = perhaps_HD_pubkey;
+            } else if (HD::BIP_32::secret perhaps_secret {key_option}; perhaps_secret.valid ()) {
+                if (bool (type_option)) {
+                    if (*type_option == master_key_type::single_address)
+                        return error_response (400, method::RESTORE, problem::invalid_query,
+                            "HD secret is incompatible with key type single_address");
+                }
+
+                sk = perhaps_secret;
+                pk = perhaps_secret.to_public ();
+            }
+
+            // TODO we have to make sure that key type, if provided, matches
+            // what was provided in derivation options.
+
+            // at this point, it is possible that WalletStyle is not set. Can we set it?
+            switch (WalletStyle) {
+                case wallet_style::invalid: {
+                    switch (KeyType) {
+
+                    }
+                } break;
+                case wallet_style::single_address:
+                    if (KeyType != master_key_type::single_address)
+                        return error_response (400, method::RESTORE, problem::invalid_query,
+                            "derivation from mnemonic is incompatible with single address or hd sequence wallet styles.");
+                case wallet_style::HD_sequence:
+                    return error_response (400, method::RESTORE, problem::invalid_query,
+                        "derivation from mnemonic is incompatible with single address or hd sequence wallet styles.");
+            }
+
+            throw data::method::unimplemented {"what to do if mnemonic isn't provided in method::GENERATE"};
         }
     }
 
-    // TODO generate the wallet
+    if (!bool (sk)) {
+        throw data::method::unimplemented {"method RESTORE with no private key"};
+    }
+
+    throw data::method::unimplemented {"method RESTORE"};
+
+    if (!p.DB->make_wallet (wallet_name))
+        return error_response (500, method::RESTORE, problem::failed,
+            string::write ("wallet ", wallet_name, " already exists"));
+
+    // set master key
+    switch (KeyType) {
+        case master_key_type::BIP44_master: {
+
+        } break;
+        default: throw data::method::unimplemented {"method RESTORE: key types other than bip 44 master"};
+    }
+
+    // if coin type is none, then we make a centbee-style account.
+    list<uint32> root_derivation = bool (CoinType) ?
+        list<uint32> {HD::BIP_44::purpose, *CoinType}:
+        list<uint32> {HD::BIP_44::purpose};
+
+    string account_name {"account"};
+
+    // TODO set this;
+    key_expression master_key_expr;
+
+    // set a sequence for the accounts.
+    p.DB->set_wallet_sequence (wallet_name, account_name,
+        key_sequence {
+            key_expression {string::write ("(", master_key_expr, ") ", write_derivation (root_derivation))},
+            key_derivation {string::write ("@ key index -> key / harden (index)")}},
+        total_accounts);
+
+    if (WalletStyle == wallet_style::BIP_44_plus || WalletStyle == wallet_style::experimental)
+        throw data::method::unimplemented {"restore extended bip 44 types"};
+
+    // generate all the accounts.
+    for (uint32 account_number = 0; account_number < total_accounts; account_number++) {
+
+        list<uint32> account_derivation = root_derivation << HD::BIP_32::harden (account_number);
+
+        list<uint32> receive_derivation = account_derivation << 0;
+        list<uint32> change_derivation = account_derivation << 1;
+
+        key_expression receive_pubkey = key_expression {sk->derive (receive_derivation).to_public ()};
+        key_expression change_pubkey = key_expression {sk->derive (change_derivation).to_public ()};
+
+        p.DB->set_to_private (receive_pubkey,
+            key_expression {string::write ("(", master_key_expr, ") ",
+                write_derivation (receive_derivation))});
+
+        p.DB->set_to_private (change_pubkey,
+            key_expression {string::write ("(", master_key_expr, ") ",
+                write_derivation (change_derivation))});
+
+        string receive_name = string::write ("receive_", account_number);
+        string change_name = string::write ("change_", account_number);
+
+        // note that each of these returns a regular pubkey rather than an xpub.
+        p.DB->set_wallet_sequence (wallet_name, receive_name,
+            key_sequence {
+                receive_pubkey,
+                key_derivation {"@ key index -> pubkey (key / index)"}}, 0);
+
+        p.DB->set_wallet_sequence (wallet_name, change_name,
+            key_sequence {
+                change_pubkey,
+                key_derivation {"@ key index -> pubkey (key / index)"}}, 0);
+
+    }
 
     // TODO restore the wallet
+    throw data::method::unimplemented {"method RESTORE"};
 
 }
