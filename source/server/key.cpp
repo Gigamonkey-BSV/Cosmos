@@ -78,9 +78,9 @@ net::HTTP::response handle_key (server &p,
         return error_response (405, method::KEY, problem::invalid_method, "use POST");
 
     auto [KeyName, method_random] = data::schema::validate<> (query,
-        data::schema::key<Diophant::symbol> ("name") &
-        *(data::schema::key<key_type> ("type") &
-            *data::schema::key<Bitcoin::net> ("net") &
+        data::schema::key<Diophant::symbol> ("name") &&
+        *(data::schema::key<key_type> ("type") &&
+            *data::schema::key<Bitcoin::net> ("net") &&
             *data::schema::key<bool> ("compressed")));
 
     // make sure the name is a valid symbol name

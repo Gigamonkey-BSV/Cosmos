@@ -2,16 +2,16 @@
 #define COSMOS_WALLET_SPLIT
 
 #include <gigamonkey/timechain.hpp>
-#include <data/crypto/random.hpp>
+#include <data/random.hpp>
 #include <Cosmos/wallet/spend.hpp>
-#include <data/math/probability/triangular_distribution.hpp>
 #include <Cosmos/options.hpp>
 
 namespace Cosmos {
 
-    // Given a general goal of splitting a wallet into many tiny outputs,
-    // this type provides several possible steps in such a process.
+    // This is for splitting a wallet into tons of tiny outputs.
     struct split {
+
+        // split options
         Bitcoin::satoshi MinSatsPerOutput {spend_options::DefaultMinSatsPerOutput};
         Bitcoin::satoshi MaxSatsPerOutput {spend_options::DefaultMaxSatsPerOutput};
         double MeanSatsPerOutput {spend_options::DefaultMeanSatsPerOutput};
@@ -23,17 +23,18 @@ namespace Cosmos {
 
         // the user provides the outputs to split and this function does the rest.
         spend::spent operator () (
-            data::entropy &, account,
-            list<entry<Bitcoin::outpoint, redeemable>> selected,
+            data::entropy &, // we don't really need cryptographically secure random here.
+            account,
+            selected z,
             double fee_rate) const;
-/*
+
         struct result {
             list<std::pair<extended_transaction, account_diff>> Transactions;
             uint32 Last;
         };
-
+/*
         // this function handles everything other than updating the addresses.
-        result operator () (data::random &, keychain, pubkeys,
+        result operator () (data::entropy &, keychain, pubkeys,
             address_sequence, list<entry<Bitcoin::outpoint, redeemable>> selected, double fee_rate) const;*/
 
         struct result_outputs {
@@ -43,41 +44,24 @@ namespace Cosmos {
         };
 
         // construct only the outputs.
-        result_outputs operator () (data::entropy &r, address_source key,
-            Bitcoin::satoshi value, double fee_rate) const;
+        result_outputs construct_outputs (data::entropy &r, const key_source &key,
+            Bitcoin::satoshi split_value, double fee_rate) const;
 
-        struct log_triangular_distribution {
-            math::triangular_distribution<double> Triangular;
-
-            log_triangular_distribution (double min, double max, double mean);
-
-            template <std::uniform_random_bit_generator engine>
-            double operator () (engine &e) const;
-
-        };
-
-        log_triangular_distribution LogTriangular;
-
-        static double inline ln (double x) {
-            return std::log (x);
-        }
-
-        static double inline exp (double x) {
-            return std::exp (x);
-        }
+        // we use this to make a
+        math::log_triangular_distribution LogTriangular;
     };
 
     // use the same function that we use to split coins for generating change outputs.
     struct split_change_parameters : split {
         // the minimum value of a change output. Below this value, no output will be created.
-        Bitcoin::satoshi MinimumCreateValue {spend_options::DefaultMinChangeValue};
+        Bitcoin::satoshi MinimumCreateValue {spend_options::DefaultMinChangeSats};
 
         // construct a set of change outputs.
-        change operator () (address_source x, Bitcoin::satoshi sats, satoshis_per_byte fees, data::entropy &rand) const;
+        change operator () (const key_source &x, Bitcoin::satoshi sats, satoshis_per_byte fees, data::entropy &rand) const;
         using split::operator ();
 
         split_change_parameters (
-            Bitcoin::satoshi min_change_value = spend_options::DefaultMinChangeValue,
+            Bitcoin::satoshi min_change_value = spend_options::DefaultMinChangeSats,
             Bitcoin::satoshi min_sats_per_output = spend_options::DefaultMinSatsPerOutput,
             Bitcoin::satoshi max_sats_per_output = spend_options::DefaultMaxSatsPerOutput,
             double mean_sats_per_output = spend_options::DefaultMeanSatsPerOutput) :
@@ -85,7 +69,7 @@ namespace Cosmos {
             MinimumCreateValue {min_change_value} {}
 
         split_change_parameters (const spend_options &o) :
-            split_change_parameters {o.MinChangeValue, o.MinSatsPerOutput, o.MaxSatsPerOutput, o.MeanSatsPerOutput} {}
+            split_change_parameters {o.MinChangeSats, o.MinSatsPerOutput, o.MaxSatsPerOutput, o.MeanSatsPerOutput} {}
     };
 /*
     spend::spent inline split::operator () (data::entropy &rand, account acc,
@@ -93,11 +77,6 @@ namespace Cosmos {
         result rr = (*this) (rand, k, w.Pubkeys, w.Addresses.change (), selected, fee_rate);
         return spend::spent {rr.Transactions, w.Addresses.update (w.Addresses.Change, rr.Last)};
     }*/
-
-    template <std::uniform_random_bit_generator engine>
-    double inline split::log_triangular_distribution::operator () (engine &e) const {
-        return exp (Triangular (e));
-    }
 
     inline split::split (
         Bitcoin::satoshi min_sats_per_output,

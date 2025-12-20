@@ -136,19 +136,19 @@ net::HTTP::response handle_generate (server &p,
     // there are differences of opinion in what should
     // be used as the coin_type parameter in a BIP44
     // derivation path.
-    auto derivation_path_schema = schema::key<restore_wallet_type> ("format") |
-        (schema::key<wallet_style> ("style") &
-        *schema::key<derivation_style> ("derivation_style") &
+    auto derivation_path_schema = schema::key<restore_wallet_type> ("format") ||
+        (schema::key<wallet_style> ("style") &&
+        *schema::key<derivation_style> ("derivation_style") &&
         *schema::key<coin_type> ("coin_type"));
 
     // we may not use a mnemonic at all but if we do
     // there are some options that apply. In particular
     // ElectrumSV uses a special set of words.
-    auto mnemonic_schema = schema::key<mnemonic_style> ("mnemonic") &
-        *schema::key<uint32> ("number_of_words") &
+    auto mnemonic_schema = schema::key<mnemonic_style> ("mnemonic") &&
+        *schema::key<uint32> ("number_of_words") &&
         *schema::key<std::string> ("password");
 
-    auto generate_schema = *mnemonic_schema & *schema::key<uint32> ("accounts") & derivation_path_schema;
+    auto generate_schema = *mnemonic_schema && *schema::key<uint32> ("accounts") && derivation_path_schema;
 
     auto [mnemonic_options, accounts_param, wallet_generation] =
         schema::validate<> (query, generate_schema);

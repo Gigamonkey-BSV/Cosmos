@@ -2,6 +2,7 @@
 #ifndef COSMOS_FILES
 #define COSMOS_FILES
 
+#include <data/tuple.hpp>
 #include <data/net/JSON.hpp>
 #include <data/crypto/encrypted.hpp>
 #include <data/tools/base_map.hpp>

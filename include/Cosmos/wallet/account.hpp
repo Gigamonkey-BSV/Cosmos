@@ -12,10 +12,6 @@ namespace Cosmos {
     using pay_to_address = Gigamonkey::pay_to_address;
     using pay_to_pubkey = Gigamonkey::pay_to_pubkey;
 
-    entry<Bitcoin::address, signing> inline pay_to_address_signing (const key_expression &d);
-
-    entry<Bitcoin::pubkey, signing> inline pay_to_pubkey_signing (const key_expression &d);
-
     // information to redeem an output in the utxo set.
     struct redeemable : signing {
 

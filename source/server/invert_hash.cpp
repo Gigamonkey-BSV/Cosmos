@@ -95,9 +95,9 @@ invert_hash_request_options::operator net::HTTP::request () const {
 }
 
 template <size_t size>
-std::function<bytes (data::byte_slice)> inline get_hash_fn (data::digest<size> (*hash_fn) (data::byte_slice)) {
+std::function<bytes (data::byte_slice)> inline get_hash_fn (data::hash::digest<size> (*hash_fn) (data::byte_slice)) {
     return [hash_fn] (data::byte_slice bb) -> bytes {
-        data::digest<size> dig = hash_fn (bb);
+        data::hash::digest<size> dig = hash_fn (bb);
         bytes d;
         d.resize (size);
         std::copy (dig.begin (), dig.end (), d.begin ());
@@ -126,8 +126,8 @@ net::HTTP::response handle_invert_hash (server &p,
 
     if (http_method == net::HTTP::method::put) {
         auto validated = schema::validate<> (query,
-            schema::key<hash_function> ("function") &
-                *(schema::key<std::string> ("digest") &
+            schema::key<hash_function> ("function") &&
+                *(schema::key<std::string> ("digest") &&
                     schema::key<digest_format> ("format")));
 
         HashFunction = std::get<0> (validated);
@@ -142,8 +142,8 @@ net::HTTP::response handle_invert_hash (server &p,
     } else {
         maybe<hash_function> func;
         std::tie (digest_string, DigestFormat, func) = schema::validate<> (query,
-            schema::key<std::string> ("digest") &
-            schema::key<digest_format> ("format") &
+            schema::key<std::string> ("digest") &&
+            schema::key<digest_format> ("format") &&
                 *schema::key<hash_function> ("function"));
 
         if (bool (func)) HashFunction = *func;

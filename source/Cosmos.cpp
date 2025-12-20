@@ -19,6 +19,8 @@
 
 #include "Cosmos.hpp"
 #include "interface.hpp"
+// test
+#include <sqlite_orm/sqlite_orm.h>
 
 std::string regex_replace (const std::string &x, const std::regex &r, const std::string &n) {
     std::stringstream ss;

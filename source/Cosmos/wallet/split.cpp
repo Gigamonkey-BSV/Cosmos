@@ -2,91 +2,16 @@
 
 namespace Cosmos {
 
-    const uint32 output_size = 34;
+    constexpr const uint32 output_size = 34;
 
-    // here e_x means exponential of x. Thus the variables are not all independent.
-    double log_triangular_distribution_mean (double a, double b, double m, double e_a, double e_b, double e_m);
-
-    double inline log_triangular_distribution_mean (double a, double b, double m, double e_a, double e_b) {
-        return log_triangular_distribution_mean (a, b, m, e_a, e_b, exp (m));
-    }
-
-    double inline log_triangular_distribution_mean (double a, double b, double m) {
-        return log_triangular_distribution_mean (a, b, m, exp (a), exp (b));
-    }
-
-    double inline log_triangular_distribution_mean (double a, double b, double m, double e_a, double e_b, double e_m) {
-        return (((e_m * (a - m + 1) - e_a) / (a - m)) + ((e_m * (m - b - 1) + e_b) / (b - m))) * 2 / (b - a);
-    }
-
-    // when m -> a or m -> b we get a limit of 0 / 0 so we have to have a special case for those cases, which
-    // represent the maximum and minimum allowed values of the mean.
-    double min_log_triangular_distribution_mean (double a, double b, double e_a, double e_b);
-    double max_log_triangular_distribution_mean (double a, double b, double e_a, double e_b);
-
-    double inline min_log_triangular_distribution_mean (double a, double b) {
-        return min_log_triangular_distribution_mean (a, b, exp (a), exp (b));
-    }
-
-    double inline max_log_triangular_distribution_mean (double a, double b) {
-        return max_log_triangular_distribution_mean (a, b, exp (a), exp (b));
-    }
-
-    double inline min_log_triangular_distribution_mean (double a, double b, double e_a, double e_b) {
-        return (e_a * (a - b - 1) + e_b) * 2 / ((b - a) * (b - a));
-    }
-
-    double inline max_log_triangular_distribution_mean (double a, double b, double e_a, double e_b) {
-        return (e_b * (a - b + 1) - e_a) * 2 / ((a - b) * (b - a));
-    }
-
-    double find_triangle_mode (double a, double b, double mean, double e_a, double e_b) {
-        double min = a;
-        double max = b;
-        double guess, m;
-
-        while (true) {
-            // it's possible to converge a lot faster than this but let's see if this works well enough.
-            double m = (max - min) / 2 + min;
-            double guess = log_triangular_distribution_mean (a, b, m, e_a, e_b);
-            if (std::max (mean - guess, guess - mean) > 1) return m;
-            (guess > mean ? max : min) = m;
-        }
-    }
-
-    split::log_triangular_distribution::log_triangular_distribution (double min, double max, double mean) {
-
-        if (max < min) throw exception {} <<
-            "log triangular distribution: max (" << max << ") must not be less than min (" << min << ")";
-
-        if (mean > max) throw exception {} <<
-            "log triangular distribution: mean (" << mean << ") must not be greater than max (" << max << ")";
-
-        if (mean < min) throw exception {} <<
-            "log triangular distribution: mean (" << mean << ") must not be less than min (" << min << ")";
-
-        double a = ln (double (min));
-        double b = ln (double (max));
-
-        double min_mean = min_log_triangular_distribution_mean (a, b, min, max);
-        double max_mean = max_log_triangular_distribution_mean (a, b, min, max);
-
-        if (mean < min_mean) throw exception {} <<
-            "Minimum possible mean value for max " << max << " and min " << min << " is " << min_mean;
-
-        if (mean > max_mean) throw exception {} <<
-            "Maximum possible mean value for max " << max << " and min " << min << " is " << max_mean;
-
-        Triangular = math::triangular_distribution<double> {a, find_triangle_mode (a, b, mean, min, max), b};
-
-    }
-
-    split::result_outputs split::operator () (data::crypto::random &r, address_sequence key,
+    split::result_outputs split::construct_outputs (data::entropy &r, const key_source &k,
         Bitcoin::satoshi split_value, double fee_rate) const {
 
         list<redeemable> outputs {};
 
         int64 remaining_split_value = split_value;
+
+        key_source key = k;
 
         while (true) {
             // how many outputs will we have by the next iteration?
@@ -99,7 +24,8 @@ namespace Cosmos {
             int64 expected_remainder = remaining_split_value - expected_fees_next;
 
             // this will only happen if not enough sats are provided initially.
-            if (expected_remainder < MinSatsPerOutput) throw exception {} << "too few sats to split!";
+            if (expected_remainder < MinSatsPerOutput)
+                throw data::exception {} << "too few sats to split!";
 
             // round up.
             int64 random_value = int64 (LogTriangular (r) + .5);
@@ -107,25 +33,28 @@ namespace Cosmos {
             // if the remaining sats will be too few, just make a final output using all that's left.
             bool we_are_done = expected_remainder - random_value < MinSatsPerOutput;
 
-            int64 output_value = we_are_done ? expected_remainder : random_value;
+            int64 output_value = we_are_done ?
+                expected_remainder:
+                random_value;
 
-            entry<Bitcoin::address, signing> last_address = pay_to_address_signing (key.last ());
+            entry<Bitcoin::address, signing> last_address =
+                make_pay_to_address (*key);
 
             outputs = outputs << redeemable {
-                Bitcoin::output {Bitcoin::satoshi {output_value}, pay_to_address::script (last_address.Key.digest ())},
-                last_address.Value.Derivation,
-                last_address.Value.ExpectedScriptSize,
-                last_address.Value.UnlockScriptSoFar};
+                Bitcoin::output {
+                    Bitcoin::satoshi {output_value},
+                    pay_to_address::script (last_address.Key.digest ())},
+                last_address.Value};
 
-            if (we_are_done) return result_outputs {outputs, key.Last};
+            if (we_are_done) return result_outputs {outputs, key.Index};
 
             remaining_split_value -= output_value;
 
             key = key.next ();
         }
     }
-
-    split::result split::operator () (redeem ree, data::crypto::random &rand,
+/*
+    split::result split::operator () (redeem ree, data::entropy &rand,
         keychain k, pubkeys p, address_sequence x,
         list<entry<Bitcoin::outpoint, redeemable>> selected, double fee_rate) const {
         using namespace Gigamonkey;
@@ -210,7 +139,7 @@ namespace Cosmos {
 
         result_outputs z = (*this) (rand, x, val, double (fees));
         return change {cross<redeemable> (z.Outputs), z.Last};
-    }
+    }*/
 
 }
 

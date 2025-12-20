@@ -21,6 +21,8 @@ add_executable (
   ../source/server/invert_hash.cpp
   ../source/server/to_private.cpp
   ../source/server/generate.cpp
+  ../source/server/restore.cpp
+  key_expression.cpp
   server.cpp
 )
 

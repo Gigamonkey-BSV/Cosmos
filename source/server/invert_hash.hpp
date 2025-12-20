@@ -18,7 +18,7 @@ std::ostream &operator << (std::ostream &, digest_format);
 
 template <size_t size>
 net::HTTP::request get_invert_hash_request (
-    const data::digest<size> &,
+    const data::hash::digest<size> &,
     digest_format ff = digest_format::BASE64,
     Cosmos::hash_function = Cosmos::hash_function::invalid);
 
@@ -31,7 +31,7 @@ net::HTTP::request put_invert_hash_request (const Bitcoin::pubkey &pub, const Bi
 template <size_t size>
 net::HTTP::request put_invert_hash_request (
     Cosmos::hash_function, const bytes &data,
-    const data::digest<size> &,
+    const data::hash::digest<size> &,
     digest_format ff = digest_format::BASE64);
 
 struct invert_hash_request_options {
@@ -100,7 +100,7 @@ invert_hash_request_options inline &invert_hash_request_options::digest (const b
 
 template <size_t size>
 net::HTTP::request inline get_invert_hash_request (
-    const data::digest<size> &dig, digest_format ff, Cosmos::hash_function f) {
+    const data::hash::digest<size> &dig, digest_format ff, Cosmos::hash_function f) {
 
     auto req = invert_hash_request_options {}.get ().digest (dig, ff);
     if (f != Cosmos::hash_function::invalid) req.function (f);
@@ -114,7 +114,7 @@ net::HTTP::request inline put_invert_hash_request (Cosmos::hash_function f, cons
 template <size_t size>
 net::HTTP::request inline put_invert_hash_request (
     Cosmos::hash_function f, const bytes &data,
-    const data::digest<size> &dig,
+    const data::hash::digest<size> &dig,
     digest_format ff) {
     return invert_hash_request_options {}.put ().function (f).data (data).digest (dig, ff);
 }

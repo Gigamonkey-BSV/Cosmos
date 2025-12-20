@@ -1,4 +1,4 @@
-
+#include <data/shuffle.hpp>
 #include <Cosmos/wallet/select.hpp>
 
 namespace Cosmos {

@@ -8,13 +8,11 @@
 
 namespace Cosmos {
 
-    using address_source = Gigamonkey::address_source;
-
     struct change {
         data::cross<redeemable> Change;
 
         // last key used +1
-        int32 Last;
+        uint32 Last;
 
         list<Bitcoin::output> outputs () const {
             list<Bitcoin::output> o;
@@ -24,12 +22,12 @@ namespace Cosmos {
     };
 
     // construct a set of change outputs.
-    using make_change = data::function<change (Bitcoin::satoshi, satoshis_per_byte fees, address_source &, data::entropy &)>;
+    using make_change = data::function<change (Bitcoin::satoshi, satoshis_per_byte fees, key_source, data::entropy &)>;
 
     // default make_change function
     struct make_change_parameters {
         // the minimum value of a change output. Below this value, no output will be created
-        Bitcoin::satoshi MinimumCreateValue {spend_options::DefaultMinChangeValue};
+        Bitcoin::satoshi MinimumCreateValue {spend_options::DefaultMinChangeSats};
 
         // the minimum value of an output that will be created by splitting
         // a larger value.

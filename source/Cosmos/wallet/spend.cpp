@@ -1,14 +1,16 @@
 #include <Cosmos/wallet/spend.hpp>
+#include <data/shuffle.hpp>
 
 namespace Cosmos {
 
-    spend::spent spend::operator () (
-        account acc, key_source addresses,
-        list<Bitcoin::output> to,
-        satoshis_per_byte fees,
-        uint32 lock) const {
+    namespace incomplete = Gigamonkey::Bitcoin::incomplete;
 
-        namespace G = Gigamonkey;
+    spend::spent spend::operator () (
+        redeem red, account acc,
+        key_source addresses,
+        // payee's outputs
+        list<Bitcoin::output> to,
+        satoshis_per_byte fees) const {
 
         // TODO if we could we ought to estimate the size of the tx and
         // the fees required to spend it and include that in value_to_spend.
@@ -23,32 +25,38 @@ namespace Cosmos {
         // It is possible that we would have more than value_to_spend
         // but then not enough for fees.
         if (value_available < value_to_spend)
-            throw exception {} << "insufficient funds: " << value_available << " < " << value_to_spend;
+            throw data::exception {} << "insufficient funds: " << value_available << " < " << value_to_spend;
 
+        // we increase the value to spend so as to redeem some extra.
+        double wallet_value_proportion = double (value_available) / double (value_to_spend);
+
+        double max_redeem_proportion = wallet_value_proportion > (((MaxRedeemProportion - 1) * 2) + 1) ?
+            MaxRedeemProportion: ((wallet_value_proportion - 1) / 2) + 1;
+
+        double min_redeem_proportion = max_redeem_proportion > (((MinRedeemProportion - 1) * 2) + 1) ?
+            MinRedeemProportion: ((max_redeem_proportion - 1) / 2) + 1;
+
+        Bitcoin::satoshi value_to_redeem =
+            std::ceil (value_to_spend * std::uniform_real_distribution<double> {MinRedeemProportion, MaxRedeemProportion} (Random));
+
+        // construct map of inputs removed from the account.
+        map<Bitcoin::index, Bitcoin::outpoint> removed;
+
+        // list of inputs
         list<nosig::input> inputs;
-        map<Bitcoin::index, Bitcoin::outpoint> remove;
 
-        // select funds to be spent and organize them into redeemers and keep
-        // track of outputs that will be removed from the wallet.
-        Bitcoin::index input_index = 0;
-        for (const auto &[op, re] : Select (acc, value_to_spend, fees, Random)) {
+        // construct list of inputs and map of removed elements.
+        size_t input_index = 0;
+        // select outputs to redeem.
+        for (const auto &[op, re]: Select (acc, value_to_redeem, fees, Random)) {
             inputs <<= nosig::input {
-                for_each ([&k, w] (const derivation &x) -> G::sigop {
-                    Bitcoin::secret sec = find_secret (k, w.Pubkeys, x);
-                    if (!sec.valid ()) throw exception {} << "could not find secret key for " << x;
-                    return G::sigop {sec};
-                }, re.Keys),
                 Bitcoin::prevout {op, re.Prevout},
-                re.ExpectedScriptSize,
-                Bitcoin::input::Finalized,
-                re.UnlockScriptSoFar};
-            remove = remove.insert (input_index++, op);
+                red (re.Prevout, {}, re.UnlockScriptSoFar)
+            };
+            removed = removed.insert (input_index++, op);
         }
 
-        map<Bitcoin::index, redeemable> insert;
-
-        // transform selected into inputs
-        nosig::transaction design_before_change {1, inputs, to, lock};
+        nosig::transaction design_before_change {1, inputs, to, 0};
 
         // how much do we need to make in change?
         satoshis_per_byte fee_rate_before_change {design_before_change.fee (), design_before_change.expected_size ()};
@@ -58,35 +66,33 @@ namespace Cosmos {
             {floor (double (int64 (fee_rate_before_change.Satoshis)) - double (fees) * fee_rate_before_change.Bytes)};
 
         // make change outputs.
-
-        change ch = Change (w.Addresses.Sequences[w.Addresses.Change], change_amount, fees, Random);
+        change ch = Change (change_amount, fees, addresses, Random);
 
         auto change_outputs = ch.outputs ();
 
         // randomly order the new outputs.
-        cross<size_t> outputs_ordering = random_ordering (to.size () + change_outputs.size (), Random);
+        data::cross<size_t> outputs_ordering = random_ordering (to.size () + change_outputs.size (), Random);
 
-        // shuffle outputs and construct tx.
-        G::redeemable_transaction design {1, inputs, shuffle (change_outputs + to, outputs_ordering), lock};
+        nosig::transaction final_design {1, inputs, shuffle (change_outputs + to, outputs_ordering), 0};
 
         // Is the fee for this transaction sufficient?
-        if (design.fee_rate () < fees) throw exception {3} << "failed to generate tx with sufficient fees";
-        std::cout << " transaction design is complete. It has " << design.Inputs.size () << " inputs spending " << design.spent () << ", " <<
-            design.Outputs.size () << " outputs sending " << design.sent () << " with fees " << design.fee  () << std::endl;
-        // redeem transaction.
-        extended_transaction complete = design.redeem (r);
+        if (final_design.fee_rate () < fees)
+            throw data::exception {3} << "failed to generate tx with sufficient fees";
 
-        if (!complete.valid ()) throw exception {3} << "invalid tx generated";
+        std::cout << " transaction design is complete. It has " << final_design.Inputs.size () << " inputs spending " << final_design.spent () << ", " <<
+            final_design.Outputs.size () << " outputs sending " << final_design.sent () << " with fees " << final_design.fee  () << std::endl;
+
+        // the list of new entries to be added to account.
+        map<Bitcoin::index, redeemable> inserted;
 
         // add new change outputs to account.
-        diff.TXID = complete.id ();
         for (int i = 0; i < change_outputs.size (); i++) {
             size_t change_index = outputs_ordering[i];
-            diff.Insert = diff.Insert.insert (outputs_ordering[i++], ch.Change[change_index]);
+            inserted = inserted.insert (change_index, ch.Change[i]);
         }
 
         // return new wallet.
-        return spent {{{complete, diff}}, w.Addresses.update (w.Addresses.Change, ch.Last)};
+        return spent {{{final_design, inserted, removed}}, key_source {ch.Last, addresses.Sequence}};
     }
 }
 

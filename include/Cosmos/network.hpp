@@ -6,11 +6,12 @@
 #include <Cosmos/network/whatsonchain.hpp>
 #include <ctime>
 
+using extended_transaction = Gigamonkey::extended::transaction;
+using satoshis_per_byte = Gigamonkey::satoshis_per_byte;
+
 namespace Cosmos {
     namespace MAPI = Gigamonkey::MAPI;
     namespace ARC = Gigamonkey::ARC;
-    using extended_transaction = Gigamonkey::extended::transaction;
-    using satoshis_per_byte = Gigamonkey::satoshis_per_byte;
 
     struct broadcast_result {
         enum result {

@@ -10,6 +10,7 @@
 #include <Diophant/symbol.hpp>
 
 #include <gigamonkey/schema/random.hpp>
+#include <gigamonkey/pay/BEEF.hpp>
 
 #include <data/tools/map_schema.hpp>
 #include <data/container.hpp>
@@ -17,6 +18,7 @@
 #include <Cosmos/Diophant.hpp>
 
 namespace schema = data::schema;
+using BEEF = Gigamonkey::BEEF;
 
 server::server (const options &o) {
     SpendOptions = o.spend_options ();
@@ -247,11 +249,6 @@ bool parse_uint32 (const std::string &str, uint32_t &result) {
     }
 }
 
-maybe<net::HTTP::response> read_spend_options (Cosmos::spend_options &, map<UTF8, UTF8> query) {
-    // TODO
-    return {};
-}
-
 net::HTTP::response process_wallet_method (
     server &p, net::HTTP::method http_method, method m,
     Diophant::symbol wallet_name,
@@ -277,9 +274,9 @@ net::HTTP::response process_wallet_method (
     if (m == method::KEY_SEQUENCE) {
 
         auto [name, post_key_sequence] = schema::validate<> (query,
-            schema::key<Diophant::symbol> ("name") &
-            *(schema::key<key_expression> ("key") &
-                schema::key<key_derivation> ("derivation") &
+            schema::key<Diophant::symbol> ("name") &&
+            *(schema::key<key_expression> ("key") &&
+                schema::key<key_derivation> ("derivation") &&
                 *schema::key<uint32> ("index")));
 
         // make sure the name is a valid symbol name
@@ -408,24 +405,45 @@ net::HTTP::response process_wallet_method (
 
         return res;
     }
-
+/*
     if (m == method::IMPORT) {
         if (http_method != net::HTTP::method::put)
             return error_response (405, m, problem::invalid_method, "use put");
         // we need to find addresses and xpubs that we need to check. 
 
-        list<std::string> unused = p.DB->get_wallet_unused (wallet_name);
+        if (!content_type)
+            return error_response (405, m, problem::invalid_parameter,
+                "put transaction in body");
 
-        list<digest160> unused_addresses;
-        list<HD::BIP_32::pubkey> unused_pubkeys;
+        BEEF beef;
 
-        for (const std::string &u : unused) {
-            if (Bitcoin::address a {u}; a.valid ()) {
+        if (*content_type == net::HTTP::content::application_octet_stream) {
+            beef = BEEF {body};
+        } else if (*content_type == net::HTTP::content::application_json) {
+            beef = BEEF {JSON {std::string (data::string (body))}};
+        } else return error_response (405, m, problem::invalid_parameter,
+                "Transaction should be BEEF format in JSON or octet stream");
 
-            } else if (HD::BIP_32::pubkey pp {u}; pp.valid ()) {
-                
-            } 
+        // TODO go through my old code and incorporate other stuff.
+        if (!beef.valid ())
+            return error_response (405, m, problem::invalid_parameter,
+                "Invalid transaction.");
+
+        map<digest160, maybe<HD::BIP_32::pubkey>> unused;
+
+        for (const std::string &u : p.DB->get_wallet_unused (wallet_name)) {
+            if (Bitcoin::address a {u}; a.valid ())
+                unused = unused.insert (a.digest (), {});
+            else if (HD::BIP_32::pubkey pp {u}; pp.valid ())
+                // generate first 3 addresses.
+                for (uint32 i = 0; i < 3; i++)
+                    unused = unused.insert (pp.derive ({i}).address ().Digest, pp);
+
+
         }
+
+        // now go through the tx and check for these unused addresses.
+
 
         // first we need a function that recognizes output patterns. 
         return error_response (501, m, problem::unimplemented);
@@ -435,8 +453,34 @@ net::HTTP::response process_wallet_method (
         if (http_method != net::HTTP::method::post)
             return error_response (405, m, problem::invalid_method, "use post");
 
+        auto [to, value, fee_rate, min_change_value, unit,
+            map_redeem_proportion, min_reedeem_proportion,
+            max_value_per_tx, min_value_per_tx, mean_value_per_tx,
+            max_value_per_output, min_value_per_output, mean_value_per_output] = schema::validate<> (query,
+            schema::key<std::string> ("to") &&
+            schema::key<int64> ("value") &&
+            schema::key<satoshis_per_byte> ("fee_rate", p.SpendOptions.FeeRate) &&
+            schema::key<Bitcoin::satoshi> ("min_change_value", p.SpendOptions.MinChangeSats) &&
+            schema::key<std::string> ("unit", "Bitcoin") && // must be Bitcoin for now.
+            schema::key<double> ("max_redeem_proportion", p.SpendOptions.MaxRedeemProportion) &&
+            schema::key<double> ("min_redeem_proportion", p.SpendOptions.MinRedeemProportion) &&
+            schema::key<Bitcoin::satoshi> ("max_value_per_tx", p.SpendOptions.MaxSatsPerTx) &&
+            schema::key<Bitcoin::satoshi> ("min_value_per_tx", p.SpendOptions.MinSatsPerTx) &&
+            schema::key<double> ("mean_value_per_tx", p.SpendOptions.MeanSatsPerTx) &&
+            schema::key<Bitcoin::satoshi> ("max_value_per_output", p.SpendOptions.MaxSatsPerOutput) &&
+            schema::key<Bitcoin::satoshi> ("min_value_per_output", p.SpendOptions.MinSatsPerOutput) &&
+            schema::key<double> ("mean_value_per_output", p.SpendOptions.MeanSatsPerOutput));
+
+        if (unit != "Bitcoin" && unit != "BSV")
+            if (http_method != net::HTTP::method::put)
+                return error_response (405, m, problem::invalid_query,
+                    "We do not support units other than Bitcoin SV for now.");
+
+        // now we try to read who we are sending to.
+
         Bitcoin::address pay_to_address;
         HD::BIP_32::pubkey pay_to_xpub;
+
 
         const UTF8 *pay_to_param = query.contains ("pay_to");
         if (bool (pay_to_param)) {
@@ -453,13 +497,13 @@ net::HTTP::response process_wallet_method (
         } else if (pay_to_xpub.valid ()) {
             return error_response (501, m, problem::unimplemented);
         } else return error_response (400, m, problem::invalid_query, "invalid parameter 'pay_to'");
-    }
+    }*/
 
     if (m == method::RESTORE) {
         if (http_method != net::HTTP::method::put)
             return error_response (405, m, problem::invalid_method, "use put");
 
-        return handle_generate (p, wallet_name, query, content_type, body);
+        return handle_restore (p, wallet_name, query, content_type, body);
     }
 
     return error_response (501, m, problem::unimplemented);

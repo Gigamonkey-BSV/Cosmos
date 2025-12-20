@@ -3,6 +3,8 @@
 #include <data/tools/map_schema.hpp>
 
 #include <gigamonkey/wif.hpp>
+#include <gigamonkey/schema/electrum_sv.hpp>
+#include <gigamonkey/schema/bip_39.hpp>
 
 namespace schema = data::schema;
 
@@ -29,25 +31,27 @@ net::HTTP::response handle_restore (server &p,
     const maybe<net::HTTP::content> &content_type,
     const data::bytes &body) {
 
-    // todo: if words fail, we need an option to try to fix errors.
+    // TODO: if words fail, we need an option to try to fix errors.
+    // TODO: need option for gussing coin type.
     auto [
         derivation_options,
         key_options,
         accounts_param,
         max_lookup_param] = schema::validate<> (query,
-        (schema::key<restore_wallet_type> ("wallet_type") | (
-            *schema::key<wallet_style> ("wallet_style") &
-            *schema::key<derivation_style> ("derivation_style") &
-            *schema::key<coin_type> ("coin_type"))) &
-        (schema::key<std::string> ("key") &
-            *schema::key<master_key_type> ("key_type") |
-            (*(schema::key<std::string> ("password") |
-                schema::key<uint16> ("CentBee_PIN") |
-                schema::key<bool> ("guess_CentBee_PIN")) &
-                (schema::key<bytes> ("entropy") |
-                    schema::key<std::string> ("mnemonic") &
-                    *schema::key<std::string> ("mnemonic_style")))) &
-        *schema::key<uint32> ("accounts") &
+        (schema::key<restore_wallet_type> ("wallet_type") || (
+            *schema::key<wallet_style> ("wallet_style") &&
+            *schema::key<derivation_style> ("derivation_style") &&
+            *(schema::key<coin_type> ("coin_type") ||
+                schema::key<bool> ("guess_coin_type")))) &&
+        (schema::key<UTF8> ("key") &&
+            *schema::key<master_key_type> ("key_type") ||
+            (*(schema::key<UTF8> ("password") ||
+                schema::key<uint16> ("CentBee_PIN") ||
+                schema::key<bool> ("guess_CentBee_PIN")) &&
+                (schema::key<UTF8> ("mnemonic") ||
+                    schema::key<bytes> ("entropy")) &&
+                    *schema::key<mnemonic_style> ("mnemonic_style"))) &&
+        *schema::key<uint32> ("accounts") &&
         *schema::key<uint32> ("max_lookup"));
 
     uint32 total_accounts = set_with_default (accounts_param, uint32 {1});
@@ -63,10 +67,11 @@ net::HTTP::response handle_restore (server &p,
     master_key_type KeyType {master_key_type::invalid};
 
     wallet_style WalletStyle {wallet_style::invalid};
-    coin_type CoinType {};
+
+    maybe<coin_type> CoinType {};
+    bool guess_coin_type {false};
 
     {
-        bool derive_from_mnemonic = key_options.index () == 1;
 
         switch (derivation_options.index ()) {
             case 0: {
@@ -96,29 +101,68 @@ net::HTTP::response handle_restore (server &p,
                 // and if we have both, they need to be consistent.
                 auto [wallet_style_option, derivation_style_option, coin_type_option] = std::get<1> (derivation_options);
 
+                if (coin_type_option) {
+                    // coin type was provided
+                    if (coin_type_option->index () == 0)
+                        CoinType = std::get<0> (*coin_type_option);
+                    else guess_coin_type = std::get<1> (*coin_type_option);
+                }
+
                 if (bool (derivation_style_option)) {
                     if (*derivation_style_option == derivation_style::BIP_44) {
-                        if (!bool (coin_type_option) || !bool (*coin_type_option))
+                        if (!bool (CoinType) || !bool (*CoinType))
                             return error_response (400, method::RESTORE, problem::invalid_parameter,
                                 "If derivation_style is BIP_44, then coin_type must be povided and not be 'none'");
-                    } else if (bool (coin_type_option) && bool (*coin_type_option))
-                        return error_response (400, method::RESTORE, problem::invalid_parameter,
-                            "If derivation_style is CentBee, then coin_type, if provided, must be 'none'");
-                } else if (!bool (coin_type_option))
+                    } else {
+                        if (!bool (CoinType)) {
+                            if (guess_coin_type)
+                                return error_response (400, method::RESTORE, problem::invalid_query,
+                                    "Do not need to guess coin type since we have derivation_style=centbee");
+                            else CoinType = coin_type {};
+                        } if (bool (CoinType) && bool (*CoinType))
+                            return error_response (400, method::RESTORE, problem::invalid_parameter,
+                                "If derivation_style is CentBee, then coin_type, if provided, must be 'none'");
+                    }
+                } else if (!bool (CoinType))
                     return error_response (400, method::RESTORE, problem::invalid_parameter,
                         "Either derivation_style or coin_type must be provided");
 
-                if (bool (coin_type_option)) CoinType = *coin_type_option;
                 if (bool (wallet_style_option)) WalletStyle = *wallet_style_option;
 
             } break;
             default: throw data::exception {} << "Should not be able to get here";
         }
 
-        if (derive_from_mnemonic) {
-            auto [password_option, mnemonic_options] = std::get<1> (key_options);
+        // if we do not know coin type at this point, then guess coin type must be set.
+        if (!CoinType && !guess_coin_type)
+            return error_response (400, method::RESTORE, problem::invalid_query,
+                "Please provide a coin_type parameter or set guess_coin_type to true");
 
-            maybe<std::string> password;
+        bool derive_from_mnemonic = key_options.index () == 1;
+        if (derive_from_mnemonic) {
+            auto [password_option, mnemonic_or_entropy, mnemonic_style_option] = std::get<1> (key_options);
+
+            mnemonic_style MnemonicStyle = set_with_default (mnemonic_style_option, mnemonic_style::BIP_39);
+
+            // now we need some way to calculate the words.
+            data::UTF8 words;
+
+            switch (mnemonic_or_entropy.index ()) {
+                case 0: {
+                    words = std::get<0> (mnemonic_or_entropy);
+                } break;
+                case 1: {
+                    auto entropy = std::get<1> (mnemonic_or_entropy);
+
+                    if (MnemonicStyle == mnemonic_style::BIP_39) {
+                        words = HD::BIP_39::generate (entropy);
+                    } else {
+                        words = encoding::UTF8::encode (HD::Electrum_SV::generate (entropy));
+                    }
+                }
+            }
+
+            UTF8 password {};
             bool guess_CentBee_PIN {false};
             if (bool (password_option)) {
                 switch (password_option->index ()) {
@@ -132,15 +176,14 @@ net::HTTP::response handle_restore (server &p,
                         if (centbee_PIN > 9999)
                             return error_response (400, method::RESTORE, problem::invalid_query, "Invalid CentBee PIN range");
 
-                        // TODO write it out as a string.
-                        throw data::method::unimplemented {"CentBee PIN to password"};
-
+                        password = std::to_string (centbee_PIN);
                     } break;
                     case 2: {
                         guess_CentBee_PIN = std::get<2> (*password_option);
                         if (!guess_CentBee_PIN)
                             return error_response (400, method::RESTORE, problem::invalid_query,
-                                "");
+                                "Please set guess_centbee_pin to true and we will attempt to figure it out.");
+
                     }
 
                     if (password_option->index () != 1) {
@@ -156,36 +199,46 @@ net::HTTP::response handle_restore (server &p,
                     }
                 }
             }
-
-            bytes entropy;
-
+            // In some cases, we can guess the wallet style from other options.
+            // TODO support single address style.
             switch (WalletStyle) {
                 case wallet_style::invalid: {
                     // assume bip 44 in this case.
-                    WalletStyle == wallet_style::BIP_44;
-                } break;
+                    if (derive_from_mnemonic) {
+                        WalletStyle == wallet_style::BIP_44;
+                        break;
+                    } else return error_response (400, method::RESTORE, problem::missing_parameter,
+                        "Need to set parameter style");
+                }
                 case wallet_style::single_address:
                 case wallet_style::HD_sequence:
                     return error_response (400, method::RESTORE, problem::invalid_query,
                         "derivation from mnemonic is incompatible with single address or hd sequence wallet styles.");
             }
 
-            switch (mnemonic_options.index ()) {
-                case 0: {
-                    auto entropy_option = std::get<0> (mnemonic_options);
-                } break;
-                case 1: {
-                    auto [mnemonic_option, style_option] = std::get<1> (mnemonic_options);
+            // now we try to generate seed from words.
+            HD::seed seed;
 
-                    // TODO suppose the mnemonic doesn't work. Need options for trying to fix it.
-                }
+            if (guess_CentBee_PIN) throw data::method::unimplemented {"method::RESTORE: guess centbee pin"};
+            else if (MnemonicStyle == mnemonic_style::BIP_39) {
+                if (!HD::BIP_39::valid (words))
+                    return error_response (400, method::RESTORE, problem::invalid_query,
+                        "Invalid mnemonic provided.");
+
+                seed = HD::BIP_39::read (words, password);
+            } else {
+                if (!HD::Electrum_SV::valid (words))
+                    return error_response (400, method::RESTORE, problem::invalid_query,
+                        "Invalid mnemonic provided.");
+
+                seed = HD::Electrum_SV::read (words, password);
             }
 
-            // TODO
-            // now we have entropy so we derive key from entropy.
+            // Now we generate keys from seed.
+            sk = HD::BIP_32::secret::from_seed (seed);
 
             // derive pubkey from secret key.
-            throw data::method::unimplemented {"what to do if wallet style isn't provided in method::GENERATE"};
+            pk = sk->to_public ();
 
         } else {
             auto [key_option, type_option] = std::get<0> (key_options);
@@ -252,7 +305,7 @@ net::HTTP::response handle_restore (server &p,
                         "derivation from mnemonic is incompatible with single address or hd sequence wallet styles.");
             }
 
-            throw data::method::unimplemented {"what to do if mnemonic isn't provided in method::GENERATE"};
+            throw data::method::unimplemented {"what to do if mnemonic isn't provided in method::RESTORE"};
         }
     }
 
@@ -260,8 +313,7 @@ net::HTTP::response handle_restore (server &p,
         throw data::method::unimplemented {"method RESTORE with no private key"};
     }
 
-    throw data::method::unimplemented {"method RESTORE"};
-
+    // NOTE: we do not necessarily want to make a whole new wallet every time we restore.
     if (!p.DB->make_wallet (wallet_name))
         return error_response (500, method::RESTORE, problem::failed,
             string::write ("wallet ", wallet_name, " already exists"));
@@ -274,9 +326,13 @@ net::HTTP::response handle_restore (server &p,
         default: throw data::method::unimplemented {"method RESTORE: key types other than bip 44 master"};
     }
 
+    if (!bool (CoinType)) throw data::method::unimplemented {"method RESTORE: guess coin type"};
+
+    coin_type CoinTypeFinal = *CoinType;
+
     // if coin type is none, then we make a centbee-style account.
-    list<uint32> root_derivation = bool (CoinType) ?
-        list<uint32> {HD::BIP_44::purpose, *CoinType}:
+    list<uint32> root_derivation = bool (CoinTypeFinal) ?
+        list<uint32> {HD::BIP_44::purpose, *CoinTypeFinal}:
         list<uint32> {HD::BIP_44::purpose};
 
     string account_name {"account"};

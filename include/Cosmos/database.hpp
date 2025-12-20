@@ -54,7 +54,7 @@ namespace Cosmos {
             const std::string &wallet_name,
             const Diophant::symbol &sequence_name,
             const key_sequence &sequence,
-            int index) = 0;
+            uint32 index) = 0;
 
         virtual maybe<key_source> get_wallet_sequence (const std::string &wallet_name, const std::string &key_name) = 0;
 

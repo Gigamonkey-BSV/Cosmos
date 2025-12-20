@@ -114,26 +114,26 @@ namespace sqlite_orm {
     };
 
     template <size_t size>
-    struct type_printer<data::digest<size>> {
+    struct type_printer<data::hash::digest<size>> {
         static std::string print () {
             return "TEXT";
         }
     };
 
     template <size_t size>
-    struct statement_binder<data::digest<size>> {
-        int bind (sqlite3_stmt *stmt, int index, const data::digest<size> &value) const {
+    struct statement_binder<data::hash::digest<size>> {
+        int bind (sqlite3_stmt *stmt, int index, const data::hash::digest<size> &value) const {
             return sqlite3_bind_text (stmt, index, data::encoding::hex::write (value).c_str (), static_cast<int> (value.size () * 2), SQLITE_TRANSIENT);
         }
     };
 
     template <size_t size>
-    struct field_printer<data::digest<size>> {
-        static void print (std::ostream &os, const data::digest<size> &value) {
+    struct field_printer<data::hash::digest<size>> {
+        static void print (std::ostream &os, const data::hash::digest<size> &value) {
             os << "<text of size " << (value.size () * 2) << ">";
         }
 
-        std::string operator () (const data::digest<size>& value) const {
+        std::string operator () (const data::hash::digest<size>& value) const {
             std::stringstream ss;
             ss << value;
             return ss.str ();
@@ -141,10 +141,10 @@ namespace sqlite_orm {
     };
 
     template <size_t size>
-    struct row_extractor<data::digest<size>> {
-        data::digest<size> extract (sqlite3_stmt *stmt, int columnIndex) const {
+    struct row_extractor<data::hash::digest<size>> {
+        data::hash::digest<size> extract (sqlite3_stmt *stmt, int columnIndex) const {
             std::string hex_text = std::string {reinterpret_cast<const char*> (sqlite3_column_text (stmt, columnIndex))};
-            return data::digest<size> {hex_text};
+            return data::hash::digest<size> {hex_text};
         }
     };
 
@@ -308,7 +308,6 @@ namespace Cosmos::SQLite {
     using namespace std;
     using string = std::string;
     using namespace sqlite_orm;
-    using data::digest256;
 
     // database version.
     struct Version {
@@ -317,15 +316,15 @@ namespace Cosmos::SQLite {
     };
 
     struct Block {
-        digest256 hash;       // 64-char hex string
+        data::hash::digest256 hash;       // 64-char hex string
         uint64_t height;
-        digest256 root;       // 64-char hex string
+        data::hash::digest256 root;       // 64-char hex string
         data::byte_array<80> header;  // 80 bytes
         data::bytes merkle_tree;
     };
 
     struct Transaction {
-        digest256 hash;           // txid, 64-char hex
+        data::hash::digest256 hash;           // txid, 64-char hex
         data::bytes tx;
         optional<uint32_t> height;
         data::byte status;
@@ -346,7 +345,7 @@ namespace Cosmos::SQLite {
 
     struct Output {
         Bitcoin::outpoint outpoint;
-        digest256 script_hash;
+        data::hash::digest256 script_hash;
     };
 
     // a hash digest and the data.
@@ -360,7 +359,7 @@ namespace Cosmos::SQLite {
     struct Address {
         int id;
         Bitcoin::address address;
-        digest256 script_hash;
+        data::hash::digest256 script_hash;
     };
 
     struct Wallet {
@@ -421,7 +420,7 @@ namespace Cosmos::SQLite {
         // typically 'receive' or 'change'
         Diophant::symbol name;
 
-        int32_t index;
+        uint32_t index;
 
         key_expression key;
 
@@ -1117,7 +1116,7 @@ namespace Cosmos::SQLite {
             const std::string &wallet_name,
             const Diophant::symbol &sequence_name,
             const key_sequence &sequence,
-            int index) final override {
+            uint32 index) final override {
 
             try {
                 return storage.transaction ([&] {

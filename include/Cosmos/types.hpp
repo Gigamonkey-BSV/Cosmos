@@ -1,7 +1,7 @@
 #ifndef COSMOS_TYPES
 #define COSMOS_TYPES
 
-#include <data/tools.hpp>
+#include <data/tuple.hpp>
 #include <data/math.hpp>
 #include <data/numbers.hpp>
 #include <Gigamonkey.hpp>

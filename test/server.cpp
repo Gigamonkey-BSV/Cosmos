@@ -49,18 +49,18 @@ net::HTTP::request inline make_create_wallet_request (const std::string &wallet_
     return net::HTTP::request::make ().method (net::HTTP::method::post).target (target).host ("localhost");
 }
 
-template <size_t x> maybe<data::digest<x>> read_digest (const net::HTTP::response &);
+template <size_t x> maybe<data::hash::digest<x>> read_digest (const net::HTTP::response &);
 
 TEST (Server, InvertHash) {
     auto test_server = get_test_server ();
     string data_A = "Hi, this string will be hashed.";
     string data_B = "Hi, this string will not have the same hash.";
 
-    data::digest256 SHA256_A = data::crypto::SHA2_256 (data_A);
-    data::digest256 SHA256_B = data::crypto::SHA2_256 (data_B);
+    data::hash::digest256 SHA256_A = data::crypto::SHA2_256 (data_A);
+    data::hash::digest256 SHA256_B = data::crypto::SHA2_256 (data_B);
 
-    data::digest160 Hash160_A = data::crypto::Bitcoin_160 (data_A);
-    data::digest160 Hash160_B = data::crypto::Bitcoin_160 (data_B);
+    data::hash::digest160 Hash160_A = data::crypto::Bitcoin_160 (data_A);
+    data::hash::digest160 Hash160_B = data::crypto::Bitcoin_160 (data_B);
 
     // attempt to retrieve data before it has been entered.
     ASSERT_TRUE (is_error (make_request (test_server, get_invert_hash_request (SHA256_A))));
@@ -165,7 +165,7 @@ TEST (Server, Entropy) {
 // prepare a server with entropy and an initial wallet.
 server prepare (server, const string &entropy = "entropyABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz");
 
-template <size_t x> net::HTTP::request request_get_invert_hash (const data::digest<x> &d, digest_format format = digest_format::HEX);
+template <size_t x> net::HTTP::request request_get_invert_hash (const data::hash::digest<x> &d, digest_format format = digest_format::HEX);
 template <size_t x> net::HTTP::request request_post_invert_hash (Cosmos::hash_function, const std::string &data);
 
 // TODO these are incomplete.
@@ -445,12 +445,12 @@ net::HTTP::request make_add_entropy_request (const string &entropy) {
         ).body (bytes (entropy)).host ("localhost");
 }
 
-template <size_t x> maybe<data::digest<x>> read_digest (const net::HTTP::response &r) {
+template <size_t x> maybe<data::hash::digest<x>> read_digest (const net::HTTP::response &r) {
     auto j = read_JSON_response (r);
     if (!bool (j) || !j->is_object () || !j->contains ("data")) return {};
     const JSON &jd = (*j)["data"];
     if (!jd.is_string ()) return {};
-    data::digest<x> d;
+    data::hash::digest<x> d;
     maybe<bytes> data = encoding::base64::read (std::string ((*j)["data"]));
     if (!bool (data) || data->size () != x) return {};
     std::copy (data->begin (), data->end (), d.begin ());

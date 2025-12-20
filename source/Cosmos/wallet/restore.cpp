@@ -23,8 +23,10 @@ namespace Cosmos {
         Bitcoin::satoshi total_spent = 0;
 
         while (true) {
+
+
             // generate next address
-            entry<Bitcoin::address, signing> next = pay_to_address_signing (m (i));
+            entry<Bitcoin::address, signing> next = make_pay_to_address (m (i));
             const Bitcoin::address &new_addr = next.Key;
 
             std::cout << "  recovering address " << new_addr << std::endl;

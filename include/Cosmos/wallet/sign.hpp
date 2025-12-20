@@ -30,15 +30,29 @@ namespace Cosmos {
             script Script;
             Bitcoin::output Prevout;
 
-            // throws if signatures are not complete.
-            explicit operator extended::input () const;
-
             input (
                 Bitcoin::satoshi val,
                 const data::bytes &locking_script,
                 const Bitcoin::outpoint &op,
                 script unlocking_script,
-                uint32_little Sequence);
+                uint32_little Sequence = Bitcoin::input::Finalized) :
+                Bitcoin::incomplete::input {op, Sequence}, Script {unlocking_script},
+                Prevout {val, locking_script} {}
+
+            input (
+                const Bitcoin::output &prev,
+                const Bitcoin::outpoint &op,
+                script unlocking_script,
+                uint32_little Sequence = Bitcoin::input::Finalized) :
+                Bitcoin::incomplete::input {op, Sequence}, Script {unlocking_script},
+                Prevout {prev} {}
+
+            input (const Bitcoin::prevout &prev,
+                script unlocking_script,
+                uint32_little Sequence = Bitcoin::input::Finalized):
+                Bitcoin::incomplete::input {prev.Key, Sequence}, Script {unlocking_script}, Prevout {prev.Value} {}
+
+            size_t expected_size () const;
         };
 
         struct transaction {
@@ -54,14 +68,16 @@ namespace Cosmos {
             transaction sign (database &) const;
 
             // throws if signatures are not complete.
-            explicit operator extended::transaction () const;
             explicit operator Bitcoin::incomplete::transaction () const;
-
-            Bitcoin::satoshi fee ();
-            uint64 expected_size ();
 
             explicit transaction (const JSON &);
             explicit operator JSON () const;
+
+            uint64 expected_size () const;
+            Bitcoin::satoshi spent () const;
+            Bitcoin::satoshi sent () const;
+            Bitcoin::satoshi fee () const;
+            satoshis_per_byte fee_rate () const;
 
         };
 
