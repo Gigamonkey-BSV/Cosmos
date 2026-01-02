@@ -26,7 +26,7 @@ namespace Cosmos {
         // function that creates change outputs.
         make_change Change;
 
-        data::entropy &Random;
+        data::random::entropy &Random;
 
         Bitcoin::satoshi MinSatsPerTx {spend_options::DefaultMinSatsPerTx};
         Bitcoin::satoshi MaxSatsPerTx {spend_options::DefaultMaxSatsPerTx};

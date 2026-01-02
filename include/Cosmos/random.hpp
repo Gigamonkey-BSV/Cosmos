@@ -9,9 +9,9 @@ namespace crypto = data::crypto;
 
 namespace Cosmos {
     // these functions are not provided by the library.
-    data::entropy *get_random ();// depricated
-    data::entropy *get_secure_random ();
-    data::entropy *get_casual_random ();
+    data::random::entropy *get_random ();// depricated
+    data::random::entropy *get_secure_random ();
+    data::random::entropy *get_casual_random ();
 
     // Some stuff having to do with random number generators. We do not need 
     // strong cryptographic random numbers for boost. It is fine to use 
@@ -40,8 +40,8 @@ namespace Cosmos {
     };
 
     template <std::uniform_random_bit_generator engine>
-    struct std_random : random, data::std_random<engine> {
-        using data::std_random<engine>::std_random;
+    struct std_random : random, data::random::std_random<engine> {
+        using data::random::std_random<engine>::std_random;
 
         static double range01 (engine &gen) {
             return std::uniform_real_distribution<double> {0.0, 1.0} (gen);
@@ -62,19 +62,19 @@ namespace Cosmos {
         }
 
         double range01 () override {
-            return range01 (data::std_random<engine>::Engine);
+            return range01 (data::random::std_random<engine>::Engine);
         }
 
         data::uint64 uint64 (data::uint64 max = std::numeric_limits<data::uint64>::max ()) override {
-            return uint64 (data::std_random<engine>::Engine, max);
+            return uint64 (data::random::std_random<engine>::Engine, max);
         }
 
         data::uint32 uint32 (data::uint32 max = std::numeric_limits<data::uint32>::max ()) override {
-            return uint32 (data::std_random<engine>::Engine, max);
+            return uint32 (data::random::std_random<engine>::Engine, max);
         }
 
         bool boolean () override {
-            return boolean (data::std_random<engine>::Engine);
+            return boolean (data::random::std_random<engine>::Engine);
         }
 
     };

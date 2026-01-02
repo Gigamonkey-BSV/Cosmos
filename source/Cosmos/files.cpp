@@ -1,6 +1,5 @@
 #include <data/crypto/encrypted.hpp>
-#include <data/crypto/stream/one_way.hpp>
-#include <data/crypto/block/cipher.hpp>
+#include <data/crypto/block.hpp>
 #include <data/crypto/block/cryptopp.hpp>
 #include <data/crypto/PKCS5_PBKDF2_HMAC.hpp>
 #include <data/io/wait_for_enter.hpp>
@@ -39,15 +38,22 @@ namespace Cosmos {
     void write_to_file (const file &j, const std::string &filename) {
         file_writer file {filename};
         if (bool (j.Key)) {
+            using namespace data::crypto;
             bytes msg (string (j.Payload.dump ()));
 
             // generate new initialization vector.
-            crypto::initialization_vector<16> iv;
+            initialization_vector<16> iv;
+
+            // TODO You don't need secure random for the initialization vector
             *get_secure_random () >> iv;
 
-            auto ofb = crypto::output_feedback_stream<16, 32, crypto::AES> (iv, *j.Key);
-            for (byte &b : msg) b = static_cast<char> (ofb.crypt (b));
+            bytes ciphertext = encrypt (
+                block_cipher<cipher::block::AES, cipher::block::mode::OFB> {iv},
+                *j.Key, msg);
 
+            // we use this byte to prepend the file
+            // because then we know it cannot be JSON.
+            // TODO this format sucks, I hate it.
             file << byte ('X') << iv << msg;
 
         } else file << j.Payload.dump (2, ' ');
@@ -74,10 +80,11 @@ namespace Cosmos {
 
         // encrypted file.
         if (prefix == 'X') {
+            using namespace crypto;
 
-            crypto::symmetric_key<32> key = get_key ();
+            symmetric_key<32> key = get_key ();
 
-            crypto::initialization_vector<16> iv;
+            initialization_vector<16> iv;
 
             for (int i = 0; i < 16; i++) {
                 if (fi.eof ()) throw data::exception {} << "invalid file format";
@@ -87,16 +94,14 @@ namespace Cosmos {
                 iv[i] = byte (next_char);
             }
 
-            auto ofb = crypto::output_feedback_stream<16, 32, crypto::AES> (iv, key);
-
-            bytes payload;
+            bytes ciphertext;
             while (!fi.eof ()) {
                 char next_char;
                 fi >> next_char;
-                payload.push_back (ofb.crypt (byte (next_char)));
+                ciphertext.push_back (next_char);
             }
 
-            return file {JSON::parse (string (payload)), key};
+            return file {JSON::parse (string (decrypt (block_cipher<cipher::block::AES, cipher::block::mode::OFB> {iv}, key, ciphertext))), key};
 
         }
 

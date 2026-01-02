@@ -136,7 +136,7 @@ net::HTTP::response handle_key (server &p,
     bool Compressed = bool (compressed_param) ? *compressed_param : true;
     Bitcoin::net Net = net_param ? *net_param : Bitcoin::net::Main;
 
-    data::entropy &random = p.get_secure_random ();
+    data::random::entropy &random = p.get_secure_random ();
     secp256k1::secret key;
     random >> key.Value;
 

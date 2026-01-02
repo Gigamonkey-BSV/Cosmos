@@ -28,6 +28,8 @@ namespace Cosmos {
     struct file {
         JSON Payload;
         // If included, then the file is encrypted.
+        // TODO it would be nice if we had something that would delete the key
+        // after a while and ask again if it was needed.
         maybe<crypto::symmetric_key<32>> Key;
         file (const JSON &j): Payload (j), Key {} {}
         file (const JSON &j, const crypto::symmetric_key<32> &k): Payload (j), Key {k} {}

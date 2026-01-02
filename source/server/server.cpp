@@ -27,20 +27,20 @@ server::server (const options &o) {
 }
 
 void server::add_entropy (const bytes &b) {
-    if (!FixedEntropy) FixedEntropy = std::make_shared<data::fixed_entropy> (b);
+    if (!FixedEntropy) FixedEntropy = std::make_shared<data::random::fixed_entropy> (b);
     else {
         FixedEntropy->Entropy = b;
         FixedEntropy->Position = 0;
     }
 
-    if (!Entropy) Entropy = std::make_shared<data::entropy_sum> (FixedEntropy, std::make_shared<Gigamonkey::bitcoind_entropy> ());
+    if (!Entropy) Entropy = std::make_shared<data::random::entropy_sum> (FixedEntropy, std::make_shared<Gigamonkey::bitcoind_entropy> ());
 }
 
-data::entropy &server::get_secure_random () {
+data::random::entropy &server::get_secure_random () {
 
     if (!SecureRandom) {
 
-        if (!Entropy) throw data::entropy::fail {};
+        if (!Entropy) throw data::random::entropy::fail {};
 
         SecureRandom = std::make_shared<crypto::NIST::DRBG> (crypto::NIST::DRBG::Hash, *Entropy, std::numeric_limits<uint32>::max ());
     }
@@ -49,15 +49,15 @@ data::entropy &server::get_secure_random () {
 
 }
 
-data::entropy &server::get_casual_random () {
+data::random::entropy &server::get_casual_random () {
 
     if (!CasualRandom) {
         uint64 seed;
         get_secure_random () >> seed;
 
-        CasualRandom = std::make_shared<data::linear_combination_random> (256,
-            std::static_pointer_cast<data::entropy> (std::make_shared<data::std_random<std::default_random_engine>> (seed)),
-            std::static_pointer_cast<data::entropy> (SecureRandom));
+        CasualRandom = std::make_shared<data::random::linear_combination_random> (256,
+            std::static_pointer_cast<data::random::entropy> (std::make_shared<data::random::std_random<std::default_random_engine>> (seed)),
+            std::static_pointer_cast<data::random::entropy> (SecureRandom));
     }
 
     return *CasualRandom.get ();
@@ -193,7 +193,7 @@ awaitable<net::HTTP::response> server::operator () (const net::HTTP::request &re
 
         co_return process_wallet_method (*this, req.Method, m, wallet_name, query, req.content_type (), req.Body);
 
-    } catch (const data::entropy::fail &) {
+    } catch (const data::random::entropy::fail &) {
         co_return error_response (500, m, problem::need_entropy);
     } catch (const Diophant::parse_error &w) {
         co_return error_response (400, m,

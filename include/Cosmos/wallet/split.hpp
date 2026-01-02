@@ -23,7 +23,7 @@ namespace Cosmos {
 
         // the user provides the outputs to split and this function does the rest.
         spend::spent operator () (
-            data::entropy &, // we don't really need cryptographically secure random here.
+            data::random::entropy &, // we don't really need cryptographically secure random here.
             account,
             selected z,
             double fee_rate) const;
@@ -44,7 +44,7 @@ namespace Cosmos {
         };
 
         // construct only the outputs.
-        result_outputs construct_outputs (data::entropy &r, const key_source &key,
+        result_outputs construct_outputs (data::random::entropy &r, const key_source &key,
             Bitcoin::satoshi split_value, double fee_rate) const;
 
         // we use this to make a
@@ -57,7 +57,7 @@ namespace Cosmos {
         Bitcoin::satoshi MinimumCreateValue {spend_options::DefaultMinChangeSats};
 
         // construct a set of change outputs.
-        change operator () (const key_source &x, Bitcoin::satoshi sats, satoshis_per_byte fees, data::entropy &rand) const;
+        change operator () (const key_source &x, Bitcoin::satoshi sats, satoshis_per_byte fees, data::random::entropy &rand) const;
         using split::operator ();
 
         split_change_parameters (

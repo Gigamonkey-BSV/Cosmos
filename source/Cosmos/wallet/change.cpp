@@ -7,7 +7,7 @@ namespace Cosmos {
 
     // construct a set of change outputs.
     change make_change_parameters::operator ()
-        (Bitcoin::satoshi val, satoshis_per_byte fees, key_source x, data::entropy &r) const {
+        (Bitcoin::satoshi val, satoshis_per_byte fees, key_source x, data::random::entropy &r) const {
 
         list<redeemable> cx {};
 

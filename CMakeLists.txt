@@ -223,6 +223,8 @@ target_link_libraries (
 
   diophant
   Gigamonkey::gigamonkey
+  Data::crypto
+  Data::net
   Data::data
   nlohmann_json
   argh
