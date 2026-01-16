@@ -4,6 +4,7 @@
 
 #include <gigamonkey/schema/bip_39.hpp>
 #include <data/tools/map_schema.hpp>
+#include <data/crypto/random.hpp>
 
 namespace schema = data::schema;
 
@@ -229,7 +230,7 @@ net::HTTP::response handle_generate (server &p,
     wallet_entropy.resize (number_of_words * 4 / 3);
 
     // generate master key.
-    p.get_secure_random () >> wallet_entropy;
+    data::crypto::random::get () >> wallet_entropy;
     std::string wallet_words = HD::BIP_39::generate (wallet_entropy);
 
     auto master = HD::BIP_32::secret::from_seed (HD::BIP_39::read (wallet_words));

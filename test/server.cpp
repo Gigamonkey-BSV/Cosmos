@@ -3,18 +3,24 @@
 #include "../source/server/key.hpp"
 #include "../source/server/generate.hpp"
 #include "../source/server/invert_hash.hpp"
+#include "../source/server/options.hpp"
+#include "../source/server/random.hpp"
 #include <data/net/JSON.hpp>
 #include <data/net/error.hpp>
 #include "gtest/gtest.h"
 
 std::atomic<bool> Shutdown {false};
 
-constexpr const int arg_count = 1;
-constexpr const char *const arg_values[arg_count] = {"--sqlite_in_memory"};
+constexpr const int arg_count = 3;
+constexpr const char *const arg_values[arg_count] = {"--sqlite_in_memory", "--ignore_user_entropy", "--seed=ffffffffffffffffedcba98765432100"};
 
 server get_test_server () {
     Shutdown = false;
-    return server {options {arg_parser {arg_count, arg_values}}};
+    std::cout << "about to setup program options" << std::endl;
+    options program_options {arg_parser {arg_count, arg_values}};
+    Cosmos::random::setup (program_options);
+    std::cout << "about to create test server " << std::endl;
+    return server {program_options};
 }
 
 net::HTTP::request make_shutdown_request ();
@@ -136,21 +142,34 @@ TEST (Server, Entropy) {
     // Make a wallet.
     ASSERT_TRUE (is_ok_response (make_request (test_server, make_create_wallet_request ("Wally"))));
 
-    // fail to generate a random key because the random number generator is not set up.
-    ASSERT_TRUE (is_error (make_request (test_server,
+    // The random number generator is set up automatically, so we can generate a key.
+    // (this used to fail because it had to be set up manually)
+    ASSERT_FALSE (is_error (make_request (test_server,
         post_key_request ("Wally", "X", key_type::secp256k1))));
 
     // initialize random number generator.
     ASSERT_TRUE (is_ok_response (make_request (test_server,
         make_add_entropy_request ("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"))));
 
-    // succeed at generating a random key
+    // fail to generate a key that we already generated.
     auto successfully_create_key = read_string_response (make_request (test_server,
         post_key_request ("Wally", "X", key_type::secp256k1)));
 
+    ASSERT_FALSE (successfully_create_key);
+
+    // successfully generate a new key
+    successfully_create_key = read_string_response (make_request (test_server,
+        post_key_request ("Wally", "Y", key_type::secp256k1)));
+
     ASSERT_TRUE (successfully_create_key);
 
-    auto get_new_key = read_string_response (make_request (test_server, get_key_request ("Wally", "X")));
+    // fail to get the key from the wrong wallet.
+    auto get_new_key = read_string_response (make_request (test_server, get_key_request ("Sally", "Y")));
+
+    // successfully retrieve the key.
+    ASSERT_FALSE (get_new_key);
+
+    get_new_key = read_string_response (make_request (test_server, get_key_request ("Wally", "Y")));
 
     // successfully retrieve the key.
     ASSERT_TRUE (get_new_key);
@@ -159,7 +178,7 @@ TEST (Server, Entropy) {
 
     // try to overwrite the key and fail.
     ASSERT_TRUE (is_error (make_request (test_server,
-        post_key_request ("Wally", "X", key_type::secp256k1))));
+        post_key_request ("Wally", "Y", key_type::secp256k1))));
 }
 
 // prepare a server with entropy and an initial wallet.

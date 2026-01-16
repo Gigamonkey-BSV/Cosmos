@@ -12,7 +12,7 @@ namespace Cosmos {
     using selected = dispatch<Bitcoin::outpoint, redeemable>;
 
     // select outputs from a wallet sufficient for the given value, plus the tx cost of the outputs selected.
-    using select = data::function<selected (const account &, Bitcoin::satoshi, satoshis_per_byte fees, data::random::entropy &)>;
+    using select = data::function<selected (const account &, Bitcoin::satoshi, satoshis_per_byte fees, data::random::source &)>;
 
     // default select function
     struct select_down {
@@ -27,7 +27,7 @@ namespace Cosmos {
         double MaxChangeFraction;
 
         // select outputs from a wallet sufficient for the given value.
-        selected operator () (const account &, Bitcoin::satoshi, satoshis_per_byte fees, data::random::entropy &) const;
+        selected operator () (const account &, Bitcoin::satoshi, satoshis_per_byte fees, data::random::source &) const;
     };
 
     // select the biggest outputs until we have enough.
@@ -41,7 +41,7 @@ namespace Cosmos {
         double MaxChangeFraction;
 
         // select outputs from a wallet sufficient for the given value.
-        selected operator () (const account &, Bitcoin::satoshi, satoshis_per_byte fees, data::random::entropy &) const;
+        selected operator () (const account &, Bitcoin::satoshi, satoshis_per_byte fees, data::random::source &) const;
     };
 
     // select random outputs until we have enough.
@@ -55,7 +55,7 @@ namespace Cosmos {
         double MaxChangeFraction;
 
         // select outputs from a wallet sufficient for the given value.
-        selected operator () (const account &, Bitcoin::satoshi, satoshis_per_byte fees, data::random::entropy &) const;
+        selected operator () (const account &, Bitcoin::satoshi, satoshis_per_byte fees, data::random::source &) const;
     };
 
     // combine select_up_random with select_down.
@@ -71,7 +71,7 @@ namespace Cosmos {
         double MaxChangeFraction;
 
         // select outputs from a wallet sufficient for the given value.
-        selected operator () (const account &, Bitcoin::satoshi, satoshis_per_byte fees, data::random::entropy &) const;
+        selected operator () (const account &, Bitcoin::satoshi, satoshis_per_byte fees, data::random::source &) const;
     };
 
 }

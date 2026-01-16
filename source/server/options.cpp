@@ -185,3 +185,33 @@ db_options options::db_options () const {
 Cosmos::spend_options options::spend_options () const {
     return Cosmos::spend_options {};
 }
+
+maybe<bytes> options::nonce () const {
+    maybe<data::hex_string> nonce;
+    this->get ("nonce", nonce);
+    if (bool (nonce)) return bytes (*nonce);
+
+    const char* val = std::getenv ("COSMOS_NONCE");
+
+    if (bool (val))
+        return bytes (data::hex_string {val});
+
+    return {};
+}
+
+maybe<bytes> options::seed () const {
+    maybe<data::hex_string> seed;
+    this->get ("seed", seed);
+    if (bool (seed)) return bytes (*seed);
+
+    const char* val = std::getenv ("COSMOS_SEED");
+
+    if (bool (val))
+        return bytes (data::hex_string {val});
+
+    return {};
+}
+
+bool options::incorporate_user_entropy () const {
+    return !this->has ("ignore_user_entropy");
+}

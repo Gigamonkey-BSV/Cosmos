@@ -32,6 +32,10 @@ struct options : arg_parser {
     net::IP::TCP::endpoint endpoint () const;
 
     Cosmos::spend_options spend_options () const;
+
+    maybe<bytes> nonce () const;
+    maybe<bytes> seed () const;
+    bool incorporate_user_entropy () const;
 };
 
 #endif

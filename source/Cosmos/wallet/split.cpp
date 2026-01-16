@@ -4,7 +4,7 @@ namespace Cosmos {
 
     constexpr const uint32 output_size = 34;
 
-    split::result_outputs split::construct_outputs (data::random::entropy &r, const key_source &k,
+    split::result_outputs split::construct_outputs (data::random::source &r, const key_source &k,
         Bitcoin::satoshi split_value, double fee_rate) const {
 
         list<redeemable> outputs {};
@@ -54,7 +54,7 @@ namespace Cosmos {
         }
     }
 /*
-    split::result split::operator () (redeem ree, data::random::entropy &rand,
+    split::result split::operator () (redeem ree, data::random::source &rand,
         keychain k, pubkeys p, address_sequence x,
         list<entry<Bitcoin::outpoint, redeemable>> selected, double fee_rate) const {
         using namespace Gigamonkey;

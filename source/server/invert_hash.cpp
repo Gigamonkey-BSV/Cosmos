@@ -1,4 +1,4 @@
-#include "server.hpp"
+
 #include "problem.hpp"
 #include "method.hpp"
 #include "invert_hash.hpp"
@@ -6,6 +6,7 @@
 #include <gigamonkey/p2p/checksum.hpp>
 
 #include <data/net/REST.hpp>
+#include <data/crypto/hash.hpp>
 
 #include <data/tools/map_schema.hpp>
 
@@ -180,28 +181,28 @@ net::HTTP::response handle_invert_hash (server &p,
 
         switch (HashFunction) {
             case hash_function::SHA1: {
-                hash = get_hash_fn (&crypto::SHA1);
+                hash = get_hash_fn (&data::crypto::SHA1);
             } break;
             case hash_function::SHA2_256: {
-                hash = get_hash_fn (&crypto::SHA2_256);
+                hash = get_hash_fn (&data::crypto::SHA2_256);
             } break;
             case hash_function::SHA2_512: {
-                hash = get_hash_fn (&crypto::SHA2_512);
+                hash = get_hash_fn (&data::crypto::SHA2_512);
             } break;
             case hash_function::SHA3_256: {
-                hash = get_hash_fn (&crypto::SHA3_256);
+                hash = get_hash_fn (&data::crypto::SHA3_256);
             } break;
             case hash_function::SHA3_512: {
-                hash = get_hash_fn (&crypto::SHA3_512);
+                hash = get_hash_fn (&data::crypto::SHA3_512);
             } break;
             case hash_function::RIPEMD160: {
-                hash = get_hash_fn (&crypto::RIPEMD_160);
+                hash = get_hash_fn (&data::crypto::RIPEMD_160);
             } break;
             case hash_function::Hash256: {
-                hash = get_hash_fn (&crypto::Bitcoin_256);
+                hash = get_hash_fn (&data::crypto::Bitcoin_256);
             } break;
             case hash_function::Hash160: {
-                hash = get_hash_fn (&crypto::Bitcoin_160);
+                hash = get_hash_fn (&data::crypto::Bitcoin_160);
             } break;
             default: {
                 return error_response (501, method::INVERT_HASH, problem::unimplemented, 

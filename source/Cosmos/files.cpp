@@ -4,7 +4,7 @@
 #include <data/crypto/PKCS5_PBKDF2_HMAC.hpp>
 #include <data/io/wait_for_enter.hpp>
 #include <Cosmos/files.hpp>
-#include <Cosmos/random.hpp>
+#include <data/random.hpp>
 #include <filesystem>
 #include <fstream>
 
@@ -44,8 +44,7 @@ namespace Cosmos {
             // generate new initialization vector.
             initialization_vector<16> iv;
 
-            // TODO You don't need secure random for the initialization vector
-            *get_secure_random () >> iv;
+            data::random::get () >> iv;
 
             bytes ciphertext = encrypt (
                 block_cipher<cipher::block::AES, cipher::block::mode::OFB> {iv},

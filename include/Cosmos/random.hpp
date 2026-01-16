@@ -2,119 +2,52 @@
 #define COSMOS_RANDOM
 
 #include <data/crypto/NIST_DRBG.hpp>
+#include <data/crypto/random.hpp>
 #include <gigamonkey/types.hpp>
 #include <mutex>
 
 namespace crypto = data::crypto;
+using byte = std::uint8_t;
+template <typename X> using ptr = data::ptr<X>;
 
-namespace Cosmos {
-    // these functions are not provided by the library.
-    data::random::entropy *get_random ();// depricated
-    data::random::entropy *get_secure_random ();
-    data::random::entropy *get_casual_random ();
+namespace Cosmos::random {
 
-    // Some stuff having to do with random number generators. We do not need 
-    // strong cryptographic random numbers for boost. It is fine to use 
-    // basic random number generators that you would use in a game or something. 
-    
-    struct random {
-        
-        virtual double range01 () = 0;
+    // we collect entropy from user input for the random number generator.
+    // this does not need to be especially great entropy. It's just extra
+    // for forward secrecy.
+    struct user_entropy final : data::random::source, data::writer<byte> {
+        data::uint32_little Counter {0};
+        data::crypto::hash::SHA2_512 Hash {};
 
-        virtual data::uint64 uint64 (data::uint64 max) = 0;
+        user_entropy () {}
 
-        virtual data::uint32 uint32 (data::uint32 max) = 0;
-
-        data::uint64 uint64 () {
-            return uint64 (std::numeric_limits<data::uint64>::max ());
+        void write (const byte *b, size_t x) final override {
+            Hash.Update (b, x);
         }
 
-        data::uint32 uint32 () {
-            return uint32 (std::numeric_limits<data::uint32>::max ());
-        }
+        void read (byte *result, size_t remaining) final override {
+            data::uint32_little counter = Counter;
 
-        virtual bool boolean () = 0;
-        
-        virtual ~random () {}
-        
+            while (remaining > 0) {
+                Hash.Update (counter.data (), 4);
+                counter++;
+
+                byte digest[64];
+                Hash.Final (digest);
+
+                size_t bytes_to_write = remaining > 64 ? 64 : remaining;
+                std::copy (digest, digest + bytes_to_write, result);
+                result += bytes_to_write;
+                remaining -= bytes_to_write;
+
+                Hash.Restart ();
+                Hash.Update (digest, 64);
+            }
+
+            Counter++;
+        }
     };
 
-    template <std::uniform_random_bit_generator engine>
-    struct std_random : random, data::random::std_random<engine> {
-        using data::random::std_random<engine>::std_random;
-
-        static double range01 (engine &gen) {
-            return std::uniform_real_distribution<double> {0.0, 1.0} (gen);
-        }
-
-        static data::uint64 uint64 (engine &gen, data::uint64 max) {
-            return std::uniform_int_distribution<data::uint64> {
-                std::numeric_limits<data::uint64>::min (), max} (gen);
-        }
-
-        static data::uint32 uint32 (engine &gen, data::uint32 max) {
-            return std::uniform_int_distribution<data::uint32> {
-                std::numeric_limits<data::uint32>::min (), max} (gen);
-        }
-
-        static bool boolean (engine &gen) {
-            return static_cast<bool> (std::uniform_int_distribution<data::uint32> {0, 1} (gen));
-        }
-
-        double range01 () override {
-            return range01 (data::random::std_random<engine>::Engine);
-        }
-
-        data::uint64 uint64 (data::uint64 max = std::numeric_limits<data::uint64>::max ()) override {
-            return uint64 (data::random::std_random<engine>::Engine, max);
-        }
-
-        data::uint32 uint32 (data::uint32 max = std::numeric_limits<data::uint32>::max ()) override {
-            return uint32 (data::random::std_random<engine>::Engine, max);
-        }
-
-        bool boolean () override {
-            return boolean (data::random::std_random<engine>::Engine);
-        }
-
-    };
-
-    using casual_random = std_random<std::default_random_engine>;
-    using NIST_DRBG_random = std_random<data::crypto::NIST::DRBG>;
-    
-    template <std::uniform_random_bit_generator engine>
-    class random_threadsafe : random {
-        std_random<engine> Random;
-        std::mutex Mutex;
-        
-        double range01 () override {
-            std::lock_guard<std::mutex> Lock (Mutex);
-            return Random.range01 ();
-        }
-
-        data::uint64 uint64 (data::uint64 max) override {
-            std::lock_guard<std::mutex> Lock (Mutex);
-            return Random.uint64 (max);
-        }
-
-        data::uint32 uint32 (data::uint32 max) override {
-            std::lock_guard<std::mutex> Lock (Mutex);
-            return Random.uint32 (max);
-        }
-
-        bool boolean () override {
-            std::lock_guard<std::mutex> Lock (Mutex);
-            return Random.boolean ();
-        }
-        
-        random_threadsafe () : random {} {}
-        random_threadsafe (data::uint64 seed) : random {seed} {}
-
-    };
-    
-    using casual_random_threadsafe = random_threadsafe<std::default_random_engine>;
-    using crypto_random_threadsafe = random_threadsafe<data::crypto::NIST::DRBG>;
-    
 }
 
 #endif

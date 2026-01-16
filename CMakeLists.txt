@@ -235,7 +235,7 @@ set_target_properties (cosmos_lib PROPERTIES CXX_EXTENSIONS OFF)
 
 add_executable (
     CosmosWalletServer
-    source/random.cpp
+    source/server/random.cpp
     source/Cosmos/database/SQLite.cpp
     source/server/db.cpp
     source/server/options.cpp

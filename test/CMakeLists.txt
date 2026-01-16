@@ -10,10 +10,10 @@ include (GoogleTest)
 
 add_executable (
   unit_tests
-  ../source/random.cpp
   ../source/Cosmos/database/SQLite.cpp
   ../source/server/db.cpp
   ../source/server/options.cpp
+  ../source/server/random.cpp
   ../source/server/problem.cpp
   ../source/server/method.cpp
   ../source/server/server.cpp

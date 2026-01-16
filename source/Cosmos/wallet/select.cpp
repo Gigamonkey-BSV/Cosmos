@@ -25,7 +25,7 @@ namespace Cosmos {
                 double optimal_outputs_per_spend,
                 double min_change_value,
                 double min_change_fraction,
-                data::random::entropy &r) {
+                data::random::source &r) {
 
                 while (true) {
 
@@ -85,7 +85,7 @@ namespace Cosmos {
                 uint32 optimal_outputs_per_spend,
                 Bitcoin::satoshi min_change_value,
                 double min_change_fraction,
-                data::random::entropy &r): Result {}, SpentValue {acc.value ()}, InputsExpectedSize {0} {
+                data::random::source &r): Result {}, SpentValue {acc.value ()}, InputsExpectedSize {0} {
 
                 // are enough funds available to make the payment?
                 if (SpentValue <= value_to_spend) throw data::exception {3} << "not enough funds to make payment.";
@@ -109,7 +109,7 @@ namespace Cosmos {
 
     // select outputs from a wallet sufficient for the given value.
     selected select_down::operator ()
-        (const account &acc, Bitcoin::satoshi value_to_spend, satoshis_per_byte fees, data::random::entropy &r) const {
+        (const account &acc, Bitcoin::satoshi value_to_spend, satoshis_per_byte fees, data::random::source &r) const {
 
         // we go through a process of selecting inputs to spend out of those in the wallet.
         // We do this by selecting all inputs and then removing outputs one by one until we can
@@ -135,19 +135,19 @@ namespace Cosmos {
     }
 
     selected select_up_biggest::operator ()
-        (const account &acc, Bitcoin::satoshi value_to_spend, satoshis_per_byte fees, data::random::entropy &r) const {
+        (const account &acc, Bitcoin::satoshi value_to_spend, satoshis_per_byte fees, data::random::source &r) const {
 
         throw data::method::unimplemented {"select_up_biggest::operator ()"};
     }
 
     selected select_up_random::operator ()
-        (const account &acc, Bitcoin::satoshi value_to_spend, satoshis_per_byte fees, data::random::entropy &r) const {
+        (const account &acc, Bitcoin::satoshi value_to_spend, satoshis_per_byte fees, data::random::source &r) const {
 
         throw data::method::unimplemented {"select_up_random::operator ()"};
     }
 
     selected select_up_and_down::operator ()
-        (const account &acc, Bitcoin::satoshi value_to_spend, satoshis_per_byte fees, data::random::entropy &r) const {
+        (const account &acc, Bitcoin::satoshi value_to_spend, satoshis_per_byte fees, data::random::source &r) const {
 
         throw data::method::unimplemented {"select_up_and_down::operator ()"};
     }

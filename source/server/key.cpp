@@ -2,6 +2,7 @@
 #include "method.hpp"
 #include "server.hpp"
 #include <data/tools/map_schema.hpp>
+#include <data/crypto/random.hpp>
 
 namespace Gigamonkey::Bitcoin {
     std::istream &operator >> (std::istream &i, net &x) {
@@ -136,7 +137,7 @@ net::HTTP::response handle_key (server &p,
     bool Compressed = bool (compressed_param) ? *compressed_param : true;
     Bitcoin::net Net = net_param ? *net_param : Bitcoin::net::Main;
 
-    data::random::entropy &random = p.get_secure_random ();
+    auto &random = data::crypto::random::get ();
     secp256k1::secret key;
     random >> key.Value;
 

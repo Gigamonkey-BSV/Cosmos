@@ -13,6 +13,8 @@
 #include "server/method.hpp"
 #include "server/server.hpp"
 
+#include "server/random.hpp"
+
 #include <Cosmos/options.hpp>
 
 void run (const options &);
@@ -50,14 +52,15 @@ int main (int arg_count, char **arg_values) {
     error err = catch_all (run, options {arg_parser {arg_count, arg_values}});
 
     if (bool (err)) {
-        if (err.Message) std::cout << "Fail code " << err.Code << ": " << *err.Message << std::endl;
-        else std::cout << "Fail code " << err.Code << "." << std::endl;
+        if (err.Message) DATA_LOG (error) << "Fail code " << err.Code << ": " << *err.Message << std::endl;
+        else DATA_LOG (error) << "Fail code " << err.Code << "." << std::endl;
     }
 
     return err.Code;
 
 }
 
+// we use this to handle all concurrent programming.
 boost::asio::io_context IO;
 
 ptr<net::HTTP::server> Server;
@@ -89,18 +92,20 @@ void run (const options &program_options) {
         return;
     }
 
+    // TODO what about help?
+
     {
         // path to an env file containing program options.
         auto envpath_param = program_options.env ();
-        // if the user provided no path, we look for a file called .env in the working directory.
+        // if the user provided no path, we look for a file called ".env" in the working directory.
         std::filesystem::path envpath = bool (envpath_param) ? *envpath_param : ".env";
 
-        if (bool (envpath_param)) std::cout << "No env path provided with --env. Using default " << envpath << std::endl;
-        std::cout << "Searching for env path " << envpath << std::endl;
+        if (bool (envpath_param)) DATA_LOG (note) << "No env path provided with --env. Using default " << envpath;
+        DATA_LOG (note) << "Searching for env path " << envpath << std::endl;
 
         std::error_code ec;
         if (!std::filesystem::exists (envpath, ec)) {
-            std::cout << "No file " << envpath << " found" << std::endl;
+            DATA_LOG (note) << "No file " << envpath << " found" << std::endl;
             // If the user provided a path, it is an error if it is not found.
             // Otherwise we look in the default location but don't throw an
             // error if we don't find it.
@@ -110,6 +115,9 @@ void run (const options &program_options) {
         else dotenv::init (envpath.c_str ());
     }
 
+    // initialize random number generator.
+    Cosmos::random::setup (program_options);
+
     {
         net::IP::TCP::endpoint endpoint = program_options.endpoint ();
 
@@ -117,13 +125,13 @@ void run (const options &program_options) {
             "invalid tcp endpoint " << endpoint << "; it should look something like tcp://127.0.0.1:4567";
 
         if (endpoint.address () == net::IP::address {"0.0.0.0"})
-            std::cout << "WARNING: the program has been set to accept connections over the Internet. In this mode of operation, "
+            DATA_LOG (warning) << "WARNING: the program has been set to accept connections over the Internet. In this mode of operation, "
                 "the user must ensure that all connections to the program are authorized. Right now, Cosmos does nothing to hide "
                 "keys from unauthorized access.";
 
-        std::cout << "running with endpoint " << endpoint << std::endl;
-        std::cout << "running with ip address " << endpoint.address () << " and listening on port " << endpoint.port () << std::endl;
-        std::cout << "connect to " <<
+        DATA_LOG (note) << "running with endpoint " << endpoint << std::endl;
+        DATA_LOG (note) << "running with ip address " << endpoint.address () << " and listening on port " << endpoint.port () << std::endl;
+        DATA_LOG (note) << "connect to " <<
           net::URL (net::URL::make ().protocol ("http").address (endpoint.address ()).port (endpoint.port ())) <<
           " to see the GUI." << std::endl;
 
@@ -135,6 +143,7 @@ void run (const options &program_options) {
     // that not everything we are using is thread safe.
     //   * Need a thread-safe database
     //   * Need a thread-safe internet stream.
+    //   * thread safe random number generator.
     uint32 num_threads = program_options.threads ();
     if (num_threads < 1) throw data::exception {} <<
         "We cannot run with zero threads. There is already one thread running to read in the input you have provided.";
@@ -146,9 +155,9 @@ void run (const options &program_options) {
     for (int i = 0; i < num_threads; i++)
         data::spawn (IO.get_executor (), [&] () -> awaitable<void> {
             int id = i;
-            std::cout << "awaiting server accept on coroutine " << id << std::endl;
+            DATA_LOG (debug) << "awaiting server accept on coroutine " << id;
             while (co_await Server->accept ()) {
-                std::cout << "successfully responded to incoming request on coroutine " << id << std::endl;
+                DATA_LOG (debug) << "successfully responded to incoming request on coroutine " << id;
             }
         });
 
@@ -169,9 +178,9 @@ void run (const options &program_options) {
                     e.code () == boost::beast::http::error::bad_line_ending ||
                     e.code () == boost::beast::http::error::bad_target ||
                     e.code () == boost::beast::http::error::bad_field) {
-                    std::cout << "Unable to read incoming stream from client. "
+                    DATA_LOG (error) << "Unable to read incoming stream from client. "
                       "This can happen if you try to connect with https (or any other protocol) instead of http. "
-                      "Please ensure you are using the correct protocol and try again." << std::endl;
+                      "Please ensure you are using the correct protocol and try again.";
                 }
             }
         } catch (...) {

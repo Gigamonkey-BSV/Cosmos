@@ -2,7 +2,6 @@
 #define SERVER_SERVER
 
 #include "options.hpp"
-#include <Cosmos/random.hpp>
 #include <Diophant/machine.hpp>
 
 using UTF8 = data::UTF8;
@@ -18,12 +17,10 @@ struct server {
 
     server (const options &o);
 
+    // handle an HTTP request.
     awaitable<net::HTTP::response> operator () (const net::HTTP::request &);
 
     void add_entropy (const bytes &);
-
-    data::random::entropy &get_secure_random ();
-    data::random::entropy &get_casual_random ();
 
     Cosmos::spend_options SpendOptions;
 
@@ -48,14 +45,6 @@ struct server {
     map<Bitcoin::outpoint, Bitcoin::output> account (const instruction &);
 
     tuple<Bitcoin::TXID, wallet_info> spend (const instruction &);*/
-
-private:
-    // TODO it would be good to have a way of doing deterministic randomness
-    // to make testing easier.
-    ptr<data::random::fixed_entropy> FixedEntropy {nullptr};
-    ptr<data::random::entropy> Entropy {nullptr};
-    ptr<crypto::NIST::DRBG> SecureRandom {nullptr};
-    ptr<data::random::linear_combination_random> CasualRandom {nullptr};
 
 };
 
