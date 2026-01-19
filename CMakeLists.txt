@@ -205,6 +205,7 @@ add_library (
     source/Cosmos/wallet/restore.cpp
     source/Cosmos/wallet/select.cpp
     source/Cosmos/wallet/change.cpp
+    source/Cosmos/wallet/keys.cpp
     source/Cosmos/Diophant.cpp
     source/Cosmos/wallet/spend.cpp
     source/Cosmos/wallet/split.cpp

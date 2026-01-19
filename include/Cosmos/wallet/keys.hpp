@@ -23,7 +23,8 @@ namespace Cosmos {
 
     template <typename X> using list = data::list<X>;
 
-    // an expression that evaluates to a key type.
+    // key_expression is a string representation for several
+    // different types of Bitcoin keys.
     struct key_expression : string {
         using string::string;
 
@@ -35,6 +36,11 @@ namespace Cosmos {
         key_expression (const HD::BIP_32::secret &);
         key_expression (const HD::BIP_32::pubkey &);
 
+        key_expression (const Bitcoin::address &);
+        key_expression (const Bitcoin::address::decoded &);
+
+        key_expression to_public () const;
+
         operator secp256k1::secret () const;
         operator secp256k1::pubkey () const;
         operator Bitcoin::secret () const;
@@ -42,12 +48,11 @@ namespace Cosmos {
         operator HD::BIP_32::secret () const;
         operator Bitcoin::pubkey () const;
         operator HD::BIP_32::pubkey () const;
+
         operator Bitcoin::address () const;
         operator Bitcoin::address::decoded () const;
 
-        bool valid () const {
-            return *this != "";
-        }
+        bool valid () const;
     };
 
     // information required to make signatures to redeem an output.
@@ -115,37 +120,17 @@ namespace Cosmos {
         operator std::string () const;
     };
 
-    std::string inline net_string (Bitcoin::net net) {
-        if (net == Bitcoin::net::Test) return "net.Test";
-        if (net == Bitcoin::net::Main) return "net.Main";
-        throw data::exception {} << "invalid network";
-    }
-
     inline key_expression::key_expression (const secp256k1::secret &x):
         string {data::string::write ("secret ", std::dec, x.Value)} {}
 
-    inline key_expression::key_expression (const Bitcoin::secret &x):
-        string {data::string::write ("WIF [secret ", std::dec, x.Secret, ", ",
-            net_string (x.Network), ", ", x.Compressed, "]")} {}
-
     inline key_expression::key_expression (const Bitcoin::WIF &x):
-        string {data::string::write ("WIF \"", x, "\"")} {}
+        string {data::string::write ("WIF ", x)} {}
 
     inline key_expression::key_expression (const Bitcoin::pubkey &p):
         string {data::string::write ("pubkey `", p, "`")} {}
 
     inline key_expression::key_expression (const secp256k1::pubkey &p):
         string {data::string::write ("pubkey `", encoding::hex::write (p), "`")} {}
-
-    inline key_expression::key_expression (const HD::BIP_32::secret &x):
-        string {data::string::write ("HD.secret [secret ", std::dec, x.Secret, ", `",
-            encoding::hex::write (x.ChainCode), "`, ", net_string (x.Network), ", ",
-                x.Depth, ", ", x.Parent, ", ", x.Sequence, "]")} {}
-
-        inline key_expression::key_expression (const HD::BIP_32::pubkey &p):
-        string {data::string::write ("HD.pubkey [pubkey `", p.Pubkey, "`, `",
-            encoding::hex::write (p.ChainCode), "`, ", net_string (p.Network), ", ",
-                p.Depth, ", ", p.Parent, ", ", p.Sequence, "]")} {}
 
     key_expression inline key_sequence::operator () (int32 i) const {
         return Derivation (Key, i);

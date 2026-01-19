@@ -63,7 +63,7 @@ namespace Cosmos {
 
         // what change needs to be accounted for in order to make this tx?
         Bitcoin::satoshi change_amount
-            {floor (double (int64 (fee_rate_before_change.Satoshis)) - double (fees) * fee_rate_before_change.Bytes)};
+            {static_cast<long int> (floor (double (int64 (fee_rate_before_change.Satoshis)) - double (fees) * fee_rate_before_change.Bytes))};
 
         // make change outputs.
         change ch = Change (change_amount, fees, addresses, Random);

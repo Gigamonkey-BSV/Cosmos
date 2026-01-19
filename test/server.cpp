@@ -166,7 +166,7 @@ TEST (Server, Entropy) {
     // fail to get the key from the wrong wallet.
     auto get_new_key = read_string_response (make_request (test_server, get_key_request ("Sally", "Y")));
 
-    // successfully retrieve the key.
+    // unsuccessfully retrieve the key.
     ASSERT_FALSE (get_new_key);
 
     get_new_key = read_string_response (make_request (test_server, get_key_request ("Wally", "Y")));
@@ -189,11 +189,11 @@ template <size_t x> net::HTTP::request request_post_invert_hash (Cosmos::hash_fu
 
 // TODO these are incomplete.
 net::HTTP::request make_to_private_get_request (const key_expression &k) {
-    return net::HTTP::request (net::HTTP::request::make {}.method (net::HTTP::method::get).path ("/to_private"));
+    return net::HTTP::request (net::HTTP::request::make {}.method (net::HTTP::method::get).path ("/to_private").host ("localhost"));
 }
 
 net::HTTP::request make_to_private_post_request (const key_expression &k, const key_expression &) {
-    return net::HTTP::request (net::HTTP::request::make {}.method (net::HTTP::method::post).path ("/to_private"));
+    return net::HTTP::request (net::HTTP::request::make {}.method (net::HTTP::method::post).path ("/to_private").host ("localhost"));
 }
 
 key_expression read_key_expression (const net::HTTP::response &);
@@ -202,6 +202,7 @@ bool is_string_response (const net::HTTP::response &r) {
     return bool (read_string_response (r));
 }
 
+// make three random keys of different types.
 TEST (Server, Key) {
     auto test_server = prepare (get_test_server ());
 
@@ -218,11 +219,10 @@ TEST (Server, Key) {
     auto res_gen_Z = read_string_response (make_request (test_server, post_key_request ("Wally", "Z", key_type::xpriv)));
     EXPECT_TRUE (bool (res_gen_Z));
 
-
     key_expression secret_X;
     key_expression secret_Y;
     key_expression secret_Z;
-/*
+
     EXPECT_NO_THROW (secret_X = read_key_expression (make_request (test_server, get_key_request ("Wally", "X"))));
     EXPECT_NO_THROW (secret_Y = read_key_expression (make_request (test_server, get_key_request ("Wally", "Y"))));
     EXPECT_NO_THROW (secret_Z = read_key_expression (make_request (test_server, get_key_request ("Wally", "Z"))));
@@ -232,19 +232,35 @@ TEST (Server, Key) {
     EXPECT_TRUE (data::valid (secret_Z));
 
     // Test that to_private won't work if an entry hasn't been made yet.
-    key_expression pubkey_X = key_expression {secp256k1::secret (secret_X).to_public ()};
-    key_expression pubkey_Y = key_expression {Bitcoin::secret (secret_Y).to_public ()};
-    key_expression pubkey_Z = key_expression {HD::BIP_32::secret (secret_Z).to_public ()};
+    key_expression pubkey_X = key_expression {secret_X.to_public ()};
+    key_expression pubkey_Y = key_expression {secret_Y.to_public ()};
+    key_expression pubkey_Z = key_expression {secret_Z.to_public ()};
 
     EXPECT_TRUE (is_error (make_request (test_server, make_to_private_get_request (pubkey_X))));
-
+/*
     // add entries for to_private
     EXPECT_FALSE (is_bool_response (true, make_request (test_server, make_to_private_post_request (pubkey_X, secret_X))));
     EXPECT_FALSE (is_bool_response (true, make_request (test_server, make_to_private_post_request (pubkey_Y, secret_Y))));
-    EXPECT_FALSE (is_bool_response (true, make_request (test_server, make_to_private_post_request (pubkey_Z, secret_Z))));
+    EXPECT_FALSE (is_bool_response (true, make_request (test_server, make_to_private_post_request (pubkey_Z, secret_Z))));*/
 
-    // TODO retrieve these.
-*/
+    // and retrieve them again
+/*
+    maybe<string> secret_X_retrieved;
+    maybe<string> secret_Y_retrieved;
+    maybe<string> secret_Z_retrieved;
+
+    EXPECT_NO_THROW (secret_X_retrieved = read_string_response (make_request (test_server, make_to_private_get_request (pubkey_X))));
+    EXPECT_NO_THROW (secret_X_retrieved = read_string_response (make_request (test_server, make_to_private_get_request (pubkey_Y))));
+    EXPECT_NO_THROW (secret_X_retrieved = read_string_response (make_request (test_server, make_to_private_get_request (pubkey_Z))));
+
+    EXPECT_EQ (secret_X, key_expression {*secret_X_retrieved});
+    EXPECT_EQ (secret_Y, key_expression {*secret_Y_retrieved});
+    EXPECT_EQ (secret_Z, key_expression {*secret_Z_retrieved});
+
+    EXPECT_NE (secret_X, key_expression {*secret_Y_retrieved});
+    EXPECT_NE (secret_Y, key_expression {*secret_Z_retrieved});
+    EXPECT_NE (secret_Z, key_expression {*secret_X_retrieved});*/
+
 }
 
 using JSON = data::JSON;
@@ -342,6 +358,15 @@ TEST (Server, Wallet) {
     // make a wallet.
     // Add key sequence to wallet
     // generate next keys of key sequences.
+}
+
+TEST (Server, ImportPay) {
+    // generate wallet A
+    // generate wallet B
+    // put fake funds in A.
+    // pay to address A -> B
+    // pay to xpub A -> B
+    // ensure funds are spendable in B.
 }
 
 server prepare (server x, const string &entropy) {

@@ -16,6 +16,13 @@ namespace Cosmos {
         //throw data::method::unimplemented {"initialize"};
     }
 
+    key_expression key_expression::to_public () const {
+        if (!bool (machine)) throw data::exception {} << "Diophant machine is not initialized";
+        key_expression result {std::string (machine->evaluate (Diophant::expression {data::string::write ("to_public (", *this, ")")}))};
+        if (!result.valid ()) return {};
+        return result;
+    }
+
     key_expression to_private (const key_expression &) {
         if (!bool (machine)) throw data::exception {} << "Diophant machine is not initialized";
         throw data::method::unimplemented {"to_private"};
@@ -24,41 +31,6 @@ namespace Cosmos {
     bytes invert_hash (const bytes &digest) {
         if (!bool (machine)) throw data::exception {} << "Diophant machine is not initialized";
         throw data::method::unimplemented {"invert_hash"};
-    }
-
-    key_expression::operator secp256k1::secret () const {
-        if (!bool (machine)) throw data::exception {} << "Diophant machine is not initialized";
-        throw data::method::unimplemented {"key_expression::operator secp256k1::secret"};
-    }
-
-    key_expression::operator Bitcoin::secret () const {
-        if (!bool (machine)) throw data::exception {} << "Diophant machine is not initialized";
-        throw data::method::unimplemented {"key_expression::operator Bitcoin::secret"};
-    }
-
-    key_expression::operator HD::BIP_32::secret () const {
-        if (!bool (machine)) throw data::exception {} << "Diophant machine is not initialized";
-        throw data::method::unimplemented {"key_expression::operator HD::BIP_32::secret"};
-    }
-
-    key_expression::operator secp256k1::pubkey () const {
-        if (!bool (machine)) throw data::exception {} << "Diophant machine is not initialized";
-        throw data::method::unimplemented {"key_expression::operator secp256k1::pubkey"};
-    }
-
-    key_expression::operator Bitcoin::pubkey () const {
-        if (!bool (machine)) throw data::exception {} << "Diophant machine is not initialized";
-        throw data::method::unimplemented {"key_expression::operator Bitcoin::pubkey"};
-    }
-
-    key_expression::operator HD::BIP_32::pubkey () const {
-        if (!bool (machine)) throw data::exception {} << "Diophant machine is not initialized";
-        throw data::method::unimplemented {"key_expression::operator HD::BIP_32::pubkey"};
-    }
-
-    key_expression key_derivation::operator () (key_expression, int32) const {
-        if (!bool (machine)) throw data::exception {} << "Diophant machine is not initialized";
-        throw data::method::unimplemented {"key_derivation::operator ()"};
     }
 
     key_sequence::operator std::string () const {

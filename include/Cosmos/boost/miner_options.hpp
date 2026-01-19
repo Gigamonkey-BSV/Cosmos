@@ -50,7 +50,7 @@ namespace BoostPOW {
         maybe<digest160> MinerPubkeyHash {};
 
         maybe<uint32> UserNonce {};
-        maybe<uint32> Category {};
+        maybe<int32> Category {};
 
         static script_options read (const argh::parser &, int start_pos = 2);
         explicit operator Boost::output_script () const;
