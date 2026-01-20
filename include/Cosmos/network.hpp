@@ -4,6 +4,7 @@
 #include <gigamonkey/pay/MAPI.hpp>
 #include <gigamonkey/pay/ARC.hpp>
 #include <Cosmos/network/whatsonchain.hpp>
+#include <data/io/log.hpp>
 #include <ctime>
 
 using extended_transaction = Gigamonkey::extended::transaction;
@@ -116,7 +117,7 @@ namespace Cosmos {
             try {
                 return double (data::synced (&network::mining_fee, &Net));
             } catch (std::exception &e) {
-                std::cout << "Warning! Exception caught while trying to get a fee quote: " << e.what () << std::endl;
+                DATA_LOG (warning) << "Warning! Exception caught while trying to get a fee quote: " << e.what ();
                 return Default;
             }
         }

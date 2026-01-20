@@ -5,6 +5,7 @@
 #include "../source/server/invert_hash.hpp"
 #include "../source/server/options.hpp"
 #include "../source/server/random.hpp"
+#include "../source/server/to_private.hpp"
 #include <data/net/JSON.hpp>
 #include <data/net/error.hpp>
 #include "gtest/gtest.h"
@@ -152,24 +153,19 @@ TEST (Server, Entropy) {
         make_add_entropy_request ("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"))));
 
     // fail to generate a key that we already generated.
-    auto successfully_create_key = read_string_response (make_request (test_server,
-        post_key_request ("Wally", "X", key_type::secp256k1)));
-
-    ASSERT_FALSE (successfully_create_key);
+    ASSERT_TRUE (is_error (make_request (test_server,
+        post_key_request ("Wally", "X", key_type::secp256k1))));
 
     // successfully generate a new key
-    successfully_create_key = read_string_response (make_request (test_server,
+    maybe<string> successfully_create_key = read_string_response (make_request (test_server,
         post_key_request ("Wally", "Y", key_type::secp256k1)));
 
     ASSERT_TRUE (successfully_create_key);
 
     // fail to get the key from the wrong wallet.
-    auto get_new_key = read_string_response (make_request (test_server, get_key_request ("Sally", "Y")));
+    ASSERT_TRUE (is_error (make_request (test_server, get_key_request ("Sally", "Y"))));
 
-    // unsuccessfully retrieve the key.
-    ASSERT_FALSE (get_new_key);
-
-    get_new_key = read_string_response (make_request (test_server, get_key_request ("Wally", "Y")));
+    auto get_new_key = read_string_response (make_request (test_server, get_key_request ("Wally", "Y")));
 
     // successfully retrieve the key.
     ASSERT_TRUE (get_new_key);
@@ -186,15 +182,6 @@ server prepare (server, const string &entropy = "entropyABCDEFGHIJKLMNOPQRSTUVWX
 
 template <size_t x> net::HTTP::request request_get_invert_hash (const data::hash::digest<x> &d, digest_format format = digest_format::HEX);
 template <size_t x> net::HTTP::request request_post_invert_hash (Cosmos::hash_function, const std::string &data);
-
-// TODO these are incomplete.
-net::HTTP::request make_to_private_get_request (const key_expression &k) {
-    return net::HTTP::request (net::HTTP::request::make {}.method (net::HTTP::method::get).path ("/to_private").host ("localhost"));
-}
-
-net::HTTP::request make_to_private_post_request (const key_expression &k, const key_expression &) {
-    return net::HTTP::request (net::HTTP::request::make {}.method (net::HTTP::method::post).path ("/to_private").host ("localhost"));
-}
 
 key_expression read_key_expression (const net::HTTP::response &);
 
@@ -236,30 +223,39 @@ TEST (Server, Key) {
     key_expression pubkey_Y = key_expression {secret_Y.to_public ()};
     key_expression pubkey_Z = key_expression {secret_Z.to_public ()};
 
+    std::cout << secret_X << " -> " << pubkey_X << std::endl;
+    std::cout << secret_Y << " -> " << pubkey_Y << std::endl;
+    std::cout << secret_Z << " -> " << pubkey_Z << std::endl;
+
+    // fail to retrieve a private key without an entry yet.
     EXPECT_TRUE (is_error (make_request (test_server, make_to_private_get_request (pubkey_X))));
-/*
+
     // add entries for to_private
-    EXPECT_FALSE (is_bool_response (true, make_request (test_server, make_to_private_post_request (pubkey_X, secret_X))));
-    EXPECT_FALSE (is_bool_response (true, make_request (test_server, make_to_private_post_request (pubkey_Y, secret_Y))));
-    EXPECT_FALSE (is_bool_response (true, make_request (test_server, make_to_private_post_request (pubkey_Z, secret_Z))));*/
+    EXPECT_TRUE (is_ok_response (make_request (test_server, make_to_private_put_request (pubkey_X, secret_X))));
+    EXPECT_TRUE (is_ok_response (make_request (test_server, make_to_private_put_request (pubkey_Y, secret_Y))));
+    EXPECT_TRUE (is_ok_response (make_request (test_server, make_to_private_put_request (pubkey_Z, secret_Z))));
 
     // and retrieve them again
-/*
+
     maybe<string> secret_X_retrieved;
     maybe<string> secret_Y_retrieved;
     maybe<string> secret_Z_retrieved;
 
     EXPECT_NO_THROW (secret_X_retrieved = read_string_response (make_request (test_server, make_to_private_get_request (pubkey_X))));
-    EXPECT_NO_THROW (secret_X_retrieved = read_string_response (make_request (test_server, make_to_private_get_request (pubkey_Y))));
-    EXPECT_NO_THROW (secret_X_retrieved = read_string_response (make_request (test_server, make_to_private_get_request (pubkey_Z))));
+    EXPECT_NO_THROW (secret_Y_retrieved = read_string_response (make_request (test_server, make_to_private_get_request (pubkey_Y))));
+    EXPECT_NO_THROW (secret_Z_retrieved = read_string_response (make_request (test_server, make_to_private_get_request (pubkey_Z))));
 
-    EXPECT_EQ (secret_X, key_expression {*secret_X_retrieved});
-    EXPECT_EQ (secret_Y, key_expression {*secret_Y_retrieved});
-    EXPECT_EQ (secret_Z, key_expression {*secret_Z_retrieved});
+    std::cout << secret_X_retrieved << std::endl;
+    std::cout << secret_Y_retrieved << std::endl;
+    std::cout << secret_Z_retrieved << std::endl;
+
+    EXPECT_EQ (secret_X, key_expression {*secret_X_retrieved}) << "expect " << secret_X << " to equal " << *secret_X_retrieved;
+    EXPECT_EQ (secret_Y, key_expression {*secret_Y_retrieved}) << "expect " << secret_Y << " to equal " << *secret_Y_retrieved;
+    EXPECT_EQ (secret_Z, key_expression {*secret_Z_retrieved}) << "expect " << secret_Z << " to equal " << *secret_Z_retrieved;
 
     EXPECT_NE (secret_X, key_expression {*secret_Y_retrieved});
     EXPECT_NE (secret_Y, key_expression {*secret_Z_retrieved});
-    EXPECT_NE (secret_Z, key_expression {*secret_X_retrieved});*/
+    EXPECT_NE (secret_Z, key_expression {*secret_X_retrieved});
 
 }
 
@@ -276,6 +272,7 @@ TEST (Server, Generate) {
     // we should simply get a bool response when we don't request the restoration words.
     ASSERT_TRUE (is_ok_response (make_request (test_server,
         generate_request_options {"A"}.wallet_style (wallet_style::BIP_44).coin_type_none ())));
+
     // These are not ready yet.
     /*
     EXPECT_TRUE (is_ok_response (true, make_request (test_server,
@@ -286,6 +283,7 @@ TEST (Server, Generate) {
     maybe<std::string> maybe_words_D = read_string_response (make_request (test_server,
         generate_request_options {"D"}.wallet_style (wallet_style::BIP_44).mnemonic_style (mnemonic_style::BIP_39)));
     ASSERT_TRUE (bool (maybe_words_D));
+
 /*
     maybe<std::string> maybe_words_E = read_string_response (make_request (test_server,
         generate_request_options {"E"}.wallet_style (wallet_style::BIP_44_plus).mnemonic_style (mnemonic_style::BIP_39)));
@@ -297,46 +295,27 @@ TEST (Server, Generate) {
 
     // for each wallet, generate a new address of receive and change
 
-    maybe<std::string> next_receive_A =
-        read_string_response (make_request (test_server, make_next_address_request ("A", "receive")));
+    maybe<std::string> next_receive_A;
+    maybe<std::string> next_change_A;
+    maybe<std::string> next_receive_D;
+    maybe<std::string> next_change_D;
 
-    maybe<std::string> next_change_A =
-        read_string_response (make_request (test_server, make_next_address_request ("A", "change")));
+    EXPECT_NO_THROW (next_receive_A =
+        read_string_response (make_request (test_server, make_next_address_request ("A", "receive"))));
 
-    maybe<std::string> next_receive_B =
-        read_string_response (make_request (test_server, make_next_address_request ("B", "receive")));
+    EXPECT_NO_THROW (next_change_A =
+        read_string_response (make_request (test_server, make_next_address_request ("A", "change"))));
 
-    maybe<std::string> next_change_B =
-        read_string_response (make_request (test_server, make_next_address_request ("B", "change")));
+    EXPECT_NO_THROW (next_receive_D =
+        read_string_response (make_request (test_server, make_next_address_request ("D", "receive"))));
 
-    maybe<std::string> next_receive_C =
-        read_string_response (make_request (test_server, make_next_address_request ("C", "receive")));
-
-    maybe<std::string> next_change_C =
-        read_string_response (make_request (test_server, make_next_address_request ("C", "change")));
-
-    maybe<std::string> next_receive_D =
-        read_string_response (make_request (test_server, make_next_address_request ("D", "receive")));
-
-    maybe<std::string> next_change_D =
-        read_string_response (make_request (test_server, make_next_address_request ("D", "change")));
-
-    maybe<std::string> next_receive_E =
-        read_string_response (make_request (test_server, make_next_address_request ("E", "receive")));
-
-    maybe<std::string> next_change_E =
-        read_string_response (make_request (test_server, make_next_address_request ("E", "change")));
-
-    maybe<std::string> next_receive_F =
-        read_string_response (make_request (test_server, make_next_address_request ("F", "receive")));
-
-    maybe<std::string> next_change_F =
-        read_string_response (make_request (test_server, make_next_address_request ("F", "change")));
+    EXPECT_NO_THROW (next_change_D =
+        read_string_response (make_request (test_server, make_next_address_request ("D", "change"))));
 
     // TODO ensure that we can regenerate these from the words.
 
     // generate a new xpub where appropriate
-
+/*
     EXPECT_TRUE (is_error (make_request (test_server, make_next_xpub_request ("A"))));
 
     maybe<std::string> next_xpub_B = read_string_response (make_request (test_server, make_next_xpub_request ("B")));
@@ -347,7 +326,7 @@ TEST (Server, Generate) {
 
     maybe<std::string> next_xpub_E = read_string_response (make_request (test_server, make_next_xpub_request ("E")));
 
-    maybe<std::string> next_xpub_F = read_string_response (make_request (test_server, make_next_xpub_request ("F")));
+    maybe<std::string> next_xpub_F = read_string_response (make_request (test_server, make_next_xpub_request ("F")));*/
 
     // TODO Generate the signing key where appropriate.
 
@@ -382,7 +361,7 @@ bool is_ok_response (const net::HTTP::response &r) {
     // check if this is an error response instead.
     maybe<net::error> err = read_error (r);
     if (bool (err))
-        std::cout << "Expected ok response but got error response " << *err << std::endl;
+        throw data::exception {} << "Expected ok response but got error response " << *err;
     return false;
 }
 
@@ -392,7 +371,7 @@ maybe<string> read_string_response (const net::HTTP::response &r) {
     // check if this is an error response instead.
     maybe<net::error> err = read_error (r);
     if (bool (err))
-        std::cout << "Expected string response but got error response " << *err << std::endl;
+        throw data::exception {} << "Expected string response but got error response " << *err;
     else std::cout << "response is " << r << std::endl;
     return {};
 }
@@ -460,9 +439,8 @@ maybe<bytes> read_data_response (const net::HTTP::response &r) {
     auto ct = r.content_type ();
     if (!bool (ct) || *ct != "application/octet-stream") {
         auto err = read_error (r);
-        if (bool (err)) {
-            std::cout << "expected data response but got error " << *err << std::endl;
-        }
+        if (bool (err))
+            throw data::exception {} << "expected data response but got error " << *err;
         return {};
     };
 

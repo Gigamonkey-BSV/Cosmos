@@ -24,6 +24,29 @@ coin_type::coin_type (coin_type::value v): maybe<uint32> {} {
     }
 }
 
+std::istream &operator >> (std::istream &i, coin_type &x) {
+    std::string word;
+    i >> word;
+    if (!i) return i;
+    std::string sanitized = sanitize (word);
+    if (sanitized == "none") x = coin_type {};
+    else if (sanitized == "bitcoin") x = coin_type {coin_type::Bitcoin};
+    else if (sanitized == "bitcoincash") x = coin_type {coin_type::Bitcoin_Cash};
+    else if (sanitized == "bitcoinsv") x = coin_type {coin_type::Bitcoin_SV};
+    else if (!parse_uint32 (word, *x)) i.setstate (std::ios::failbit);
+    return i;
+}
+
+std::ostream &operator << (std::ostream &o, const coin_type &x) {
+    if (!bool (x)) return o << "none";
+
+    uint32 v = *x;
+    if (v == HD::BIP_44::coin_type_Bitcoin) return o << "Bitcoin";
+    if (v == HD::BIP_44::coin_type_Bitcoin_Cash) return o << "BitcoinCash";
+    if (v == HD::BIP_44::coin_type_Bitcoin_SV) return o << "BitcoinSV";
+    return o << v;
+}
+
 generate_request_options::operator net::HTTP::request () const {
     std::stringstream query_stream;
     query_stream << "style=" << WalletStyle;
@@ -44,15 +67,6 @@ std::ostream &operator << (std::ostream &o, wallet_style x) {
     }
 }
 
-std::ostream &operator << (std::ostream &o, mnemonic_style x) {
-    switch (x) {
-        case mnemonic_style::none: return o << "none";
-        case mnemonic_style::BIP_39: return o << "BIP39";
-        case mnemonic_style::Electrum_SV: return o << "ElectrumSV";
-        default: throw 0;
-    }
-}
-
 std::istream &operator >> (std::istream &i, wallet_style &x) {
     std::string word;
     i >> word;
@@ -65,6 +79,15 @@ std::istream &operator >> (std::istream &i, wallet_style &x) {
     else if (sanitized == "experimental") x = wallet_style::experimental;
     else i.setstate (std::ios::failbit);
     return i;
+}
+
+std::ostream &operator << (std::ostream &o, mnemonic_style x) {
+    switch (x) {
+        case mnemonic_style::none: return o << "none";
+        case mnemonic_style::BIP_39: return o << "BIP39";
+        case mnemonic_style::Electrum_SV: return o << "ElectrumSV";
+        default: throw 0;
+    }
 }
 
 std::istream &operator >> (std::istream &i, mnemonic_style &x) {
@@ -89,6 +112,14 @@ std::istream &operator >> (std::istream &i, derivation_style &x) {
     return i;
 }
 
+std::ostream &operator << (std::ostream &o, derivation_style x) {
+    switch (x) {
+        case derivation_style::CentBee: return o << "CentBee";
+        case derivation_style::BIP_44: return o << "BIP44";
+        default: return o << "unknown";
+    }
+}
+
 std::istream &operator >> (std::istream &i, restore_wallet_type &x) {
     std::string word;
     i >> word;
@@ -103,17 +134,15 @@ std::istream &operator >> (std::istream &i, restore_wallet_type &x) {
     return i;
 }
 
-std::istream &operator >> (std::istream &i, coin_type &x) {
-    std::string word;
-    i >> word;
-    if (!i) return i;
-    std::string sanitized = sanitize (word);
-    if (sanitized == "none") x = coin_type {};
-    else if (sanitized == "bitcoin") x = coin_type {coin_type::Bitcoin};
-    else if (sanitized == "bitcoincash") x = coin_type {coin_type::Bitcoin_Cash};
-    else if (sanitized == "bitcoinsv") x = coin_type {coin_type::Bitcoin_SV};
-    else if (!parse_uint32 (word, *x)) i.setstate (std::ios::failbit);
-    return i;
+std::ostream &operator << (std::ostream &o, restore_wallet_type x) {
+    switch (x) {
+        case restore_wallet_type::Money_Button: return o << "MoneyButton";
+        case restore_wallet_type::RelayX: return o << "RelayX";
+        case restore_wallet_type::Simply_Cash: return o << "SimplyCash";
+        case restore_wallet_type::Electrum_SV: return o << "ElectrumSV";
+        case restore_wallet_type::CentBee: return o << "CentBee";
+        default: return o << "unknown";
+    }
 }
 
 std::string write_derivation (list<uint32> d) {

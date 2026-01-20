@@ -177,7 +177,7 @@ db_options options::db_options () const {
         throw data::exception {} << "No SQLite database path provided.";
 
     if (param_in_memory)
-        std::cout << "WARNING: SQLite database is in-memory. All information will be erased on program exit." << std::endl;
+        DATA_LOG (warning) << "WARNING: SQLite database is in-memory. All information will be erased on program exit.";
 
     return sqlite;
 }

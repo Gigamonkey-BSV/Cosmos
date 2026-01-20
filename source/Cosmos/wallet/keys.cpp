@@ -321,4 +321,18 @@ namespace Cosmos {
         throw data::exception {} << "invalid key expression";
     }
 
+    key_expression key_expression::to_public () const {
+        if (auto x = extract_secp256k1_secret (*this); !x.empty ())
+            return make_secp256k1_secret (x).to_public ();
+        if (auto x = extract_WIF_string (*this); !x.empty ())
+            return make_WIF_string (x).decode ().to_public ();
+        if (auto x = extract_WIF_decoded (*this); !x.empty ())
+            return make_Bitcoin_secret (x).to_public ();
+        if (auto x = extract_HD_secret_string (*this); !x.empty ())
+            return make_HD_secret_string (x).to_public ();
+        if (auto x = extract_HD_secret_decoded (*this); !x.empty ())
+            return make_HD_secret_decoded (x).to_public ();
+        throw data::exception {} << "invalid key expression";
+    }
+
 }

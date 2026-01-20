@@ -388,6 +388,7 @@ namespace Cosmos::SQLite {
     // to_public function application. Thus, key is
     // an expression for a private key.
     struct Pubkey {
+        int id;
         key_expression pubkey;
         key_expression secret;
     };
@@ -523,7 +524,8 @@ namespace Cosmos::SQLite {
             ),
 
             make_table ("pubkeys",
-                make_column ("pubkey", &Pubkey::pubkey, primary_key ()),
+                make_column ("id", &Pubkey::id, primary_key ().autoincrement ()),
+                make_column ("pubkey", &Pubkey::pubkey),
                 make_column ("secret", &Pubkey::secret)
             ),
 
@@ -1010,12 +1012,8 @@ namespace Cosmos::SQLite {
         }
 
         bool set_to_private (const key_expression &pubkey, const key_expression &secret) final override {
-
             try {
-                storage.insert (
-                    sqlite_orm::into<Pubkey> (),
-                    columns (&Pubkey::pubkey, &Pubkey::secret),
-                    values (std::string (pubkey), std::string (secret)));
+                storage.insert (Pubkey {-1, pubkey, secret});
             } catch (const std::system_error &e) {
                 return false;
             }
@@ -1024,6 +1022,7 @@ namespace Cosmos::SQLite {
         }
 
         key_expression get_to_private (const key_expression &pubkey) final override {
+
             auto rows = storage.select (
                 columns (&Pubkey::pubkey, &Pubkey::secret),
                 where (c (&Pubkey::pubkey) == std::string (pubkey)),
@@ -1041,7 +1040,6 @@ namespace Cosmos::SQLite {
                 return storage.transaction([&] {
                     // 1. Look up the user id
                     auto wrows = storage.select (&Wallet::id, where (c (&Wallet::name) == wallet_name));
-
                     if (wrows.empty ()) return false;
 
                     int wallet_id = wrows.front ();
@@ -1050,7 +1048,6 @@ namespace Cosmos::SQLite {
                         columns (&Key::name, &Key::key),
                         where (c (&Key::name) == key_name && c (&Key::wallet) == wallet_id),
                         limit (1));
-
                     if (!krows.empty ()) return false;
 
                     // 2. Insert a secret tied to that user id

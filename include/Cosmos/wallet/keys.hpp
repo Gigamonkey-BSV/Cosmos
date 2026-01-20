@@ -53,6 +53,8 @@ namespace Cosmos {
         operator Bitcoin::address::decoded () const;
 
         bool valid () const;
+
+        key_expression (data::string_view x): string {x} {}
     };
 
     // information required to make signatures to redeem an output.
@@ -127,7 +129,7 @@ namespace Cosmos {
         string {data::string::write ("WIF ", x)} {}
 
     inline key_expression::key_expression (const Bitcoin::pubkey &p):
-        string {data::string::write ("pubkey `", p, "`")} {}
+        string {data::string::write ("pubkey `", encoding::hex::write (p), "`")} {}
 
     inline key_expression::key_expression (const secp256k1::pubkey &p):
         string {data::string::write ("pubkey `", encoding::hex::write (p), "`")} {}

@@ -62,19 +62,26 @@ net::HTTP::response process_wallet_method (
 
 extern std::atomic<bool> Shutdown;
 
+// remove empty strings from the begining and end if they exist.
+// When we use '/' as a delimiter, we will always get an empty
+// string at the start, since the path always starts with '/' if
+// it exists. A user may end a path with '/' as well.
+list<UTF8> normalize_path (list<UTF8> path) {
+    if (size (path) == 0) return path;
+    if (first (path) == "") path = rest (path);
+    if (size (path) == 0) return path;
+    auto r = reverse (path);
+    if (first (path) == "") r = rest (r);
+    return reverse (r);
+}
+
 awaitable<net::HTTP::response> server::operator () (const net::HTTP::request &req) {
 
     std::cout << "Responding to request " << req << std::endl;
-    list<UTF8> path = req.Target.path ().read ('/');
+    list<UTF8> path = normalize_path (req.Target.path ().read ('/'));
 
     // if no API method was called, serve the GUI. 
     if (size (path) == 0) co_return HTML_JS_UI_response ();
-
-    // the first part of the path is always "" as long as we use "/" as a delimiter 
-    // because a path always begins with "/". 
-    path = rest (path);
-
-    if (size (path) == 0 || path[0] == "") co_return HTML_JS_UI_response ();
 
     // The favicon doesn't work right now, not sure why.
     if (size (path) == 1 && path[0] == "favicon.ico") co_return favicon ();
@@ -157,7 +164,8 @@ awaitable<net::HTTP::response> server::operator () (const net::HTTP::request &re
 
     try {
 
-        if (path.size () < 2) co_return process_method (*this, req.Method, m, query, req.content_type (), req.Body);
+        if (path.size () < 2)
+            co_return process_method (*this, req.Method, m, query, req.content_type (), req.Body);
 
         // make sure the wallet name is a valid string.
         Diophant::symbol wallet_name {path[1]};
@@ -194,7 +202,7 @@ net::HTTP::response process_method (
 
     if (m == method::INVERT_HASH) return handle_invert_hash (p, http_method, query, content_type, body);
 
-    if (m == method::TO_PRIVATE) handle_to_private (p, http_method, query, content_type, body);
+    if (m == method::TO_PRIVATE) return handle_to_private (p, http_method, query, content_type, body);
 
     return error_response (500, m, problem::invalid_wallet_name, "wallet method called without wallet name");
 }
@@ -229,7 +237,7 @@ net::HTTP::response process_wallet_method (
     const data::bytes &body) {
 
     // make sure the wallet name is a valid string.
-    if (!wallet_name.valid ()) return error_response (400, m, problem::invalid_wallet_name, "name argument must be alpha alnum+");
+    if (!wallet_name.valid ()) return error_response (400, m, problem::invalid_wallet_name, "wallet name argument must be alpha alnum+");
 
     // Associate a secret key with a name. The key could be anything; private, public, or symmetric.
     if (m == method::KEY) return handle_key (p, wallet_name, http_method, query, content_type, body);
@@ -419,8 +427,8 @@ net::HTTP::response process_wallet_method (
 
         // first we need a function that recognizes output patterns. 
         return error_response (501, m, problem::unimplemented);
-    }
-
+    }*/
+/*
     if (m == method::SPEND) {
         if (http_method != net::HTTP::method::post)
             return error_response (405, m, problem::invalid_method, "use post");

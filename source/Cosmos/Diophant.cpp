@@ -16,13 +16,6 @@ namespace Cosmos {
         //throw data::method::unimplemented {"initialize"};
     }
 
-    key_expression key_expression::to_public () const {
-        if (!bool (machine)) throw data::exception {} << "Diophant machine is not initialized";
-        key_expression result {std::string (machine->evaluate (Diophant::expression {data::string::write ("to_public (", *this, ")")}))};
-        if (!result.valid ()) return {};
-        return result;
-    }
-
     key_expression to_private (const key_expression &) {
         if (!bool (machine)) throw data::exception {} << "Diophant machine is not initialized";
         throw data::method::unimplemented {"to_private"};
