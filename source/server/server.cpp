@@ -6,6 +6,7 @@
 #include "generate.hpp"
 #include "restore.hpp"
 #include "random.hpp"
+#include "import.hpp"
 
 #include <Diophant/parse.hpp>
 #include <Diophant/symbol.hpp>
@@ -87,6 +88,7 @@ awaitable<net::HTTP::response> server::operator () (const net::HTTP::request &re
     if (size (path) == 1 && path[0] == "favicon.ico") co_return favicon ();
 
     method m = read_method (path[0]);
+    std::cout << "method " << m << std::endl;
 
     if (m == method::UNSET) co_return error_response (400, m, problem::unknown_method, path[0]);
 
@@ -321,6 +323,7 @@ net::HTTP::response process_wallet_method (
     }
 
     if (m == method::NEXT_ADDRESS || m == method::NEXT_XPUB) {
+        std::cout << " generate next address or next xpub" << std::endl;
         if (http_method != net::HTTP::method::post)
             return error_response (405, m, problem::invalid_method, "use post");
 
@@ -385,49 +388,14 @@ net::HTTP::response process_wallet_method (
 
         return res;
     }
-/*
+
     if (m == method::IMPORT) {
         if (http_method != net::HTTP::method::put)
             return error_response (405, m, problem::invalid_method, "use put");
-        // we need to find addresses and xpubs that we need to check. 
 
-        if (!content_type)
-            return error_response (405, m, problem::invalid_parameter,
-                "put transaction in body");
+        return handle_import (p, wallet_name, query, content_type, body);
 
-        BEEF beef;
-
-        if (*content_type == net::HTTP::content::application_octet_stream) {
-            beef = BEEF {body};
-        } else if (*content_type == net::HTTP::content::application_json) {
-            beef = BEEF {JSON {std::string (data::string (body))}};
-        } else return error_response (405, m, problem::invalid_parameter,
-                "Transaction should be BEEF format in JSON or octet stream");
-
-        // TODO go through my old code and incorporate other stuff.
-        if (!beef.valid ())
-            return error_response (405, m, problem::invalid_parameter,
-                "Invalid transaction.");
-
-        map<digest160, maybe<HD::BIP_32::pubkey>> unused;
-
-        for (const std::string &u : p.DB->get_wallet_unused (wallet_name)) {
-            if (Bitcoin::address a {u}; a.valid ())
-                unused = unused.insert (a.digest (), {});
-            else if (HD::BIP_32::pubkey pp {u}; pp.valid ())
-                // generate first 3 addresses.
-                for (uint32 i = 0; i < 3; i++)
-                    unused = unused.insert (pp.derive ({i}).address ().Digest, pp);
-
-
-        }
-
-        // now go through the tx and check for these unused addresses.
-
-
-        // first we need a function that recognizes output patterns. 
-        return error_response (501, m, problem::unimplemented);
-    }*/
+    }
 /*
     if (m == method::SPEND) {
         if (http_method != net::HTTP::method::post)

@@ -381,11 +381,19 @@ net::HTTP::request make_list_wallets_request () {
 }
 
 net::HTTP::request make_next_address_request (const std::string &wallet_name, const std::string &sequence_name) {
-    return net::HTTP::request::make ().method (net::HTTP::method::post).path (string::write ("/next_address/", wallet_name)).host ("localhost");
+    return net::HTTP::request::make ().method (
+        net::HTTP::method::post
+    ).path (
+        string::write ("/next_address/", wallet_name)
+    ).query_map ({{"name", sequence_name}}).host ("localhost");
 }
 
-net::HTTP::request make_next_xpub_request (const std::string &wallet_name) {
-    return net::HTTP::request::make ().method (net::HTTP::method::post).path (string::write ("/next_xpub/", wallet_name)).host ("localhost");
+net::HTTP::request make_next_xpub_request (const std::string &wallet_name, const std::string &sequence_name) {
+    return net::HTTP::request::make ().method (
+        net::HTTP::method::post
+    ).path (
+        string::write ("/next_xpub/", wallet_name)
+    ).query_map ({{"name", sequence_name}}).host ("localhost");
 }
 
 maybe<JSON> read_JSON_response (const net::HTTP::response &r) {

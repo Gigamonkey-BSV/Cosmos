@@ -22,6 +22,7 @@ add_executable (
   ../source/server/to_private.cpp
   ../source/server/generate.cpp
   ../source/server/restore.cpp
+  ../source/server/import.cpp
   key_expression.cpp
   diophant.cpp
   server.cpp

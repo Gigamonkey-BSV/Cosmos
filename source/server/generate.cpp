@@ -283,16 +283,8 @@ net::HTTP::response handle_generate (server &p,
     p.DB->set_wallet_sequence (wallet_name, account_name,
         key_sequence {
             key_expression {string::write ("(", master_key_expr, ") ", write_derivation (root_derivation))},
-            key_derivation {string::write ("@ key index -> key / harden (index)")}},
+            key_derivation {string::write ("@ key index -> key / 'index)")}},
         total_accounts);
-
-    if (WalletStyle == wallet_style::BIP_44_plus) {
-        Diophant::symbol receive_x_symbol {"receivex"};
-        p.DB->set_wallet_sequence (wallet_name, receive_x_symbol,
-            key_sequence {
-                key_expression {string::write ("(", master_key_expr, ") ", write_derivation (root_derivation))},
-                key_derivation {"@ key index -> key / `index"}}, 0);
-    }
 
     // generate all the accounts.
     for (uint32 account_number = 0; account_number < total_accounts; account_number++) {
@@ -313,8 +305,16 @@ net::HTTP::response handle_generate (server &p,
             key_expression {string::write ("(", master_key_expr, ") ",
                 write_derivation (change_derivation))});
 
-        string receive_name = string::write ("receive_", account_number);
-        string change_name = string::write ("change_", account_number);
+        string receive_name;
+        string change_name;
+
+        if (account_number == 0) {
+            receive_name = "receive";
+            change_name = "change";
+        } else {
+            receive_name = string::write ("receive_", account_number);
+            change_name = string::write ("change_", account_number);
+        }
 
         // note that each of these returns a regular pubkey rather than an xpub.
         p.DB->set_wallet_sequence (wallet_name, receive_name,

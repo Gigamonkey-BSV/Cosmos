@@ -31,14 +31,9 @@ namespace Cosmos {
         throw data::method::unimplemented {"key_sequence::operator string"};
     }
 
-    key_source key_source::operator + () const {
+    key_expression key_derivation::operator () (const key_expression &, int32) const {
         if (!bool (machine)) throw data::exception {} << "Diophant machine is not initialized";
-        throw data::method::unimplemented {"key_source::operator +"};
-    }
-
-    key_expression key_source::operator * () const {
-        if (!bool (machine)) throw data::exception {} << "Diophant machine is not initialized";
-        throw data::method::unimplemented {"key_source::operator *"};
+        throw data::method::unimplemented {"key_sequence::operator string"};
     }
 
     key_source::operator std::string () const {

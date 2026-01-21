@@ -95,7 +95,7 @@ namespace Cosmos {
     // a function that derives an ith key from a given key.
     struct key_derivation : string {
         using string::string;
-        key_expression operator () (key_expression, int32) const;
+        key_expression operator () (const key_expression &, int32) const;
     };
 
     struct key_sequence {
@@ -111,13 +111,22 @@ namespace Cosmos {
         uint32 Index;
         key_sequence Sequence;
 
-        key_source operator + () const;
+        key_source operator + () const {
+            return next ();
+        }
 
-        key_expression operator * () const;
+        key_expression operator * () const {
+            return Sequence (Index);
+        }
 
-        key_source &operator ++ ();
+        key_source &operator ++ () {
+            Index++;
+            return *this;
+        }
 
-        key_source next () const;
+        key_source next () const {
+            return key_source {Index + 1, Sequence};
+        }
 
         operator std::string () const;
     };

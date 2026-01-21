@@ -157,8 +157,6 @@ net::HTTP::response handle_key (server &p,
         }
     }
 
-    std::cout << " try to set key in wallet " << wallet_name << " with key name " << KeyName << " to " << key_expr << std::endl;
-
     if (p.DB->set_key (wallet_name, KeyName, key_expr)) {
         if (!method_random) return ok_response ();
         else return string_response (key_expr);

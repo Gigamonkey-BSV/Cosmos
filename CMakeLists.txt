@@ -248,6 +248,7 @@ add_executable (
     source/server/to_private.cpp
     source/server/generate.cpp
     source/server/restore.cpp
+    source/server/import.cpp
     source/Server.cpp
 )
 

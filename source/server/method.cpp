@@ -51,6 +51,8 @@ method read_method (const UTF8 &p) {
     if (sanitized == "key") return method::KEY;
     if (sanitized == "keysequnce") return method::KEY_SEQUENCE;
     if (sanitized == "generate") return method::GENERATE;
+    if (sanitized == "nextaddress") return method::NEXT_ADDRESS;
+    if (sanitized == "nextxpub") return method::NEXT_XPUB;
     if (sanitized == "restore") return method::RESTORE;
     if (sanitized == "update") return method::UPDATE;
     if (sanitized == "request") return method::REQUEST;
@@ -83,6 +85,8 @@ std::ostream &operator << (std::ostream &o, method m) {
         case method::DETAILS: return o << "details";
         case method::KEY: return o << "key";
         case method::KEY_SEQUENCE: return o << "key_sequence";
+        case method::NEXT_ADDRESS: return o << "next_address";
+        case method::NEXT_XPUB: return o << "next_xpub";
         case method::GENERATE: return o << "generate";        // generate a wallet
         case method::RESTORE: return o << "restore";          // restore a wallet
         case method::UPDATE: return o << "update";            // depricated: check if txs in pending have been mined.
