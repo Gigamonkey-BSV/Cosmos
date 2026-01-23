@@ -78,7 +78,7 @@ list<UTF8> normalize_path (list<UTF8> path) {
 
 awaitable<net::HTTP::response> server::operator () (const net::HTTP::request &req) {
 
-    std::cout << "Responding to request " << req << std::endl;
+    DATA_LOG (normal) << "Respond to request " << req;
     list<UTF8> path = normalize_path (req.Target.path ().read ('/'));
 
     // if no API method was called, serve the GUI. 
@@ -88,7 +88,6 @@ awaitable<net::HTTP::response> server::operator () (const net::HTTP::request &re
     if (size (path) == 1 && path[0] == "favicon.ico") co_return favicon ();
 
     method m = read_method (path[0]);
-    std::cout << "method " << m << std::endl;
 
     if (m == method::UNSET) co_return error_response (400, m, problem::unknown_method, path[0]);
 
@@ -323,7 +322,6 @@ net::HTTP::response process_wallet_method (
     }
 
     if (m == method::NEXT_ADDRESS || m == method::NEXT_XPUB) {
-        std::cout << " generate next address or next xpub" << std::endl;
         if (http_method != net::HTTP::method::post)
             return error_response (405, m, problem::invalid_method, "use post");
 

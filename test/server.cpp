@@ -17,10 +17,10 @@ constexpr const char *const arg_values[arg_count] = {"--sqlite_in_memory", "--ig
 
 server get_test_server () {
     Shutdown = false;
-    std::cout << "about to setup program options" << std::endl;
+    DATA_LOG (normal) << "about to setup program options";
     options program_options {arg_parser {arg_count, arg_values}};
     Cosmos::random::setup (program_options);
-    std::cout << "about to create test server " << std::endl;
+    DATA_LOG (normal) << "about to create test server ";
     return server {program_options};
 }
 
@@ -52,7 +52,6 @@ bool is_JSON_response (const JSON &, const net::HTTP::response &r);
 
 net::HTTP::request inline make_create_wallet_request (const std::string &wallet_name) {
     string target = string::write ("/create_wallet/", wallet_name);
-    std::cout << "target is " << target << std::endl;
     return net::HTTP::request::make ().method (net::HTTP::method::post).target (target).host ("localhost");
 }
 
@@ -223,10 +222,6 @@ TEST (Server, Key) {
     key_expression pubkey_Y = key_expression {secret_Y.to_public ()};
     key_expression pubkey_Z = key_expression {secret_Z.to_public ()};
 
-    std::cout << secret_X << " -> " << pubkey_X << std::endl;
-    std::cout << secret_Y << " -> " << pubkey_Y << std::endl;
-    std::cout << secret_Z << " -> " << pubkey_Z << std::endl;
-
     // fail to retrieve a private key without an entry yet.
     EXPECT_TRUE (is_error (make_request (test_server, make_to_private_get_request (pubkey_X))));
 
@@ -244,10 +239,6 @@ TEST (Server, Key) {
     EXPECT_NO_THROW (secret_X_retrieved = read_string_response (make_request (test_server, make_to_private_get_request (pubkey_X))));
     EXPECT_NO_THROW (secret_Y_retrieved = read_string_response (make_request (test_server, make_to_private_get_request (pubkey_Y))));
     EXPECT_NO_THROW (secret_Z_retrieved = read_string_response (make_request (test_server, make_to_private_get_request (pubkey_Z))));
-
-    std::cout << secret_X_retrieved << std::endl;
-    std::cout << secret_Y_retrieved << std::endl;
-    std::cout << secret_Z_retrieved << std::endl;
 
     EXPECT_EQ (secret_X, key_expression {*secret_X_retrieved}) << "expect " << secret_X << " to equal " << *secret_X_retrieved;
     EXPECT_EQ (secret_Y, key_expression {*secret_Y_retrieved}) << "expect " << secret_Y << " to equal " << *secret_Y_retrieved;
@@ -372,7 +363,7 @@ maybe<string> read_string_response (const net::HTTP::response &r) {
     maybe<net::error> err = read_error (r);
     if (bool (err))
         throw data::exception {} << "Expected string response but got error response " << *err;
-    else std::cout << "response is " << r << std::endl;
+    else DATA_LOG (normal) << "response is " << r;
     return {};
 }
 

@@ -31,9 +31,9 @@ namespace Cosmos {
         throw data::method::unimplemented {"key_sequence::operator string"};
     }
 
-    key_expression key_derivation::operator () (const key_expression &, int32) const {
+    key_expression key_derivation::operator () (const key_expression &k, int32 i) const {
         if (!bool (machine)) throw data::exception {} << "Diophant machine is not initialized";
-        throw data::method::unimplemented {"key_sequence::operator string"};
+        return std::string (machine->evaluate (Diophant::expression {string::write (static_cast<const std::string &> (*this), " $ ", static_cast<const std::string &> (k), " $ ", i)}));
     }
 
     key_source::operator std::string () const {

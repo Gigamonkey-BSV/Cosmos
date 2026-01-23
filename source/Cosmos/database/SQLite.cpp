@@ -1122,7 +1122,18 @@ namespace Cosmos::SQLite {
 
                     if (wrows.empty ()) return false;
 
-                    storage.replace (Sequence {-1, wrows.front (), sequence_name, index, sequence.Key, sequence.Derivation});
+                    auto srows = storage.select (&Sequence::id,
+                        (where (c (&Sequence::name) == sequence_name && c (&Sequence::wallet_id) == wrows.front ())));
+
+                    if (!srows.empty ()) {
+
+                        storage.replace (Sequence {wrows.front (), wrows.front (), sequence_name, index, sequence.Key, sequence.Derivation});
+
+                        return true;
+                    }
+
+                    storage.insert (Sequence {-1, wrows.front (), sequence_name, index, sequence.Key, sequence.Derivation});
+
                     return true;
                 });
             } catch (const std::system_error &e) {
@@ -1131,7 +1142,6 @@ namespace Cosmos::SQLite {
         }
 
         maybe<key_source> get_wallet_sequence (const std::string &wallet_name, const std::string &key_name) final override {
-
             try {
                 key_source result;
                 if (storage.transaction ([&] {

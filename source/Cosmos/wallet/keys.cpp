@@ -19,7 +19,7 @@ namespace Cosmos {
     }
 
     std::ostream &write_HD_secret (std::ostream &o, const HD::BIP_32::secret &x) {
-        o << "HD.secret [secret " << std::dec << x.Secret.Value << ", `" << x.ChainCode << "`";
+        o << "HD.secret [secret " << std::dec << x.Secret.Value << ", `" << encoding::hex::write (x.ChainCode) << "`";
         if (x.Network != Bitcoin::net::Main || x.Depth != 0 || x.Parent != 0 || x.Sequence != 0) o << ", " << net_string (x.Network);
         if (x.Depth != 0 || x.Parent != 0 || x.Sequence != 0) o << ", " << uint32 (x.Depth);
         if (x.Parent != 0 || x.Sequence != 0) o << ", " << x.Parent;
@@ -28,7 +28,7 @@ namespace Cosmos {
     }
 
     std::ostream &write_HD_pubkey (std::ostream &o, const HD::BIP_32::pubkey &x) {
-        o << "HD.pubkey [pubkey `" << encoding::hex::write (x.Pubkey) << "`, `" << x.ChainCode << "`";
+        o << "HD.pubkey [pubkey `" << encoding::hex::write (x.Pubkey) << "`, `" << encoding::hex::write (x.ChainCode) << "`";
         if (x.Network != Bitcoin::net::Main || x.Depth != 0 || x.Parent != 0 || x.Sequence != 0) o << ", " << net_string (x.Network);
         if (x.Depth != 0 || x.Parent != 0 || x.Sequence != 0) o << ", " << uint32 (x.Depth);
         if (x.Parent != 0 || x.Sequence != 0) o << ", " << x.Parent;
