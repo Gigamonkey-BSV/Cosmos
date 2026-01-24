@@ -51,7 +51,6 @@ namespace Cosmos {
     using extracted = list<string_view>;
 
     extracted extract (const std::regex &re, string_view text) {
-
         extracted result {};
 
         std::match_results<std::string_view::const_iterator> match {};
@@ -71,10 +70,10 @@ namespace Cosmos {
     }
 
     const std::regex Bitcoin_address_string (R"REGEX(^\s*address\s*`[1-9A-HJ-NP-Za-km-z]+`\s*$)REGEX");
-    const std::regex Bitcoin_address_decoded (R"REGEX(^\s*address\s*\[\s*`([\dA-Fa-f]+)`\s*(?:,\s*net\.(Test|Main)\s*)?\]\s*$)REGEX");
+    const std::regex Bitcoin_address_decoded (R"REGEX(^\s*address\s*\[\s*`([0-9A-Fa-f]+)`\s*(?:,\s*net\.(Test|Main)\s*)?\]\s*$)REGEX");
 
     const std::regex secp256k1_secret (R"REGEX(^\s*secret\s+(\d+)\s*$)REGEX");
-    const std::regex secp256k1_pubkey (R"REGEX(^\s*pubkey\s+`([\dA-Fa-f]+)`\s*$)REGEX");
+    const std::regex secp256k1_pubkey (R"REGEX(^\s*pubkey\s+`([0-9A-Fa-f]+)`\s*$)REGEX");
     const std::regex WIF_string (R"REGEX(^\s*WIF\s+"([1-9A-HJ-NP-Za-km-z]+)"\s*$)REGEX");
     const std::regex HD_secret_string (R"REGEX(^\s*HD\s*\.\s*secret\s+"([1-9A-HJ-NP-Za-km-z]+)"\s*$)REGEX");
     const std::regex HD_pubkey_string (R"REGEX(^\s*HD\s*\.\s*pubkey\s+"([1-9A-HJ-NP-Za-km-z]+)"\s*$)REGEX");

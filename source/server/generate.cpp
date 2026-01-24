@@ -320,12 +320,12 @@ net::HTTP::response handle_generate (server &p,
         p.DB->set_wallet_sequence (wallet_name, receive_name,
             key_sequence {
                 receive_pubkey,
-                key_derivation {"@ key index -> pubkey (key / index)"}}, 0);
+                key_derivation {"@ key index -> key / index"}}, 0);
 
         p.DB->set_wallet_sequence (wallet_name, change_name,
             key_sequence {
                 change_pubkey,
-                key_derivation {"@ key index -> pubkey (key / index)"}}, 0);
+                key_derivation {"@ key index -> key / index"}}, 0);
 
     }
 
