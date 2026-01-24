@@ -257,7 +257,7 @@ using JSON = data::JSON;
 
 net::HTTP::request make_next_address_request (const std::string &wallet_name, const std::string &sequence_name = "receive");
 
-net::HTTP::request make_next_xpub_request (const std::string &wallet_name);
+net::HTTP::request make_next_xpub_request (const std::string &wallet_name, const std::string &sequence_name);
 
 TEST (Server, Generate) {
     auto test_server = prepare (get_test_server ());
@@ -299,30 +299,36 @@ TEST (Server, Generate) {
 
     EXPECT_NO_THROW (next_change_A =
         read_string_response (make_request (test_server, make_next_address_request ("A", "change"))));
-/*
+
     EXPECT_NO_THROW (next_receive_D =
         read_string_response (make_request (test_server, make_next_address_request ("D", "receive"))));
 
     EXPECT_NO_THROW (next_change_D =
-        read_string_response (make_request (test_server, make_next_address_request ("D", "change"))));*/
+        read_string_response (make_request (test_server, make_next_address_request ("D", "change"))));
 
-    // TODO ensure that we can regenerate these from the words.
+    // TODO ensure that we can regenerate these from the word for wallet D.
 
     // generate a new xpub where appropriate
-/*
-    EXPECT_TRUE (is_error (make_request (test_server, make_next_xpub_request ("A"))));
 
+    EXPECT_TRUE (is_error (make_request (test_server, make_next_xpub_request ("A", "xreceive"))));
+/*
     maybe<std::string> next_xpub_B = read_string_response (make_request (test_server, make_next_xpub_request ("B")));
 
     maybe<std::string> next_xpub_C = read_string_response (make_request (test_server, make_next_xpub_request ("C")));
-
-    EXPECT_TRUE (is_error (make_request (test_server, make_next_xpub_request ("D"))));
-
+*/
+    EXPECT_TRUE (is_error (make_request (test_server, make_next_xpub_request ("D", "xreceive"))));
+/*
     maybe<std::string> next_xpub_E = read_string_response (make_request (test_server, make_next_xpub_request ("E")));
 
     maybe<std::string> next_xpub_F = read_string_response (make_request (test_server, make_next_xpub_request ("F")));*/
 
     // TODO Generate the signing key where appropriate.
+
+    // TODO check that the value in each of these wallets is zero.
+
+    // TODO import funds into these wallets.
+
+    // TODO make a payment from each wallet.
 
 }
 

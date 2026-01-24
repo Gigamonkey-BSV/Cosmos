@@ -342,7 +342,7 @@ net::HTTP::response process_wallet_method (
 
         {
             maybe<Cosmos::key_source> seq = p.DB->get_wallet_sequence (wallet_name, sequence_name);
-            if (!bool (seq)) return error_response (400, m, problem::invalid_query);
+            if (!bool (seq)) return error_response (400, m, problem::invalid_query, string::write ("no key named ", sequence_name));
             sequence = *seq;
         }
 
@@ -376,7 +376,7 @@ net::HTTP::response process_wallet_method (
 
             p.DB->set_wallet_unused (wallet_name, encoded);
 
-            res = JSON_response (JSON (std::string (encoded)));
+            res = string_response (std::string (encoded));
         } else {
             // we have to be able to generate this or else something is wrong with the system.
             HD::BIP_32::pubkey next_xpub (next_key);
@@ -386,7 +386,7 @@ net::HTTP::response process_wallet_method (
             p.DB->set_to_private (next_xpub, Cosmos::to_private (next_key));
 
             auto next_xpub_str = std::string (next_xpub.write ());
-            res = JSON_response (JSON (next_xpub_str));
+            res = string_response (std::string (next_xpub_str));
             p.DB->set_wallet_unused (wallet_name, next_xpub_str);
         }
 

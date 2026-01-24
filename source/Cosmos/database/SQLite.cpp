@@ -525,8 +525,9 @@ namespace Cosmos::SQLite {
             make_table ("keys",
                 make_column ("id", &Key::id, primary_key ().autoincrement ()),
                 make_column ("wallet", &Key::wallet),
-                make_column ("name", &Key::name, unique ()),
-                make_column ("key", &Key::key)
+                make_column ("name", &Key::name),
+                make_column ("key", &Key::key),
+                unique (&Key::wallet, &Key::name)
             ),
 
             make_table ("pubkeys",
@@ -559,10 +560,11 @@ namespace Cosmos::SQLite {
             make_table ("sequences",
                 make_column ("id", &Sequence::id, primary_key ().autoincrement ()),
                 make_column ("wallet_id", &Sequence::wallet_id),
-                make_column ("name", &Sequence::name, unique ()),
+                make_column ("name", &Sequence::name),
                 make_column ("index", &Sequence::index),
                 make_column ("derivation", &Sequence::derivation),
-                make_column ("key", &Sequence::key)
+                make_column ("key", &Sequence::key),
+                unique (&Sequence::wallet_id, &Sequence::name)
             ),
 
             make_table ("unused",
