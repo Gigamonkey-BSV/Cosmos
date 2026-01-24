@@ -254,6 +254,10 @@ net::HTTP::response handle_generate (server &p,
 
     uint32 total_accounts = bool (accounts_param) ? *accounts_param : 1;
 
+    if (total_accounts < 1)
+        return error_response (400, method::GENERATE, problem::invalid_parameter,
+            string::write ("cannot have zero accounts"));
+
     // we generate the wallet the same way regardless of whether the user wants words.
     bytes wallet_entropy {};
     wallet_entropy.resize (number_of_words * 4 / 3);
@@ -262,34 +266,28 @@ net::HTTP::response handle_generate (server &p,
     data::crypto::random::get () >> wallet_entropy;
     std::string wallet_words = HD::BIP_39::generate (wallet_entropy);
 
-    auto master = HD::BIP_32::secret::from_seed (HD::BIP_39::read (wallet_words));
-
-    key_expression master_key_expr {master};
-
-    if (!p.DB->make_wallet (wallet_name))
-        return error_response (500, method::GENERATE, problem::failed,
-            string::write ("wallet ", wallet_name, " already exists"));
-
-    p.DB->set_key (wallet_name, Diophant::symbol {"master"}, master_key_expr);
+    auto root = HD::BIP_32::secret::from_seed (HD::BIP_39::read (wallet_words));
 
     // if coin type is none, then we make a centbee-style account.
     list<uint32> root_derivation = bool (CoinType) ?
         list<uint32> {HD::BIP_44::purpose, *CoinType}:
         list<uint32> {HD::BIP_44::purpose};
 
-    string account_name {"account"};
+    auto master = root.derive (root_derivation);
 
-    // set a sequence for the accounts.
-    p.DB->set_wallet_sequence (wallet_name, account_name,
-        key_sequence {
-            key_expression {string::write ("(", master_key_expr, ") ", write_derivation (root_derivation))},
-            key_derivation {string::write ("@ key index -> key / 'index)")}},
-        total_accounts);
+    // having read all the settings, we proceed to alter the database.
+    if (!p.DB->make_wallet (wallet_name))
+        return error_response (500, method::GENERATE, problem::failed,
+            string::write ("wallet ", wallet_name, " already exists"));
+
+    // set root key
+    p.DB->set_key (wallet_name, Diophant::symbol {"root"}, key_expression {root});
+    p.DB->set_key (wallet_name, Diophant::symbol {"master"}, key_expression {master});
 
     // generate all the accounts.
     for (uint32 account_number = 0; account_number < total_accounts; account_number++) {
 
-        list<uint32> account_derivation = root_derivation << HD::BIP_32::harden (account_number);
+        list<uint32> account_derivation = {HD::BIP_32::harden (account_number)};
 
         list<uint32> receive_derivation = account_derivation << 0;
         list<uint32> change_derivation = account_derivation << 1;
@@ -298,11 +296,11 @@ net::HTTP::response handle_generate (server &p,
         key_expression change_pubkey = key_expression {master.derive (change_derivation).to_public ()};
 
         p.DB->set_to_private (receive_pubkey,
-            key_expression {string::write ("(", master_key_expr, ") ",
+            key_expression {string::write ("(", key_expression {master}, ") ",
                 write_derivation (receive_derivation))});
 
         p.DB->set_to_private (change_pubkey,
-            key_expression {string::write ("(", master_key_expr, ") ",
+            key_expression {string::write ("(", key_expression {master}, ") ",
                 write_derivation (change_derivation))});
 
         string receive_name;

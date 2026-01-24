@@ -143,6 +143,9 @@ namespace Cosmos {
     inline key_expression::key_expression (const secp256k1::pubkey &p):
         string {data::string::write ("pubkey `", encoding::hex::write (p), "`")} {}
 
+    inline key_expression::key_expression (const Bitcoin::address &d):
+        string {data::string::write ("address ", d)} {}
+
     key_expression inline key_sequence::operator () (int32 i) const {
         return Derivation (Key, i);
     }

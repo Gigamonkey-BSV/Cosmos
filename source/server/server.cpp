@@ -329,46 +329,54 @@ net::HTTP::response process_wallet_method (
             return error_response (400, m, problem::invalid_parameter,
                 string::write ("cannot find wallet named ", wallet_name));
         
-        // look at the receive key sequence.
+        // look at the given key sequence.
         Diophant::symbol sequence_name =
             schema::validate<> (query,
                 schema::key<Diophant::symbol> ("name"));
 
         if (!sequence_name.valid ())
-            return error_response (400, m, problem::invalid_parameter, "sequence_name");
+            return error_response (400, m, problem::invalid_parameter, "name");
         
         // do we have a sequence by this name? 
-        maybe<Cosmos::key_source> seq = p.DB->get_wallet_sequence (wallet_name, sequence_name);
-        if (!bool (seq)) return error_response (400, m, problem::invalid_query);
+        Cosmos::key_source sequence;
+
+        {
+            maybe<Cosmos::key_source> seq = p.DB->get_wallet_sequence (wallet_name, sequence_name);
+            if (!bool (seq)) return error_response (400, m, problem::invalid_query);
+            sequence = *seq;
+        }
 
         // generate a new key. 
-        Cosmos::key_expression next_key {**seq};
+        Cosmos::key_expression next_key {*sequence};
 
         net::HTTP::response res;
 
         if (m == method::NEXT_ADDRESS) {
-            Bitcoin::pubkey next_pubkey = Bitcoin::pubkey (next_key);
+            Bitcoin::pubkey next_pubkey;
+            Bitcoin::address::decoded next_address;
 
-            if (!next_pubkey.valid ())
+            try {
+                next_pubkey = Bitcoin::pubkey (next_key);
+                next_address = Bitcoin::address::decoded (next_key);
+            } catch (...) {
+                return error_response (500, method::NEXT_ADDRESS, problem::failed);
+            }
+
+            if (!next_address.valid ())
                 return error_response (500, method::NEXT_ADDRESS, problem::failed);
 
-            digest160 next_address_hash = next_pubkey.address_hash ();
-            p.DB->set_invert_hash (next_address_hash, Cosmos::hash_function::Hash160, next_pubkey);
+            p.DB->set_invert_hash (next_address.Digest, Cosmos::hash_function::Hash160, next_pubkey);
 
-            Bitcoin::net net {Bitcoin::net::Main}; // just assume Main if we don't know.
-            Bitcoin::secret next_secret = Bitcoin::secret (next_key);
+            p.DB->set_to_private (next_pubkey, key_expression {
+                string::write ("(",
+                    sequence.Sequence.Derivation, ") (to_private ",
+                    sequence.Sequence.Key, ") ", sequence.Index)});
 
-            // if this is not valid, then we are working with a cold wallet
-            // so it's not an error.
-            if (next_secret.valid ()) net = next_secret.Network;
+            Bitcoin::address encoded = next_address.encode ();
 
-            Bitcoin::address next_address {net, next_address_hash};
+            p.DB->set_wallet_unused (wallet_name, encoded);
 
-            res = JSON_response (JSON (std::string (next_address)));
-
-            p.DB->set_wallet_unused (wallet_name, next_address);
-
-            p.DB->set_to_private (next_key, Cosmos::to_private (next_key));
+            res = JSON_response (JSON (std::string (encoded)));
         } else {
             // we have to be able to generate this or else something is wrong with the system.
             HD::BIP_32::pubkey next_xpub (next_key);
@@ -382,7 +390,8 @@ net::HTTP::response process_wallet_method (
             p.DB->set_wallet_unused (wallet_name, next_xpub_str);
         }
 
-        p.DB->set_wallet_sequence (wallet_name, sequence_name, seq->Sequence, seq->Index);
+        ++sequence;
+        p.DB->set_wallet_sequence (wallet_name, sequence_name, sequence.Sequence, sequence.Index);
 
         return res;
     }

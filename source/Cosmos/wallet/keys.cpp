@@ -46,6 +46,9 @@ namespace Cosmos {
     key_expression::key_expression (const HD::BIP_32::secret &x): string {write_key (&write_HD_secret, x)} {}
     key_expression::key_expression (const HD::BIP_32::pubkey &x): string {write_key (&write_HD_pubkey, x)} {}
 
+    inline key_expression::key_expression (const Bitcoin::address::decoded &d):
+        string {data::string::write ("address [`", encoding::hex::write (d.Digest), "`, ", net_string (d.Network), "]")} {}
+
     using string_view = data::string_view;
 
     using extracted = list<string_view>;
@@ -150,7 +153,7 @@ namespace Cosmos {
     }
 
     Bitcoin::net inline read_net (string_view b) {
-        return b.size () > 0 && b['M'] ? Bitcoin::net::Main : Bitcoin::net::Test;
+        return b.size () > 0 && b[0] == 'M' ? Bitcoin::net::Main : Bitcoin::net::Test;
     }
 
     bool inline read_bool (string_view b) {

@@ -431,6 +431,12 @@ namespace Cosmos::SQLite {
         std::string derivation;
     };
 
+    struct Unused {
+        int id;
+        int wallet_id;
+        key_expression key;
+    };
+
     struct Event {
         int id;
         Bitcoin::TXID tx;
@@ -519,7 +525,7 @@ namespace Cosmos::SQLite {
             make_table ("keys",
                 make_column ("id", &Key::id, primary_key ().autoincrement ()),
                 make_column ("wallet", &Key::wallet),
-                make_column ("name", &Key::name),
+                make_column ("name", &Key::name, unique ()),
                 make_column ("key", &Key::key)
             ),
 
@@ -553,10 +559,16 @@ namespace Cosmos::SQLite {
             make_table ("sequences",
                 make_column ("id", &Sequence::id, primary_key ().autoincrement ()),
                 make_column ("wallet_id", &Sequence::wallet_id),
-                make_column ("name", &Sequence::name),
+                make_column ("name", &Sequence::name, unique ()),
                 make_column ("index", &Sequence::index),
                 make_column ("derivation", &Sequence::derivation),
                 make_column ("key", &Sequence::key)
+            ),
+
+            make_table ("unused",
+                make_column ("id", &Unused::id, primary_key ().autoincrement ()),
+                make_column ("wallet_id", &Unused::wallet_id),
+                make_column ("key", &Unused::key)
             ),
 
             make_table ("events",
@@ -1127,7 +1139,7 @@ namespace Cosmos::SQLite {
 
                     if (!srows.empty ()) {
 
-                        storage.replace (Sequence {wrows.front (), wrows.front (), sequence_name, index, sequence.Key, sequence.Derivation});
+                        storage.replace (Sequence {srows.front (), wrows.front (), sequence_name, index, sequence.Key, sequence.Derivation});
 
                         return true;
                     }
@@ -1173,20 +1185,50 @@ namespace Cosmos::SQLite {
             return {};
         };
 
-        Cosmos::account get_wallet_account (const std::string &wallet_name) final override {
-            throw data::method::unimplemented {"SQLite::get_wallet_account"};
+        bool set_wallet_unused (const std::string &wallet_name, const key_expression &key) final override {
+            try {
+                return storage.transaction ([&] {
+                    // 1. Look up the user id
+                    auto wid = storage.select (&Wallet::id, where (c (&Wallet::name) == wallet_name));
+
+                    if (wid.empty ()) return false;
+
+                    storage.insert (Unused {-1, wid.front (), key});
+                    return true;
+                });
+            } catch (const std::system_error &e) {
+                return false;
+            }
+
+            return true;
         };
 
-        void set_wallet_unused (const std::string &wallet_name, const std::string &key_name) final override {
-            throw data::method::unimplemented {"SQLite::set_wallet_unused"};
-        };
-
-        void set_wallet_used (const std::string &wallet_name, const std::string &key_name) final override {
+        bool set_wallet_used (const std::string &wallet_name, const key_expression &key) final override {
             throw data::method::unimplemented {"SQLite::set_wallet_used"};
         };
 
-        list<std::string> get_wallet_unused (const std::string &wallet_name) final override {
-            throw data::method::unimplemented {"SQLite::get_wallet_symbols"};
+        list<key_expression> get_wallet_unused (const std::string &wallet_name) final override {
+            list<key_expression> result;
+            try {
+                storage.transaction ([&] {
+                    // 1. Look up the user id
+                    auto wid = storage.select (&Wallet::id, where (c (&Wallet::name) == wallet_name));
+
+                    if (wid.empty ()) return false;
+
+                    for (const auto &k : storage.select (&Unused::key, where (c (&Unused::wallet_id) == wid.front ()))) result <<= key_expression {k};
+
+                    return true;
+                });
+            } catch (const std::system_error &e) {
+                return {};
+            }
+
+            return result;
+        };
+
+        Cosmos::account get_wallet_account (const std::string &wallet_name) final override {
+            throw data::method::unimplemented {"SQLite::get_wallet_account"};
         };
 
     };

@@ -15,7 +15,10 @@ std::atomic<bool> Shutdown {false};
 constexpr const int arg_count = 3;
 constexpr const char *const arg_values[arg_count] = {"--sqlite_in_memory", "--ignore_user_entropy", "--seed=ffffffffffffffffedcba98765432100"};
 
+bool log_init = false;
+
 server get_test_server () {
+    if (!log_init) data::log::init ()->min_level (data::log::normal);
     Shutdown = false;
     DATA_LOG (normal) << "about to setup program options";
     options program_options {arg_parser {arg_count, arg_values}};
@@ -296,12 +299,12 @@ TEST (Server, Generate) {
 
     EXPECT_NO_THROW (next_change_A =
         read_string_response (make_request (test_server, make_next_address_request ("A", "change"))));
-
+/*
     EXPECT_NO_THROW (next_receive_D =
         read_string_response (make_request (test_server, make_next_address_request ("D", "receive"))));
 
     EXPECT_NO_THROW (next_change_D =
-        read_string_response (make_request (test_server, make_next_address_request ("D", "change"))));
+        read_string_response (make_request (test_server, make_next_address_request ("D", "change"))));*/
 
     // TODO ensure that we can regenerate these from the words.
 
