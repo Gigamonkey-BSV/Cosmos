@@ -68,14 +68,14 @@ namespace Cosmos {
     std::ostream &operator << (std::ostream &, monetary_unit);
 
     struct network {
-        net::asio::io_context IO;
+        data::exec IO;
         ptr<net::HTTP::SSL> SSL;
         whatsonchain WhatsOnChain;
         MAPI::client Gorilla;
         net::HTTP::client CoinGecko;
         ARC::client TAAL;
 
-        network () : IO {}, SSL {std::make_shared<net::HTTP::SSL> (net::HTTP::SSL::tlsv12_client)},
+        network (data::exec io) : IO {io}, SSL {std::make_shared<net::HTTP::SSL> (net::HTTP::SSL::tlsv12_client)},
             WhatsOnChain {SSL}, Gorilla {SSL, net::HTTP::REST {"https", "mapi.gorillapool.io"}},
             CoinGecko {SSL, net::HTTP::REST {"https", "api.coingecko.com"}, data::tools::rate_limiter {1, data::milliseconds {10}}},
             // TODO I don't know what to put for TAAL's rate limiter.

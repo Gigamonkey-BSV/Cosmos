@@ -26,7 +26,9 @@ enum class wallet_style {
     experimental
 };
 
+// BIP 44 uses a coin type parameter in the derivation path and CentBee does not.
 enum class derivation_style {
+    unset,
     BIP_44,
     CentBee
 };
@@ -73,12 +75,30 @@ std::istream &operator >> (std::istream &, coin_type &);
 
 std::string write_derivation (list<uint32> d);
 
+enum class generate_error {
+    valid,
+    wallet_already_exists,
+    words_vs_mnemonic_style,
+    centbee_vs_coin_type,
+    neither_style_nor_coin_type,
+    mnemonic_vs_number_of_words,
+    invalid_number_of_words,
+    zero_accounts
+};
+
+// set of options provided in a http request that are
+// used to generate a new wallet.
 struct generate_request_options {
-    std::string Name;
+    Diophant::symbol Name;
     ::wallet_style WalletStyle {::wallet_style::BIP_44};
-    maybe<uint32> CoinTypeDerivationParameter {HD::BIP_44::coin_type_Bitcoin};
-    ::mnemonic_style MnemonicStyle {mnemonic_style::none};
-    uint32 NumberOfWords {12};
+private:
+    maybe<::coin_type> CoinTypeDerivationParameter {};
+public:
+    ::derivation_style DerivationStyle {::derivation_style::unset};
+    ::mnemonic_style MnemonicStyle {::mnemonic_style::none};
+    uint32 NumberOfWords {0};
+    maybe<std::string> Password;
+    uint32 Accounts {1};
 
     generate_request_options (const std::string &name): Name {name} {}
 
@@ -88,9 +108,26 @@ struct generate_request_options {
     generate_request_options &coin_type (uint32);
     generate_request_options &coin_type_none ();
 
+    ::coin_type coin_type () const {
+        if (CoinTypeDerivationParameter) return *CoinTypeDerivationParameter;
+        if (DerivationStyle == ::derivation_style::CentBee) return ::coin_type {};
+        throw data::exception {"invalid parameters"};
+    }
+
     // make a generate request
     operator net::HTTP::request () const;
+
+    // read from a generate request.
+    generate_request_options (
+        Diophant::symbol wallet_name, map<UTF8, UTF8> query,
+        const maybe<net::HTTP::content> &content_type,
+        const data::bytes &body);
+
+    generate_error check () const;
 };
+
+// return the mnemonic if the generate function succeeded
+std::expected<std::string, generate_error> generate (database &DB, const generate_request_options &);
 
 net::HTTP::response handle_generate (server &p,
     Diophant::symbol wallet_name, map<UTF8, UTF8> query,
@@ -114,11 +151,13 @@ generate_request_options inline &generate_request_options::number_of_words (uint
 
 generate_request_options inline &generate_request_options::coin_type (uint32 u) {
     CoinTypeDerivationParameter = u;
+    DerivationStyle = ::derivation_style::BIP_44;
     return *this;
 }
 
 generate_request_options inline &generate_request_options::coin_type_none () {
     CoinTypeDerivationParameter = {};
+    DerivationStyle = ::derivation_style::CentBee;
     return *this;
 }
 

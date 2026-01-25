@@ -63,6 +63,8 @@ int main (int arg_count, char **arg_values) {
 // we use this to handle all concurrent programming.
 boost::asio::io_context IO;
 
+ptr<Cosmos::network> Network;
+
 ptr<net::HTTP::server> Server;
 
 std::atomic<bool> Shutdown {false};
@@ -135,8 +137,10 @@ void run (const options &program_options) {
           net::URL (net::URL::make ().protocol ("http").address (endpoint.address ()).port (endpoint.port ())) <<
           " to see the GUI." << std::endl;
 
+        Network = ptr<Cosmos::network> (new Cosmos::network {IO.get_executor ()});
+
         Server = std::make_shared<net::HTTP::server>
-            (IO.get_executor (), endpoint, server {program_options});
+            (IO.get_executor (), endpoint, server {program_options, Network.get ()});
     }
 
     // We should be able to work with multiple threads now except

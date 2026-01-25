@@ -3,6 +3,7 @@
 
 #include "options.hpp"
 #include <Diophant/machine.hpp>
+#include <Cosmos/network.hpp>
 
 using UTF8 = data::UTF8;
 
@@ -15,7 +16,7 @@ using key_sequence = Cosmos::key_sequence;
 
 struct server {
 
-    server (const options &o);
+    server (const options &o, Cosmos::network *net);
 
     // handle an HTTP request.
     awaitable<net::HTTP::response> operator () (const net::HTTP::request &);
@@ -24,6 +25,7 @@ struct server {
 
     Cosmos::spend_options SpendOptions;
 
+    Cosmos::network *Net;
     ptr<database> DB;
 
     struct make_wallet_options {};

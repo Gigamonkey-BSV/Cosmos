@@ -1206,7 +1206,23 @@ namespace Cosmos::SQLite {
         };
 
         bool set_wallet_used (const std::string &wallet_name, const key_expression &key) final override {
-            throw data::method::unimplemented {"SQLite::set_wallet_used"};
+            try {
+                return storage.transaction ([&] {
+                    // 1. Look up the user id
+                    auto wid = storage.select (&Wallet::id, where (c (&Wallet::name) == wallet_name));
+
+                    if (wid.empty ()) return false;
+
+                    storage.remove_all<Unused> (
+                        where (c (&Unused::key) == key && c (&Unused::id) == wid.front ()));
+
+                    return true;
+                });
+            } catch (const std::system_error &e) {
+                return false;
+            }
+
+            return true;
         };
 
         list<key_expression> get_wallet_unused (const std::string &wallet_name) final override {

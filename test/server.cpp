@@ -24,7 +24,7 @@ server get_test_server () {
     options program_options {arg_parser {arg_count, arg_values}};
     Cosmos::random::setup (program_options);
     DATA_LOG (normal) << "about to create test server ";
-    return server {program_options};
+    return server {program_options, nullptr};
 }
 
 net::HTTP::request make_shutdown_request ();
@@ -275,7 +275,12 @@ TEST (Server, Generate) {
         generate_request_options {"C"}.wallet_style (wallet_style::experimental))));*/
 
     maybe<std::string> maybe_words_D = read_string_response (make_request (test_server,
-        generate_request_options {"D"}.wallet_style (wallet_style::BIP_44).mnemonic_style (mnemonic_style::BIP_39)));
+        generate_request_options {"D"}.wallet_style (
+            wallet_style::BIP_44
+        ).mnemonic_style (
+            mnemonic_style::BIP_39
+        ).coin_type (
+            HD::BIP_44::coin_type_Bitcoin)));
     ASSERT_TRUE (bool (maybe_words_D));
 
 /*

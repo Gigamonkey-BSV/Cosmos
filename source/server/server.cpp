@@ -22,10 +22,8 @@
 namespace schema = data::schema;
 using BEEF = Gigamonkey::BEEF;
 
-server::server (const options &o) {
-    SpendOptions = o.spend_options ();
-
-    DB = load_DB (o.db_options ());
+server::server (const options &o, Cosmos::network *net) :
+SpendOptions {o.spend_options ()}, Net {net}, DB {load_DB (o.db_options ())} {
     Cosmos::initialize (DB);
 }
 
