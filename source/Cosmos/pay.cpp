@@ -3,6 +3,8 @@
 
 namespace Cosmos {
 
+    using exception = data::exception;
+
     payments::request::request (const JSON &j) {
         if (!j.is_object ()) throw exception {} << "Invalid payments::request format";
 
@@ -28,7 +30,7 @@ namespace Cosmos {
 
         return o;
     }
-
+/*
     payments::new_request payments::request_payment (payments::type t, const payments &p, const addresses &k, const payments::request &x) {
         derived_pubkey d = k.last (k.Receive);
         switch (t) {
@@ -60,7 +62,7 @@ namespace Cosmos {
 
             default : throw exception {} << "unknown payment type";
         }
-    }
+    }*/
 
     account_diff read_account_diff (const JSON &j) {
         if (!j.is_object ()) throw "invalid payments offer format";
@@ -109,7 +111,7 @@ namespace Cosmos {
         for (const auto &jj : j) diffs <<= read_account_diff (jj);
         return diffs;
     }
-
+/*
     JSON write_redeemable (const payments::redeemable &r) {
         JSON::object_t o;
         o["request"] = payments::write_payment_request (r.Request);
@@ -119,7 +121,7 @@ namespace Cosmos {
 
     payments::redeemable inline read_redeemable (const JSON &j) {
         return payments::redeemable {payments::read_payment_request (j["request"]), derivation (j["derivation"])};
-    }
+    }*/
 
     payments::offer read_offer (const JSON &j) {
         if (!j.is_object ()) throw "invalid payments offer format";
@@ -136,7 +138,7 @@ namespace Cosmos {
         o["diff"] = write_account_diffs (p.Diff);
         return o;
     }
-
+/*
     payments::payments (const JSON &j) {
         if (j == nullptr) return;
         if (!j.is_object ()) throw exception {} << "invalid payments JSON format A";
@@ -152,8 +154,8 @@ namespace Cosmos {
 
         for (const auto &[key, value] : proposals->items ()) Proposals = Proposals.insert (string (key), read_offer (value));
 
-    }
-
+    }*/
+/*
     payments::operator JSON () const {
 
         JSON::object_t r;
@@ -166,5 +168,5 @@ namespace Cosmos {
         o["requests"] = r;
         o["proposals"] = p;
         return o;
-    }
+    }*/
 }

@@ -8,6 +8,7 @@
 #include "../source/server/to_private.hpp"
 #include <data/net/JSON.hpp>
 #include <data/net/error.hpp>
+#include <Cosmos/Diophant.hpp>
 #include "gtest/gtest.h"
 
 std::atomic<bool> Shutdown {false};
@@ -17,6 +18,8 @@ constexpr const char *const arg_values[arg_count] = {"--sqlite_in_memory", "--ig
 
 bool log_init = false;
 
+ptr<database> DB;
+
 server get_test_server () {
     if (!log_init) data::log::init ()->min_level (data::log::normal);
     Shutdown = false;
@@ -24,7 +27,12 @@ server get_test_server () {
     options program_options {arg_parser {arg_count, arg_values}};
     Cosmos::random::setup (program_options);
     DATA_LOG (normal) << "about to create test server ";
-    return server {program_options, nullptr};
+
+    DB = load_DB (program_options.db_options ());
+
+    Cosmos::diophant::initialize (DB);
+
+    return server {program_options.spend_options (), *DB, nullptr};
 }
 
 net::HTTP::request make_shutdown_request ();

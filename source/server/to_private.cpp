@@ -31,13 +31,13 @@ net::HTTP::response handle_to_private (
 
         key_expression value {data::string (body)};
 
-        if (p.DB->set_to_private (key, value)) return ok_response ();
+        if (p.DB.set_to_private (key, value)) return ok_response ();
         return error_response (500, method::TO_PRIVATE, problem::failed, "could not set private key");
     }
 
     if (http_method == net::HTTP::method::get) {
 
-        key_expression pk = p.DB->get_to_private (key);
+        key_expression pk = p.DB.get_to_private (key);
 
         if (!pk.valid ()) return error_response (404, method::TO_PRIVATE, problem::failed, "Could not retrieve key");
         return string_response (pk);

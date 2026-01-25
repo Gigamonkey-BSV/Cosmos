@@ -95,7 +95,7 @@ net::HTTP::response handle_key (server &p,
         if (http_method != net::HTTP::method::get)
             return error_response (405, method::KEY, problem::invalid_method, "use GET");
 
-        key_expression secret = p.DB->get_key (wallet_name, KeyName);
+        key_expression secret = p.DB.get_key (wallet_name, KeyName);
 
         if (secret.valid ()) return string_response (string (secret));
 
@@ -117,7 +117,7 @@ net::HTTP::response handle_key (server &p,
     if (bool (post_key)) {
         key_expression key_expr = key_expression {data::string (body)};
 
-        if (p.DB->set_key (wallet_name, KeyName, key_expr))
+        if (p.DB.set_key (wallet_name, KeyName, key_expr))
             return string_response (std::string (key_expr));
 
         return error_response (500, method::KEY, problem::failed, "could not create key");
@@ -157,7 +157,7 @@ net::HTTP::response handle_key (server &p,
         }
     }
 
-    if (p.DB->set_key (wallet_name, KeyName, key_expr)) {
+    if (p.DB.set_key (wallet_name, KeyName, key_expr)) {
         if (!method_random) return ok_response ();
         else return string_response (key_expr);
     }

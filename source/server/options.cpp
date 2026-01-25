@@ -215,3 +215,7 @@ maybe<bytes> options::seed () const {
 bool options::incorporate_user_entropy () const {
     return !this->has ("ignore_user_entropy");
 }
+
+bool options::online () const {
+    return !this->has ("offline");
+}

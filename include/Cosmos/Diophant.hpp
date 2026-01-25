@@ -4,7 +4,7 @@
 #include <Cosmos/database.hpp>
 #include <Diophant/machine.hpp>
 
-namespace Cosmos {
+namespace Cosmos::diophant {
 
     void initialize (ptr<database>);
     key_expression to_private (const key_expression &);

@@ -314,7 +314,7 @@ net::HTTP::response handle_restore (server &p,
     }
 
     // NOTE: we do not necessarily want to make a whole new wallet every time we restore.
-    if (!p.DB->make_wallet (wallet_name))
+    if (!p.DB.make_wallet (wallet_name))
         return error_response (500, method::RESTORE, problem::failed,
             string::write ("wallet ", wallet_name, " already exists"));
 
@@ -341,7 +341,7 @@ net::HTTP::response handle_restore (server &p,
     key_expression master_key_expr;
 
     // set a sequence for the accounts.
-    p.DB->set_wallet_sequence (wallet_name, account_name,
+    p.DB.set_wallet_sequence (wallet_name, account_name,
         key_sequence {
             key_expression {string::write ("(", master_key_expr, ") ", write_derivation (root_derivation))},
             key_derivation {string::write ("@ key index -> key / harden (index)")}},
@@ -361,11 +361,11 @@ net::HTTP::response handle_restore (server &p,
         key_expression receive_pubkey = key_expression {sk->derive (receive_derivation).to_public ()};
         key_expression change_pubkey = key_expression {sk->derive (change_derivation).to_public ()};
 
-        p.DB->set_to_private (receive_pubkey,
+        p.DB.set_to_private (receive_pubkey,
             key_expression {string::write ("(", master_key_expr, ") ",
                 write_derivation (receive_derivation))});
 
-        p.DB->set_to_private (change_pubkey,
+        p.DB.set_to_private (change_pubkey,
             key_expression {string::write ("(", master_key_expr, ") ",
                 write_derivation (change_derivation))});
 
@@ -373,12 +373,12 @@ net::HTTP::response handle_restore (server &p,
         string change_name = string::write ("change_", account_number);
 
         // note that each of these returns a regular pubkey rather than an xpub.
-        p.DB->set_wallet_sequence (wallet_name, receive_name,
+        p.DB.set_wallet_sequence (wallet_name, receive_name,
             key_sequence {
                 receive_pubkey,
                 key_derivation {"@ key index -> pubkey (key / index)"}}, 0);
 
-        p.DB->set_wallet_sequence (wallet_name, change_name,
+        p.DB.set_wallet_sequence (wallet_name, change_name,
             key_sequence {
                 change_pubkey,
                 key_derivation {"@ key index -> pubkey (key / index)"}}, 0);

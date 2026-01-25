@@ -20,6 +20,12 @@ enum class master_key_type {
 std::ostream &operator << (std::ostream &, master_key_type);
 std::istream &operator >> (std::istream &, master_key_type &);
 
+struct restore_request_options : generate_request_options {};
+
+struct restore_result {};
+
+restore_result restore (Cosmos::database &db, Cosmos::network &net, const restore_request_options &);
+
 net::HTTP::response handle_restore (server &p,
     Diophant::symbol wallet_name, map<UTF8, UTF8> query,
     const maybe<net::HTTP::content> &content_type,

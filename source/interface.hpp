@@ -14,6 +14,8 @@
 
 using arg_parser = data::io::arg_parser;
 
+template <typename X> using function = std::function<X>;
+
 namespace Cosmos {
     using filepath = std::filesystem::path;
 

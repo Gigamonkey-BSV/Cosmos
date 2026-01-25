@@ -16,6 +16,7 @@
 #include "server/random.hpp"
 
 #include <Cosmos/options.hpp>
+#include <Cosmos/Diophant.hpp>
 
 void run (const options &);
 
@@ -63,9 +64,9 @@ int main (int arg_count, char **arg_values) {
 // we use this to handle all concurrent programming.
 boost::asio::io_context IO;
 
-ptr<Cosmos::network> Network;
-
-ptr<net::HTTP::server> Server;
+ptr<database> DB;
+std::unique_ptr<Cosmos::network> Network;
+std::unique_ptr<net::HTTP::server> Server;
 
 std::atomic<bool> Shutdown {false};
 
@@ -120,6 +121,19 @@ void run (const options &program_options) {
     // initialize random number generator.
     Cosmos::random::setup (program_options);
 
+    // set up db
+    DB = load_DB (program_options.db_options ());
+    Cosmos::diophant::initialize (DB);
+
+    // set up network
+    if (program_options.online ()) {
+        Network = std::unique_ptr<Cosmos::network> (new Cosmos::network {IO.get_executor ()});
+
+        // TODO: check health of network
+
+        // TODO: update pending transactions
+    }
+
     {
         net::IP::TCP::endpoint endpoint = program_options.endpoint ();
 
@@ -137,10 +151,8 @@ void run (const options &program_options) {
           net::URL (net::URL::make ().protocol ("http").address (endpoint.address ()).port (endpoint.port ())) <<
           " to see the GUI." << std::endl;
 
-        Network = ptr<Cosmos::network> (new Cosmos::network {IO.get_executor ()});
-
-        Server = std::make_shared<net::HTTP::server>
-            (IO.get_executor (), endpoint, server {program_options, Network.get ()});
+        Server = std::unique_ptr<net::HTTP::server> {new net::HTTP::server
+            (IO.get_executor (), endpoint, server {program_options.spend_options (), *DB, Network.get ()})};
     }
 
     // We should be able to work with multiple threads now except

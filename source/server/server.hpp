@@ -16,17 +16,18 @@ using key_sequence = Cosmos::key_sequence;
 
 struct server {
 
-    server (const options &o, Cosmos::network *net);
+    Cosmos::spend_options SpendOptions;
+
+    Cosmos::network *Net;
+    database &DB;
+
+    server (const Cosmos::spend_options &x, database &db, Cosmos::network *net):
+        SpendOptions {x}, Net {net}, DB {db} {}
 
     // handle an HTTP request.
     awaitable<net::HTTP::response> operator () (const net::HTTP::request &);
 
     void add_entropy (const bytes &);
-
-    Cosmos::spend_options SpendOptions;
-
-    Cosmos::network *Net;
-    ptr<database> DB;
 
     struct make_wallet_options {};
 

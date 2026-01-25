@@ -212,7 +212,7 @@ add_library (
     source/Cosmos/history.cpp
     source/Cosmos/tax.cpp
     source/Cosmos/boost/miner_options.cpp
-    #source/Cosmos/pay.cpp
+    source/Cosmos/pay.cpp
 )
 
 target_include_directories (cosmos_lib PUBLIC include)
@@ -252,20 +252,6 @@ add_executable (
     source/Server.cpp
 )
 
-#add_executable (
-    #CosmosWallet
-    #source/random.cpp
-    #source/interface.cpp
-    #source/generate.cpp
-    #source/restore.cpp
-    #source/request.cpp
-    #source/accept.cpp
-    #source/split.cpp
-    #source/import.cpp
-    #source/Cosmos.cpp
-    #source/Client.cpp
-#)
-
 target_link_libraries (
   CosmosWalletServer
 
@@ -274,6 +260,7 @@ target_link_libraries (
   cosmos_lib
   SQLite::SQLite3
   Gigamonkey::gigamonkey
+
 )
 
 target_include_directories (
@@ -282,8 +269,21 @@ target_include_directories (
     include
 )
 
-target_compile_features (CosmosWalletServer PUBLIC cxx_std_20)
+target_compile_features (CosmosWalletServer PUBLIC cxx_std_23)
 set_target_properties (CosmosWalletServer PROPERTIES CXX_EXTENSIONS OFF)
+
+#add_executable (
+#    CosmosWallet
+#    source/interface.cpp
+#    source/import.cpp
+#    source/generate.cpp
+#    source/restore.cpp
+#    source/split.cpp
+#    source/request.cpp
+#    source/accept.cpp
+#    source/Cosmos.cpp
+#    source/Client.cpp
+#)
 
 #target_link_libraries (
 #    CosmosWallet PUBLIC
@@ -295,10 +295,10 @@ set_target_properties (CosmosWalletServer PROPERTIES CXX_EXTENSIONS OFF)
 #    include
 #)
 
-#target_compile_features (CosmosWallet PUBLIC cxx_std_20)
+#target_compile_features (CosmosWallet PUBLIC cxx_std_23)
 #set_target_properties (CosmosWallet PROPERTIES CXX_EXTENSIONS OFF)
 
-# add_definitions ("-DHAS_BOOST")
+add_definitions ("-DHAS_BOOST")
 
 if (PACKAGE_TESTS)
   include (CTest)

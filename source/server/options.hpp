@@ -36,6 +36,8 @@ struct options : arg_parser {
     maybe<bytes> nonce () const;
     maybe<bytes> seed () const;
     bool incorporate_user_entropy () const;
+
+    bool online () const;
 };
 
 #endif

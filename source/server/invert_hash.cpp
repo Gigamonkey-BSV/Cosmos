@@ -222,10 +222,10 @@ net::HTTP::response handle_invert_hash (server &p,
     if (!bool (digest)) return error_response (400, method::INVERT_HASH, problem::invalid_query, "No digest provided");
 
     if (http_method == net::HTTP::method::put) {
-        if (p.DB->set_invert_hash (*digest, HashFunction, body)) return ok_response ();
+        if (p.DB.set_invert_hash (*digest, HashFunction, body)) return ok_response ();
         return error_response (500, method::INVERT_HASH, problem::failed, "could not create key");
     } else {
-        maybe<tuple<Cosmos::hash_function, bytes>> inverted = p.DB->get_invert_hash (*digest);
+        maybe<tuple<Cosmos::hash_function, bytes>> inverted = p.DB.get_invert_hash (*digest);
         if (!bool (inverted)) return error_response (404, method::INVERT_HASH, problem::failed, "Hash digest not found");
 
         Cosmos::hash_function return_hash_function = std::get<0> (*inverted);

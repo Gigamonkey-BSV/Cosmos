@@ -258,15 +258,7 @@ generate_error generate_request_options::check () const {
     return generate_error::valid;
 }
 
-std::expected<std::string, generate_error> generate (database &DB, const generate_request_options &gen) {
-
-    // we generate the wallet the same way regardless of whether the user wants words.
-    bytes wallet_entropy {};
-    wallet_entropy.resize (gen.NumberOfWords * 4 / 3);
-
-    // generate master key.
-    data::crypto::random::get () >> wallet_entropy;
-    std::string wallet_words = HD::BIP_39::generate (wallet_entropy);
+generate_error generate (database &DB, const std::string &wallet_words, const generate_request_options &gen) {
 
     auto root = HD::BIP_32::secret::from_seed (HD::BIP_39::read (wallet_words));
 
@@ -279,7 +271,7 @@ std::expected<std::string, generate_error> generate (database &DB, const generat
 
     // having read all the settings, we proceed to alter the database.
     if (!DB.make_wallet (gen.Name))
-        return std::unexpected (generate_error::wallet_already_exists);
+        return generate_error::wallet_already_exists;
 
     // set root key
     DB.set_key (gen.Name, Diophant::symbol {"root"}, key_expression {root});
@@ -328,7 +320,7 @@ std::expected<std::string, generate_error> generate (database &DB, const generat
 
     }
 
-    return wallet_words;
+    return generate_error::valid;
 
 }
 
@@ -365,10 +357,19 @@ net::HTTP::response handle_generate (server &p,
                 return error_response (500, method::GENERATE, problem::failed);
         }
 
-    auto result = generate (*p.DB, gen);
 
-    if (!result)
-        switch (result.error ()) {
+    // we generate the wallet the same way regardless of whether the user wants words.
+    bytes wallet_entropy {};
+    wallet_entropy.resize (gen.NumberOfWords * 4 / 3);
+
+    // generate master key.
+    data::crypto::random::get () >> wallet_entropy;
+    std::string wallet_words = HD::BIP_39::generate (wallet_entropy);
+
+    generate_error result = generate (p.DB, wallet_words, gen);
+
+    if (result != generate_error::valid)
+        switch (result) {
             case generate_error::wallet_already_exists:
                 return error_response (500, method::GENERATE, problem::failed,
                     string::write ("wallet ", gen.Name, " already exists"));
@@ -377,7 +378,7 @@ net::HTTP::response handle_generate (server &p,
         }
 
     if (gen.MnemonicStyle != mnemonic_style::none)
-        return string_response (*result);
+        return string_response (wallet_words);
 
     return ok_response ();
 

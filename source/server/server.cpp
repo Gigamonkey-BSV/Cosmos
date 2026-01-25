@@ -22,11 +22,6 @@
 namespace schema = data::schema;
 using BEEF = Gigamonkey::BEEF;
 
-server::server (const options &o, Cosmos::network *net) :
-SpendOptions {o.spend_options ()}, Net {net}, DB {load_DB (o.db_options ())} {
-    Cosmos::initialize (DB);
-}
-
 namespace Cosmos::random {
     extern Cosmos::random::user_entropy *User;
 }
@@ -137,7 +132,7 @@ awaitable<net::HTTP::response> server::operator () (const net::HTTP::request &re
         if (req.Method != net::HTTP::method::get)
             co_return error_response (405, m, problem::invalid_method, "use get");
         JSON::array_t names;
-        for (const std::string &name : DB->list_wallet_names ())
+        for (const std::string &name : DB.list_wallet_names ())
             names.push_back (name);
 
         co_return JSON_response (names);
@@ -245,7 +240,7 @@ net::HTTP::response process_wallet_method (
         if (http_method != net::HTTP::method::post)
             return error_response (405, m, problem::invalid_method, "use post");
 
-        bool created = p.DB->make_wallet (wallet_name);
+        bool created = p.DB.make_wallet (wallet_name);
         if (created) return ok_response ();
         else return error_response (500, m, problem::failed, "could not create wallet");
     }
@@ -278,7 +273,7 @@ net::HTTP::response process_wallet_method (
                 return error_response (400, m, problem::invalid_parameter,
                     "name parameter must be alpha alnum+");
 
-            if (!p.DB->set_wallet_sequence (wallet_name, name,
+            if (!p.DB.set_wallet_sequence (wallet_name, name,
                 Cosmos::key_sequence {key, derivation}, index))
                 return error_response (400, m, problem::invalid_parameter,
                     string::write ("wallet ", wallet_name, " does not exist."));
@@ -290,7 +285,7 @@ net::HTTP::response process_wallet_method (
         if (http_method != net::HTTP::method::get)
             return error_response (405, m, problem::invalid_method, "use GET");
 
-        auto seq = p.DB->get_wallet_sequence (wallet_name, name);
+        auto seq = p.DB.get_wallet_sequence (wallet_name, name);
         if (!seq) return error_response (404, m, problem::failed,
             string::write ("Could not find sequence ", wallet_name, ".", name));
 
@@ -301,14 +296,14 @@ net::HTTP::response process_wallet_method (
         if (http_method != net::HTTP::method::get)
             return error_response (405, m, problem::invalid_method, "use get");
 
-        return value_response (p.DB->get_wallet_account (wallet_name).value ());
+        return value_response (p.DB.get_wallet_account (wallet_name).value ());
     }
 
     if (m == method::DETAILS) {
         if (http_method != net::HTTP::method::get)
             return error_response (405, m, problem::invalid_method, "use get");
 
-        return JSON_response (p.DB->get_wallet_account (wallet_name).details ());
+        return JSON_response (p.DB.get_wallet_account (wallet_name).details ());
     }
 
     if (m == method::GENERATE) {
@@ -323,7 +318,7 @@ net::HTTP::response process_wallet_method (
         if (http_method != net::HTTP::method::post)
             return error_response (405, m, problem::invalid_method, "use post");
 
-        if (!data::contains (p.DB->list_wallet_names (), static_cast<const std::string &> (wallet_name)))
+        if (!data::contains (p.DB.list_wallet_names (), static_cast<const std::string &> (wallet_name)))
             return error_response (400, m, problem::invalid_parameter,
                 string::write ("cannot find wallet named ", wallet_name));
         
@@ -339,7 +334,7 @@ net::HTTP::response process_wallet_method (
         Cosmos::key_source sequence;
 
         {
-            maybe<Cosmos::key_source> seq = p.DB->get_wallet_sequence (wallet_name, sequence_name);
+            maybe<Cosmos::key_source> seq = p.DB.get_wallet_sequence (wallet_name, sequence_name);
             if (!bool (seq)) return error_response (400, m, problem::invalid_query, string::write ("no key named ", sequence_name));
             sequence = *seq;
         }
@@ -363,33 +358,35 @@ net::HTTP::response process_wallet_method (
             if (!next_address.valid ())
                 return error_response (500, method::NEXT_ADDRESS, problem::failed);
 
-            p.DB->set_invert_hash (next_address.Digest, Cosmos::hash_function::Hash160, next_pubkey);
+            p.DB.set_invert_hash (next_address.Digest, Cosmos::hash_function::Hash160, next_pubkey);
 
-            p.DB->set_to_private (next_pubkey, key_expression {
+            p.DB.set_to_private (next_pubkey, key_expression {
                 string::write ("(",
                     sequence.Sequence.Derivation, ") (to_private ",
                     sequence.Sequence.Key, ") ", sequence.Index)});
 
             Bitcoin::address encoded = next_address.encode ();
 
-            p.DB->set_wallet_unused (wallet_name, encoded);
+            p.DB.set_wallet_unused (wallet_name, encoded);
 
             res = string_response (std::string (encoded));
         } else {
+            throw data::method::unimplemented {"next_xpub"};
+            /*
             // we have to be able to generate this or else something is wrong with the system.
             HD::BIP_32::pubkey next_xpub (next_key);
             if (!next_xpub.valid ())
                 return error_response (500, method::NEXT_XPUB, problem::failed);
 
-            p.DB->set_to_private (next_xpub, Cosmos::to_private (next_key));
+            p.DB.set_to_private (next_xpub, Cosmos::diophant::to_private (next_key));
 
             auto next_xpub_str = std::string (next_xpub.write ());
             res = string_response (std::string (next_xpub_str));
-            p.DB->set_wallet_unused (wallet_name, next_xpub_str);
+            p.DB.set_wallet_unused (wallet_name, next_xpub_str);*/
         }
 
         ++sequence;
-        p.DB->set_wallet_sequence (wallet_name, sequence_name, sequence.Sequence, sequence.Index);
+        p.DB.set_wallet_sequence (wallet_name, sequence_name, sequence.Sequence, sequence.Index);
 
         return res;
     }
@@ -401,7 +398,7 @@ net::HTTP::response process_wallet_method (
         return handle_import (p, wallet_name, query, content_type, body);
 
     }
-/*
+
     if (m == method::SPEND) {
         if (http_method != net::HTTP::method::post)
             return error_response (405, m, problem::invalid_method, "use post");
@@ -434,13 +431,12 @@ net::HTTP::response process_wallet_method (
         Bitcoin::address pay_to_address;
         HD::BIP_32::pubkey pay_to_xpub;
 
-
         const UTF8 *pay_to_param = query.contains ("pay_to");
         if (bool (pay_to_param)) {
             pay_to_address = Bitcoin::address {*pay_to_param};
             pay_to_xpub = HD::BIP_32::pubkey {*pay_to_param};
         } else return error_response (400, m, problem::invalid_query, "required parameter 'pay_to' not present");
-
+/*
         if (pay_to_address.valid ()) {
 
         Cosmos::spend_options spend_options = p.SpendOptions;
@@ -449,8 +445,8 @@ net::HTTP::response process_wallet_method (
             return error_response (501, m, problem::unimplemented);
         } else if (pay_to_xpub.valid ()) {
             return error_response (501, m, problem::unimplemented);
-        } else return error_response (400, m, problem::invalid_query, "invalid parameter 'pay_to'");
-    }*/
+        } else return error_response (400, m, problem::invalid_query, "invalid parameter 'pay_to'");*/
+    }
 
     if (m == method::RESTORE) {
         if (http_method != net::HTTP::method::put)
