@@ -5,7 +5,6 @@
 #include "to_private.hpp"
 #include "generate.hpp"
 #include "restore.hpp"
-#include "random.hpp"
 #include "import.hpp"
 
 #include <Diophant/parse.hpp>
@@ -21,14 +20,6 @@
 
 namespace schema = data::schema;
 using BEEF = Gigamonkey::BEEF;
-
-namespace Cosmos::random {
-    extern Cosmos::random::user_entropy *User;
-}
-
-void server::add_entropy (const bytes &b) {
-    if (Cosmos::random::UserEntropy != nullptr) *Cosmos::random::UserEntropy << b;
-}
 
 net::HTTP::response version_response () {
     std::stringstream ss;
@@ -70,6 +61,8 @@ list<UTF8> normalize_path (list<UTF8> path) {
 }
 
 awaitable<net::HTTP::response> server::operator () (const net::HTTP::request &req) {
+
+    if (UserEntropy != nullptr) *UserEntropy << req;
 
     DATA_LOG (normal) << "Respond to request " << req;
     list<UTF8> path = normalize_path (req.Target.path ().read ('/'));
@@ -117,13 +110,7 @@ awaitable<net::HTTP::response> server::operator () (const net::HTTP::request &re
             co_return error_response (405, method::ADD_ENTROPY, problem::invalid_method,
                 "use post with method add_entropy");
 
-        maybe<net::HTTP::content> content_type = req.content_type ();
-        if (!bool (content_type) || (
-            *content_type != net::HTTP::content::type::application_octet_stream &&
-            *content_type != net::HTTP::content::type::text_plain))
-            co_return error_response (400, method::ADD_ENTROPY, problem::invalid_content_type, "expected content-type:application/octet-stream");
-
-        add_entropy (req.Body);
+        // request was already proccessed into the user entropy.
 
         co_return ok_response ();
     }

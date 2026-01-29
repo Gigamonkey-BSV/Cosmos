@@ -9,7 +9,6 @@
 
 namespace Cosmos {
 
-    using pay_to_address = Gigamonkey::pay_to_address;
     using pay_to_pubkey = Gigamonkey::pay_to_pubkey;
 
     // information to redeem an output in the utxo set.

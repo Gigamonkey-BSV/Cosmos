@@ -6,22 +6,11 @@
 
 #include <Diophant/symbol.hpp>
 
-namespace secp256k1 = Gigamonkey::secp256k1;
-namespace Bitcoin = Gigamonkey::Bitcoin;
+#include <Cosmos/types.hpp>
+
 namespace HD = Gigamonkey::HD;
-namespace encoding = data::encoding;
-using digest160 = Gigamonkey::digest160;
-
-using int32 = data::int32;
-using uint32 = data::uint32;
-using uint64 = data::uint64;
-
-using bytes = data::bytes;
-using string = data::string;
 
 namespace Cosmos {
-
-    template <typename X> using list = data::list<X>;
 
     // key_expression is a string representation for several
     // different types of Bitcoin keys.

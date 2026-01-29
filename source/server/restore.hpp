@@ -20,7 +20,19 @@ enum class master_key_type {
 std::ostream &operator << (std::ostream &, master_key_type);
 std::istream &operator >> (std::istream &, master_key_type &);
 
-struct restore_request_options : generate_request_options {};
+struct restore_request_options : generate_request_options {
+
+    operator net::HTTP::request () const;
+
+    restore_request_options (
+        Diophant::symbol wallet_name, map<UTF8, UTF8> query,
+        const maybe<net::HTTP::content> &content_type,
+        const data::bytes &body);
+
+    restore_request_options (const args &);
+
+    bool valid () const;
+};
 
 struct restore_result {};
 

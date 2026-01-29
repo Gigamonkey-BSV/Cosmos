@@ -4,35 +4,41 @@
 #include "../source/server/generate.hpp"
 #include "../source/server/invert_hash.hpp"
 #include "../source/server/options.hpp"
-#include "../source/server/random.hpp"
 #include "../source/server/to_private.hpp"
 #include <data/net/JSON.hpp>
 #include <data/net/error.hpp>
 #include <Cosmos/Diophant.hpp>
+#include <data/io/random.hpp>
 #include "gtest/gtest.h"
 
 std::atomic<bool> Shutdown {false};
 
-constexpr const int arg_count = 3;
-constexpr const char *const arg_values[arg_count] = {"--sqlite_in_memory", "--ignore_user_entropy", "--seed=ffffffffffffffffedcba98765432100"};
+constexpr const int arg_count = 2;
+constexpr const char *const arg_values[arg_count] = {"--sqlite_in_memory", "--ignore_user_entropy"};
 
 bool log_init = false;
 
 ptr<database> DB;
 
+namespace data::random {
+    bytes Personalization {string {"Cosmos wallet server test cases"}};
+}
+
 server get_test_server () {
-    if (!log_init) data::log::init ()->min_level (data::log::normal);
+    if (!log_init) data::log::init ({.threshold = data::log::normal});
     Shutdown = false;
     DATA_LOG (normal) << "about to setup program options";
-    options program_options {arg_parser {arg_count, arg_values}};
-    Cosmos::random::setup (program_options);
+    options program_options {args {arg_count, arg_values}};
+    data::random::init ({
+        .seed = bytes (data::hex_string {"ffffffffffffffffedcba98765432100"}),
+        .nonce = bytes (data::hex_string {"0123abcd4567fe98"})});
     DATA_LOG (normal) << "about to create test server ";
 
     DB = load_DB (program_options.db_options ());
 
     Cosmos::diophant::initialize (DB);
 
-    return server {program_options.spend_options (), *DB, nullptr};
+    return server {program_options.spend_options (), *DB, nullptr, nullptr};
 }
 
 net::HTTP::request make_shutdown_request ();

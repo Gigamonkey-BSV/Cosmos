@@ -13,11 +13,11 @@ bool options::offline () const {
     return this->has ("offline");
 }
 
-bool has_accept_remote (const arg_parser &o) {
+bool has_accept_remote (const args &o) {
     return o.has ("accept_remote");
 }
 
-maybe<net::IP::TCP::endpoint> read_endpoint_option (const arg_parser &o) {
+maybe<net::IP::TCP::endpoint> read_endpoint_option (const args &o) {
     maybe<net::IP::TCP::endpoint> endpoint;
     o.get ("endpoint", endpoint);
     if (!bool (endpoint)) {
@@ -32,7 +32,7 @@ maybe<net::IP::TCP::endpoint> read_endpoint_option (const arg_parser &o) {
     return endpoint;
 }
 
-maybe<net::IP::address> read_ip_address_option (const arg_parser &o) {
+maybe<net::IP::address> read_ip_address_option (const args &o) {
     maybe<net::IP::address> ip_address;
     
     o.get ("ip_address", ip_address);
@@ -48,7 +48,7 @@ maybe<net::IP::address> read_ip_address_option (const arg_parser &o) {
     return ip_address;
 }
 
-maybe<uint16> read_port_option (const arg_parser &o) {
+maybe<uint16> read_port_option (const args &o) {
     maybe<uint16> port_number;
 
     o.get ("port", port_number);
@@ -214,8 +214,4 @@ maybe<bytes> options::seed () const {
 
 bool options::incorporate_user_entropy () const {
     return !this->has ("ignore_user_entropy");
-}
-
-bool options::online () const {
-    return !this->has ("offline");
 }

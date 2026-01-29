@@ -4,6 +4,7 @@
 #include "options.hpp"
 #include <Diophant/machine.hpp>
 #include <Cosmos/network.hpp>
+#include <Cosmos/random.hpp>
 
 using UTF8 = data::UTF8;
 
@@ -21,13 +22,13 @@ struct server {
     Cosmos::network *Net;
     database &DB;
 
-    server (const Cosmos::spend_options &x, database &db, Cosmos::network *net):
-        SpendOptions {x}, Net {net}, DB {db} {}
+    Cosmos::random::user_entropy *UserEntropy;
+
+    server (const Cosmos::spend_options &x, database &db, Cosmos::network *net, Cosmos::random::user_entropy *ue):
+        SpendOptions {x}, Net {net}, DB {db}, UserEntropy {ue} {}
 
     // handle an HTTP request.
     awaitable<net::HTTP::response> operator () (const net::HTTP::request &);
-
-    void add_entropy (const bytes &);
 
     struct make_wallet_options {};
 

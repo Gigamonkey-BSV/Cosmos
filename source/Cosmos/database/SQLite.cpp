@@ -1117,8 +1117,8 @@ namespace Cosmos::SQLite {
             return true;
         }
 
-        list<std::string> list_wallet_names () final override {
-            list<std::string> names;
+        data::list<std::string> list_wallet_names () final override {
+            data::list<std::string> names;
             for (const auto &name : storage.select (&Wallet::name)) names <<= name;
             return names;
         }
@@ -1225,8 +1225,8 @@ namespace Cosmos::SQLite {
             return true;
         };
 
-        list<key_expression> get_wallet_unused (const std::string &wallet_name) final override {
-            list<key_expression> result;
+        data::list<key_expression> get_wallet_unused (const std::string &wallet_name) final override {
+            data::list<key_expression> result;
             try {
                 storage.transaction ([&] {
                     // 1. Look up the user id

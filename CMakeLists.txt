@@ -224,6 +224,7 @@ target_link_libraries (
 
   diophant
   Gigamonkey::gigamonkey
+  Data::io
   Data::crypto
   Data::net
   Data::data
@@ -236,7 +237,6 @@ set_target_properties (cosmos_lib PROPERTIES CXX_EXTENSIONS OFF)
 
 add_executable (
     CosmosWalletServer
-    source/server/random.cpp
     source/Cosmos/database/SQLite.cpp
     source/server/db.cpp
     source/server/options.cpp
@@ -259,7 +259,6 @@ target_link_libraries (
 
   cosmos_lib
   SQLite::SQLite3
-  Gigamonkey::gigamonkey
 
 )
 

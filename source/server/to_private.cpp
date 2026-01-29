@@ -19,7 +19,11 @@ net::HTTP::response handle_to_private (
     server &p, net::HTTP::method http_method, map<UTF8, UTF8> query,
     const maybe<net::HTTP::content> &content_type, const data::bytes &body) {
 
-    key_expression key = data::schema::validate<> (query, data::schema::key<key_expression> ("key"));
+    std::cout << " to_private: query is " << query << std::endl;
+
+    key_expression key {data::schema::validate<> (query, data::schema::key<std::string> ("key"))};
+
+    std::cout << "read key expression from query as " << key << std::endl;
 
     if (!key.valid ())
         return error_response (400, method::TO_PRIVATE, problem::invalid_parameter,
@@ -30,6 +34,8 @@ net::HTTP::response handle_to_private (
             return error_response (400, method::TO_PRIVATE, problem::invalid_content_type, "expected content-type:text/plain");
 
         key_expression value {data::string (body)};
+
+        std::cout << "read key expression from body as " << value << std::endl;
 
         if (p.DB.set_to_private (key, value)) return ok_response ();
         return error_response (500, method::TO_PRIVATE, problem::failed, "could not set private key");

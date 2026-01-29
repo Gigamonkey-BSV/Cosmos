@@ -6,11 +6,11 @@
 #include <Cosmos/types.hpp>
 #include <data/io/arg_parser.hpp>
 
-using arg_parser = data::io::arg_parser;
+using args = data::io::args::parsed;
 using uint16 = data::uint16;
 
-struct options : arg_parser {
-    options (arg_parser &&ap) : arg_parser {ap} {}
+struct options : args {
+    options (args &&ap) : args {ap} {}
 
     // path to an env file containing program options. 
     maybe<filepath> env () const;
@@ -36,8 +36,6 @@ struct options : arg_parser {
     maybe<bytes> nonce () const;
     maybe<bytes> seed () const;
     bool incorporate_user_entropy () const;
-
-    bool online () const;
 };
 
 #endif

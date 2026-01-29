@@ -7,13 +7,12 @@
 #include <data/net/URL.hpp>
 #include <data/net/JSON.hpp>
 #include <data/net/HTTP_server.hpp>
+#include <data/io/random.hpp>
 
 // TODO: in here we have 'using namespace data' and that causes a
 // problem if the includes are in the wrong order. This should be fixed. 
 #include "server/method.hpp"
 #include "server/server.hpp"
-
-#include "server/random.hpp"
 
 #include <Cosmos/options.hpp>
 #include <Cosmos/Diophant.hpp>
@@ -50,7 +49,7 @@ int main (int arg_count, char **arg_values) {
     std::signal (SIGINT, signal_handler);
     std::signal (SIGTERM, signal_handler);
 
-    error err = catch_all (run, options {arg_parser {arg_count, arg_values}});
+    error err = catch_all (run, options {args {arg_count, arg_values}});
 
     if (bool (err)) {
         if (err.Message) DATA_LOG (error) << "Fail code " << err.Code << ": " << *err.Message << std::endl;
@@ -88,6 +87,25 @@ void signal_handler (int signal) {
     }
 }
 
+Cosmos::random::user_entropy UserEntropy;
+
+namespace data::random {
+    bytes Personalization {string {"Cosmos wallet v1alpha, woop zoop dedoop!_^(G0899[p9.[09954g2[]]])"}};
+}
+
+void init_random (const options &program_options) {
+
+    auto mn = program_options.nonce ();
+
+    data::random::init ({
+        .secure = true,
+        .seed = program_options.seed (),
+        .nonce = bool (mn) ? *mn : data::bytes {},
+        .additional = program_options.incorporate_user_entropy () ? &UserEntropy : nullptr,
+        .strength = 256
+    });
+}
+
 void run (const options &program_options) {
     // print version string.
     if (program_options.has ("version")) {
@@ -119,14 +137,14 @@ void run (const options &program_options) {
     }
 
     // initialize random number generator.
-    Cosmos::random::setup (program_options);
+    init_random (program_options);
 
     // set up db
     DB = load_DB (program_options.db_options ());
     Cosmos::diophant::initialize (DB);
 
     // set up network
-    if (program_options.online ()) {
+    if (!program_options.local ()) {
         Network = std::unique_ptr<Cosmos::network> (new Cosmos::network {IO.get_executor ()});
 
         // TODO: check health of network
@@ -152,7 +170,7 @@ void run (const options &program_options) {
           " to see the GUI." << std::endl;
 
         Server = std::unique_ptr<net::HTTP::server> {new net::HTTP::server
-            (IO.get_executor (), endpoint, server {program_options.spend_options (), *DB, Network.get ()})};
+            (IO.get_executor (), endpoint, server {program_options.spend_options (), *DB, Network.get (), &UserEntropy})};
     }
 
     // We should be able to work with multiple threads now except
