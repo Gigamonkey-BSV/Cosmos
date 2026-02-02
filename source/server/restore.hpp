@@ -22,14 +22,14 @@ std::istream &operator >> (std::istream &, master_key_type &);
 
 struct restore_request_options : generate_request_options {
 
-    operator net::HTTP::request () const;
+    net::HTTP::request request (const UTF8 & = "localhost");
 
     restore_request_options (
         Diophant::symbol wallet_name, map<UTF8, UTF8> query,
         const maybe<net::HTTP::content> &content_type,
         const data::bytes &body);
 
-    restore_request_options (const args &);
+    restore_request_options (const args::parsed &);
 
     bool valid () const;
 };

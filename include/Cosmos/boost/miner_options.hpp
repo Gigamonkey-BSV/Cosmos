@@ -4,11 +4,13 @@
 
 #include <string>
 #include <optional>
-#include <argh.h>
+#include <data/io/arg_parser.hpp>
 #include <gigamonkey/boost/boost.hpp>
+#include <Cosmos/types.hpp>
 
 namespace BoostPOW {
-    using namespace Gigamonkey;
+    using namespace Gigamonkey::Boost;
+    using args = data::io::args::parsed;
 
     struct script_options {
         // Content is what is to be boosted. Could be a hash or
@@ -52,8 +54,10 @@ namespace BoostPOW {
         maybe<uint32> UserNonce {};
         maybe<int32> Category {};
 
-        static script_options read (const argh::parser &, int start_pos = 2);
-        explicit operator Boost::output_script () const;
+        static script_options read (const args &, int start_pos = 2);
+        explicit operator output_script () const;
+
+        net::HTTP::request request (const UTF8 & = "localhost");
     };
 }
 

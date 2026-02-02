@@ -11,7 +11,7 @@
 
 // TODO: in here we have 'using namespace data' and that causes a
 // problem if the includes are in the wrong order. This should be fixed. 
-#include "server/method.hpp"
+#include "method.hpp"
 #include "server/server.hpp"
 
 #include <Cosmos/options.hpp>
@@ -27,19 +27,13 @@ error catch_all (fun f, args... a) {
     try {
         std::invoke (std::forward<fun> (f), std::forward<args> (a)...);
     } catch (const data::method::unimplemented &x) {
-        return error {7, x.what ()};
+        return error {error::programmer_action, x.what ()};
     } catch (const net::HTTP::exception &x) {
-        return error {6, x.what ()};
+        return error {error::operator_action, x.what ()};
     } catch (const JSON::exception &x) {
-        return error {5, x.what ()};
+        return error {error::operator_action, x.what ()};
     } catch (const CryptoPP::Exception &x) {
-        return error {4, x.what ()};
-    } catch (const data::exception &x) {
-        return error {3, x.what ()};
-    } catch (const std::exception &x) {
-        return error {2, x.what ()};
-    } catch (...) {
-        return error {1};
+        return error {error::programmer_action, x.what ()};
     }
 
     return error {};
@@ -49,7 +43,7 @@ int main (int arg_count, char **arg_values) {
     std::signal (SIGINT, signal_handler);
     std::signal (SIGTERM, signal_handler);
 
-    error err = catch_all (run, options {args {arg_count, arg_values}});
+    error err = catch_all (run, options {args::parsed {arg_count, arg_values}});
 
     if (bool (err)) {
         if (err.Message) DATA_LOG (error) << "Fail code " << err.Code << ": " << *err.Message << std::endl;

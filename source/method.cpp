@@ -3,28 +3,6 @@
 
 using JSON = data::JSON;
 
-net::HTTP::response error_response (unsigned int status, method m, problem tt, const std::string &detail) {
-    std::stringstream meth_string;
-    meth_string << m;
-    std::stringstream problem_type;
-    problem_type << tt;
-
-    JSON err {
-        {"method", meth_string.str ()},
-        {"status", status},
-        {"title", problem_type.str ()}};
-
-    if (detail != "") err["detail"] = detail;
-
-    return net::HTTP::response (status, {{"content-type", "application/problem+json"}}, bytes (data::string (err.dump ())));
-}
-
-net::HTTP::response help_response (method m) {
-    std::stringstream ss;
-    help (ss, m);
-    return net::HTTP::response (200, {{"content-type", "text/plain"}}, bytes (data::string (ss.str ())));
-}
-
 std::string regex_replace (const std::string &x, const std::regex &r, const std::string &n) {
     std::stringstream ss;
     std::regex_replace (std::ostreambuf_iterator<char> (ss), x.begin (), x.end (), r, n);
@@ -51,8 +29,7 @@ method read_method (const UTF8 &p) {
     if (sanitized == "key") return method::KEY;
     if (sanitized == "keysequnce") return method::KEY_SEQUENCE;
     if (sanitized == "generate") return method::GENERATE;
-    if (sanitized == "nextaddress") return method::NEXT_ADDRESS;
-    if (sanitized == "nextxpub") return method::NEXT_XPUB;
+    if (sanitized == "next") return method::NEXT;
     if (sanitized == "restore") return method::RESTORE;
     if (sanitized == "update") return method::UPDATE;
     if (sanitized == "request") return method::REQUEST;
@@ -85,8 +62,7 @@ std::ostream &operator << (std::ostream &o, method m) {
         case method::DETAILS: return o << "details";
         case method::KEY: return o << "key";
         case method::KEY_SEQUENCE: return o << "key_sequence";
-        case method::NEXT_ADDRESS: return o << "next_address";
-        case method::NEXT_XPUB: return o << "next_xpub";
+        case method::NEXT: return o << "next";
         case method::GENERATE: return o << "generate";        // generate a wallet
         case method::RESTORE: return o << "restore";          // restore a wallet
         case method::UPDATE: return o << "update";            // depricated: check if txs in pending have been mined.

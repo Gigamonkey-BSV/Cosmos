@@ -1,7 +1,7 @@
 #include "to_private.hpp"
-#include "method.hpp"
+#include "../method.hpp"
 
-#include <data/tools/map_schema.hpp>
+#include <data/tools/schema.hpp>
 
 string escaped (const string &x) {
     std::stringstream s;
@@ -21,7 +21,7 @@ net::HTTP::response handle_to_private (
 
     std::cout << " to_private: query is " << query << std::endl;
 
-    key_expression key {data::schema::validate<> (query, data::schema::key<std::string> ("key"))};
+    key_expression key {data::schema::validate<> (query, data::schema::map::key<std::string> ("key"))};
 
     std::cout << "read key expression from query as " << key << std::endl;
 

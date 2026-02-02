@@ -58,10 +58,20 @@ namespace Cosmos {
 
         virtual maybe<key_source> get_wallet_sequence (const std::string &wallet_name, const std::string &key_name) = 0;
 
+        // we use this to remember the keys we've generated that
+        // may be associated with a payment. The address is how
+        // we recognize a payment.
+        struct unused {
+            key_expression Address;
+
+            // the name of the master key.
+            std::string Master;
+        };
+
         // TODO there needs to be a time limit for these things.
-        virtual bool set_wallet_unused (const std::string &wallet_name, const key_expression &key_name) = 0;
-        virtual bool set_wallet_used (const std::string &wallet_name, const key_expression &key_name) = 0;
-        virtual list<key_expression> get_wallet_unused (const std::string &wallet_name) = 0;
+        virtual bool set_wallet_unused (const std::string &wallet_name, const unused &) = 0;
+        virtual bool set_wallet_used (const std::string &wallet_name, const key_expression &address) = 0;
+        virtual list<unused> get_wallet_unused (const std::string &wallet_name) = 0;
 
         virtual Cosmos::account get_wallet_account (const std::string &wallet_name) = 0;
 

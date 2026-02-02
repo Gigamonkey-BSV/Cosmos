@@ -87,13 +87,23 @@ namespace Cosmos {
         key_expression operator () (const key_expression &, int32) const;
     };
 
+    // a general way of making sequences of keys
+    // from a master key. The big problem is to
+    // be able to go back and generate the private
+    // key given a derived key. We have a master
+    // key and two functions.
+    //   * Derivation : key -> key
+    //   * Serialization : key -> string
+    // In order to get the private key, we use
+    //   * Derivation (to_private (Key))
     struct key_sequence {
+
         key_expression Key;
         key_derivation Derivation;
+        std::string Serialization;
 
-        key_expression operator () (int32) const;
-
-        operator std::string () const;
+        // the result of Serialization (Derivation (Key, d))
+        key_expression operator () (int32 d) const;
     };
 
     struct key_source {

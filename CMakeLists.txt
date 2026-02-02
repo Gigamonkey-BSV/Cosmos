@@ -238,10 +238,10 @@ set_target_properties (cosmos_lib PROPERTIES CXX_EXTENSIONS OFF)
 add_executable (
     CosmosWalletServer
     source/Cosmos/database/SQLite.cpp
+    source/method.cpp
     source/server/db.cpp
     source/server/options.cpp
     source/server/problem.cpp
-    source/server/method.cpp
     source/server/server.cpp
     source/server/invert_hash.cpp
     source/server/key.cpp
@@ -270,6 +270,33 @@ target_include_directories (
 
 target_compile_features (CosmosWalletServer PUBLIC cxx_std_23)
 set_target_properties (CosmosWalletServer PROPERTIES CXX_EXTENSIONS OFF)
+
+add_executable (
+    CosmosWalletClient
+    source/Cosmos.cpp
+    source/method.cpp
+#    source/interface.cpp
+#    source/import.cpp
+#    source/generate.cpp
+#    source/restore.cpp
+#    source/split.cpp
+#    source/request.cpp
+#    source/accept.cpp
+    source/Client.cpp
+)
+
+target_link_libraries (
+    CosmosWalletClient PUBLIC
+    cosmos_lib
+)
+
+target_include_directories (
+    CosmosWalletClient PUBLIC
+    include
+)
+
+#target_compile_features (CosmosWallet PUBLIC cxx_std_23)
+#set_target_properties (CosmosWallet PROPERTIES CXX_EXTENSIONS OFF)
 
 #add_executable (
 #    CosmosWallet

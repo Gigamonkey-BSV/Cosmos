@@ -18,9 +18,8 @@
 #include <Cosmos/boost/miner_options.hpp>
 
 #include "Cosmos.hpp"
-#include "interface.hpp"
-// test
-#include <sqlite_orm/sqlite_orm.h>
+//#include "interface.hpp"
+
 
 std::string regex_replace (const std::string &x, const std::regex &r, const std::string &n) {
     std::stringstream ss;
@@ -32,86 +31,11 @@ std::string sanitize (const std::string &in) {
     return regex_replace (data::to_lower (in), std::regex {"_|-"}, "");
 }
 
-meth read_method (const arg_parser &p, uint32 index) {
-    maybe<UTF8> m;
-    p.get (index, m);
-    if (!bool (m)) return UNSET;
-
-    return read_method (*m);
-}
-
-meth read_method (const UTF8 &p) {
-    UTF8 m = p;
-    std::transform (m.begin (), m.end (), m.begin (),
-        [] (unsigned char c) {
-            return std::tolower (c);
-        });
-
-    if (m == "help") return HELP;
-    if (m == "version") return VERSION;
-    if (m == "shutdown") return SHUTDOWN;
-    if (m == "add_entropy") return ADD_ENTROPY;
-    if (m == "set_key") return SET_KEY;
-    if (m == "to_private") return TO_PRIVATE;
-    if (m == "invert_hash") return INVERT_HASH;
-    if (m == "make_wallet") return MAKE_WALLET;
-    if (m == "list_wallets") return LIST_WALLETS;
-    if (m == "generate") return GENERATE;
-    if (m == "restore") return RESTORE;
-    if (m == "details") return DETAILS;
-    if (m == "value") return VALUE;
-    if (m == "update") return UPDATE;
-    if (m == "request") return REQUEST;
-    if (m == "accept") return ACCEPT;
-    if (m == "pay") return PAY;
-    if (m == "sign") return SIGN;
-    if (m == "import") return IMPORT;
-    if (m == "send") return SPEND;
-    if (m == "boost") return BOOST;
-    if (m == "split") return SPLIT;
-    if (m == "taxes") return TAXES;
-    if (m == "encrypt_private_keys") return ENCRYPT_KEY;
-    if (m == "decrypt_private_keys") return DECRYPT_KEY;
-
-    return UNSET;
-}
-
-std::ostream &operator << (std::ostream &o, meth m) {
-    switch (m) {
-        case UNSET: return o << "unset";
-        case HELP: return o << "help";              // print help messages
-        case VERSION: return o << "version";        // print a version message
-        case SHUTDOWN: return o << "shutdown";
-        case ADD_ENTROPY: return o << "add_entropy";    // add entropy to the random number generator.
-        case MAKE_WALLET: return o << "make_wallet";
-        case SET_KEY: return o << "add_key";
-        case TO_PRIVATE: return o << "to_private";
-        case GENERATE: return o << "generate";       // generate a wallet
-        case RESTORE: return o << "restore";         // restore a wallet
-        case UPDATE: return o << "update";           // depricated: check if txs in pending have been mined.
-        case VALUE: return o << "value";             // the value in the wallet.
-        case DETAILS: return o << "details";
-        case SEND: return o << "send";              // (depricated)
-        case SPEND: return o << "spend";            // check pending txs for having been mined. (depricated)
-        case REQUEST: return o << "request";        // request a payment
-        case ACCEPT: return o << "accept";         // accept a payment
-        case PAY: return o << "pay";               // make a payment.
-        case SIGN: return o << "sign";             // sign an unsigned transaction
-        case IMPORT: return o << "import";         // import a utxo with private key
-        case BOOST: return o << "boost";          // boost some content
-        case SPLIT: return o << "split";           // split your wallet into tiny pieces for privacy.
-        case TAXES: return o << "taxes";           // calculate income and capital gain for a given year.
-        case ENCRYPT_KEY: return o << "encrypt_key";
-        case DECRYPT_KEY: return o << "decrypt_key";
-        default: throw data::exception {} << "unknown method";
-    }
-}
-
 std::ostream &version (std::ostream &o) {
     return o << "Cosmos Wallet version 0.0.2 alpha";
 }
 
-std::ostream &help (std::ostream &o, meth meth) {
+std::ostream &help (std::ostream &o, method meth) {
     switch (meth) {
         default :
             return version (o) << "\n" << "input should be <method> <args>... where method is "
@@ -128,7 +52,7 @@ std::ostream &help (std::ostream &o, meth meth) {
                 "\n\tsplit      -- split an output into many pieces"
                 "\n\trestore    -- restore a wallet from words, a key, or many other options."
                 "\nuse help \"method\" for information on a specific method";
-        case GENERATE :
+        case method::GENERATE :
             return o << "Generate a new wallet in terms of 24 words (BIP 39) or as an extended private key."
                 "\narguments for method generate:"
                 "\n\t(--name=)<wallet name>"
@@ -139,9 +63,9 @@ std::ostream &help (std::ostream &o, meth meth) {
                 // could have "bitcoin" "bitcoin_cash" or "bitcoinSV" as its values,
                 // ignoring case, spaces, and '_'.
                 "\n\t(--coin_type=<uint32> (=0)) (value of BIP 44 coin_type)";
-        case VALUE :
+        case method::VALUE :
             return o << "Print the value in a wallet. No parameters.";
-        case REQUEST :
+        case method::REQUEST :
             return o << "Generate a new payment request."
                 "\narguments for method request:"
                 "\n\t(--name=)<wallet name>"
@@ -149,7 +73,7 @@ std::ostream &help (std::ostream &o, meth meth) {
                 "\n\t(--expires=<number of minutes before expiration>)"
                 "\n\t(--memo=\"<explanation of the nature of the payment>\")"
                 "\n\t(--amount=<expected amount of payment>)";
-        case PAY :
+        case method::PAY :
             return o << "Respond to a payment request by creating a payment."
                 "\narguments for method pay:"
                 "\n\t(--name=)<wallet name>"
@@ -161,21 +85,21 @@ std::ostream &help (std::ostream &o, meth meth) {
                 "\n\t(--min_sats_per_output=<float>) (= " << Cosmos::spend_options::DefaultMinSatsPerOutput << ")"
                 "\n\t(--max_sats_per_output=<float>) (= " << Cosmos::spend_options::DefaultMaxSatsPerOutput << ")"
                 "\n\t(--mean_sats_per_output=<float>) (= " << Cosmos::spend_options::DefaultMeanSatsPerOutput << ") ";
-        case ACCEPT :
+        case method::ACCEPT :
             return o << "Accept a payment."
                 "\narguments for method accept:"
                 "\n\t(--payment=)<payment tx in BEEF or SPV envelope>";
-        case SIGN :
+        case method::SIGN :
             return o << "arguments for method sign not yet available.";
-        case IMPORT :
+        case method::IMPORT :
             return o << "arguments for method import not yet available.";
-        case SEND :
+        case method::SEND :
             return o << "This method is DEPRICATED";
-        case SPEND :
+        case method::SPEND :
             return o << "Spend coins";
-        case BOOST :
+        case method::BOOST :
             return o << "arguments for method boost not yet available.";
-        case SPLIT :
+        case method::SPLIT :
             return o << "Split outputs in your wallet into many tiny outputs with small values over a triangular distribution. "
                 "\narguments for method split:"
                 "\n\t(--name=)<wallet name>"
@@ -184,7 +108,7 @@ std::ostream &help (std::ostream &o, meth meth) {
                 "\n\t(--min_sats_per_output=<float>) (= " << Cosmos::spend_options::DefaultMinSatsPerOutput << ")"
                 "\n\t(--max_sats_per_output=<float>) (= " << Cosmos::spend_options::DefaultMaxSatsPerOutput << ")"
                 "\n\t(--mean_sats_per_output=<float>) (= " << Cosmos::spend_options::DefaultMeanSatsPerOutput << ") ";
-        case RESTORE :
+        case method::RESTORE :
             o << "arguments for method restore:"
                 "\n\t(--name=)<wallet name>"
                 "\n\t(--key=)<xpub | xpriv>"
@@ -194,9 +118,9 @@ std::ostream &help (std::ostream &o, meth meth) {
                 "\n\t(--coin_type=\"Bitcoin\"|\"BitcoinCash\"|\"BitcoinSV\"|<integer>)"
                 "\n\t(--wallet_type=\"RelayX\"|\"ElectrumSV\"|\"SimplyCash\"|\"CentBee\"|<string>)"
                 "\n\t(--entropy=<string>)";
-        case ENCRYPT_KEY:
+        case method::ENCRYPT_KEY:
             o << "Encrypt the private key file so that it can only be accessed with a password. No parameters.";
-        case DECRYPT_KEY :
+        case method::DECRYPT_KEY :
             return o << "Decrypt the private key file again. No parameters.";
     }
 
@@ -204,7 +128,6 @@ std::ostream &help (std::ostream &o, meth meth) {
 
 maybe<std::string> de_escape (string_view input) {
 
-    if (!valid (input)) return {};
     string rt {};
 
     std::ostringstream decoded;

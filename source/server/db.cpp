@@ -1,6 +1,6 @@
 
 #include "db.hpp"
-#include "method.hpp"
+#include "../method.hpp"
 
 #include <Cosmos/database/SQLite/SQLite.hpp>
 

@@ -29,11 +29,6 @@ namespace Cosmos {
         throw data::method::unimplemented {"invert_hash"};
     }
 
-    key_sequence::operator std::string () const {
-        if (!bool (diophant::machine)) throw data::exception {} << "Diophant machine is not initialized";
-        throw data::method::unimplemented {"key_sequence::operator string"};
-    }
-
     key_expression key_derivation::operator () (const key_expression &k, int32 i) const {
         if (!bool (diophant::machine)) throw data::exception {} << "Diophant machine is not initialized";
         return std::string (diophant::machine->evaluate (Diophant::expression

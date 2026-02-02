@@ -1,5 +1,5 @@
 #include "server.hpp"
-#include "method.hpp"
+#include "../method.hpp"
 #include "invert_hash.hpp"
 #include "key.hpp"
 #include "to_private.hpp"
@@ -13,13 +13,35 @@
 #include <gigamonkey/schema/random.hpp>
 #include <gigamonkey/pay/BEEF.hpp>
 
-#include <data/tools/map_schema.hpp>
+#include <data/tools/schema.hpp>
 #include <data/container.hpp>
 
 #include <Cosmos/Diophant.hpp>
 
 namespace schema = data::schema;
 using BEEF = Gigamonkey::BEEF;
+
+net::HTTP::response error_response (unsigned int status, method m, problem tt, const std::string &detail) {
+    std::stringstream meth_string;
+    meth_string << m;
+    std::stringstream problem_type;
+    problem_type << tt;
+
+    JSON err {
+        {"method", meth_string.str ()},
+        {"status", status},
+        {"title", problem_type.str ()}};
+
+        if (detail != "") err["detail"] = detail;
+
+        return net::HTTP::response (status, {{"content-type", "application/problem+json"}}, bytes (data::string (err.dump ())));
+}
+
+net::HTTP::response help_response (method m) {
+    std::stringstream ss;
+    help (ss, m);
+    return net::HTTP::response (200, {{"content-type", "text/plain"}}, bytes (data::string (ss.str ())));
+}
 
 net::HTTP::response version_response () {
     std::stringstream ss;
@@ -163,7 +185,7 @@ awaitable<net::HTTP::response> server::operator () (const net::HTTP::request &re
             string::write ("an invalid Diophant expression was generated: ", w.what ()));
     } catch (schema::missing_key mk) {
         co_return error_response (400, m, problem::missing_parameter, string::write ("missing parameter ", mk.Key));
-    } catch (schema::invalid_value iv) {
+    } catch (schema::invalid_entry iv) {
         co_return error_response (400, m, problem::invalid_parameter, string::write ("invalid parameter ", iv.Key));
     } catch (schema::unknown_key uk) {
         co_return error_response (400, m, problem::invalid_query, string::write ("unknown parameter ", uk.Key));
@@ -235,10 +257,10 @@ net::HTTP::response process_wallet_method (
     if (m == method::KEY_SEQUENCE) {
 
         auto [name, post_key_sequence] = schema::validate<> (query,
-            schema::key<Diophant::symbol> ("name") &&
-            *(schema::key<key_expression> ("key") &&
-                schema::key<key_derivation> ("derivation") &&
-                *schema::key<uint32> ("index")));
+            schema::map::key<Diophant::symbol> ("name") &&
+            *(schema::map::key<key_expression> ("key") &&
+                schema::map::key<key_derivation> ("derivation") &&
+                *schema::map::key<uint32> ("index")));
 
         // make sure the name is a valid symbol name
         if (!data::valid (name))
@@ -301,7 +323,7 @@ net::HTTP::response process_wallet_method (
         return handle_generate (p, wallet_name, query, content_type, body);
     }
 
-    if (m == method::NEXT_ADDRESS || m == method::NEXT_XPUB) {
+    if (m == method::NEXT) {
         if (http_method != net::HTTP::method::post)
             return error_response (405, m, problem::invalid_method, "use post");
 
@@ -312,7 +334,7 @@ net::HTTP::response process_wallet_method (
         // look at the given key sequence.
         Diophant::symbol sequence_name =
             schema::validate<> (query,
-                schema::key<Diophant::symbol> ("name"));
+                schema::map::key<Diophant::symbol> ("name"));
 
         if (!sequence_name.valid ())
             return error_response (400, m, problem::invalid_parameter, "name");
@@ -326,56 +348,18 @@ net::HTTP::response process_wallet_method (
             sequence = *seq;
         }
 
-        // generate a new key. 
+        // generate a new address (which could be an xpub).
         Cosmos::key_expression next_key {*sequence};
 
-        net::HTTP::response res;
+        if (!next_key.valid ())
+            return error_response (500, method::NEXT, problem::failed);
 
-        if (m == method::NEXT_ADDRESS) {
-            Bitcoin::pubkey next_pubkey;
-            Bitcoin::address::decoded next_address;
+        // make an unused reference to put in the database for later.
+        p.DB.set_wallet_unused (wallet_name, database::unused {next_key, sequence.Sequence.Key});
 
-            try {
-                next_pubkey = Bitcoin::pubkey (next_key);
-                next_address = Bitcoin::address::decoded (next_key);
-            } catch (...) {
-                return error_response (500, method::NEXT_ADDRESS, problem::failed);
-            }
+        p.DB.set_wallet_sequence (wallet_name, sequence_name, sequence.Sequence, sequence.Index + 1);
 
-            if (!next_address.valid ())
-                return error_response (500, method::NEXT_ADDRESS, problem::failed);
-
-            p.DB.set_invert_hash (next_address.Digest, Cosmos::hash_function::Hash160, next_pubkey);
-
-            p.DB.set_to_private (next_pubkey, key_expression {
-                string::write ("(",
-                    sequence.Sequence.Derivation, ") (to_private ",
-                    sequence.Sequence.Key, ") ", sequence.Index)});
-
-            Bitcoin::address encoded = next_address.encode ();
-
-            p.DB.set_wallet_unused (wallet_name, encoded);
-
-            res = string_response (std::string (encoded));
-        } else {
-            throw data::method::unimplemented {"next_xpub"};
-            /*
-            // we have to be able to generate this or else something is wrong with the system.
-            HD::BIP_32::pubkey next_xpub (next_key);
-            if (!next_xpub.valid ())
-                return error_response (500, method::NEXT_XPUB, problem::failed);
-
-            p.DB.set_to_private (next_xpub, Cosmos::diophant::to_private (next_key));
-
-            auto next_xpub_str = std::string (next_xpub.write ());
-            res = string_response (std::string (next_xpub_str));
-            p.DB.set_wallet_unused (wallet_name, next_xpub_str);*/
-        }
-
-        ++sequence;
-        p.DB.set_wallet_sequence (wallet_name, sequence_name, sequence.Sequence, sequence.Index);
-
-        return res;
+        return string_response (std::string (next_key));
     }
 
     if (m == method::IMPORT) {
@@ -394,19 +378,19 @@ net::HTTP::response process_wallet_method (
             map_redeem_proportion, min_reedeem_proportion,
             max_value_per_tx, min_value_per_tx, mean_value_per_tx,
             max_value_per_output, min_value_per_output, mean_value_per_output] = schema::validate<> (query,
-            schema::key<std::string> ("to") &&
-            schema::key<int64> ("value") &&
-            schema::key<satoshis_per_byte> ("fee_rate", p.SpendOptions.FeeRate) &&
-            schema::key<Bitcoin::satoshi> ("min_change_value", p.SpendOptions.MinChangeSats) &&
-            schema::key<std::string> ("unit", "Bitcoin") && // must be Bitcoin for now.
-            schema::key<double> ("max_redeem_proportion", p.SpendOptions.MaxRedeemProportion) &&
-            schema::key<double> ("min_redeem_proportion", p.SpendOptions.MinRedeemProportion) &&
-            schema::key<Bitcoin::satoshi> ("max_value_per_tx", p.SpendOptions.MaxSatsPerTx) &&
-            schema::key<Bitcoin::satoshi> ("min_value_per_tx", p.SpendOptions.MinSatsPerTx) &&
-            schema::key<double> ("mean_value_per_tx", p.SpendOptions.MeanSatsPerTx) &&
-            schema::key<Bitcoin::satoshi> ("max_value_per_output", p.SpendOptions.MaxSatsPerOutput) &&
-            schema::key<Bitcoin::satoshi> ("min_value_per_output", p.SpendOptions.MinSatsPerOutput) &&
-            schema::key<double> ("mean_value_per_output", p.SpendOptions.MeanSatsPerOutput));
+            schema::map::key<std::string> ("to") &&
+            schema::map::key<int64> ("value") &&
+            schema::map::key<satoshis_per_byte> ("fee_rate", p.SpendOptions.FeeRate) &&
+            schema::map::key<Bitcoin::satoshi> ("min_change_value", p.SpendOptions.MinChangeSats) &&
+            schema::map::key<std::string> ("unit", "Bitcoin") && // must be Bitcoin for now.
+            schema::map::key<double> ("max_redeem_proportion", p.SpendOptions.MaxRedeemProportion) &&
+            schema::map::key<double> ("min_redeem_proportion", p.SpendOptions.MinRedeemProportion) &&
+            schema::map::key<Bitcoin::satoshi> ("max_value_per_tx", p.SpendOptions.MaxSatsPerTx) &&
+            schema::map::key<Bitcoin::satoshi> ("min_value_per_tx", p.SpendOptions.MinSatsPerTx) &&
+            schema::map::key<double> ("mean_value_per_tx", p.SpendOptions.MeanSatsPerTx) &&
+            schema::map::key<Bitcoin::satoshi> ("max_value_per_output", p.SpendOptions.MaxSatsPerOutput) &&
+            schema::map::key<Bitcoin::satoshi> ("min_value_per_output", p.SpendOptions.MinSatsPerOutput) &&
+            schema::map::key<double> ("mean_value_per_output", p.SpendOptions.MeanSatsPerOutput));
 
         if (unit != "Bitcoin" && unit != "BSV")
             if (http_method != net::HTTP::method::put)

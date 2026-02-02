@@ -6,6 +6,7 @@
 #include <data/net/HTTP.hpp>
 #include <gigamonkey/schema/bip_44.hpp>
 #include "server.hpp"
+#include "../Cosmos.hpp"
 
 enum class mnemonic_style {
     none,
@@ -115,13 +116,15 @@ public:
     }
 
     // make a generate request
-    operator net::HTTP::request () const;
+    net::HTTP::request request (const UTF8 & = "localhost") const;
 
     // read from a generate request.
     generate_request_options (
         Diophant::symbol wallet_name, map<UTF8, UTF8> query,
         const maybe<net::HTTP::content> &content_type,
         const data::bytes &body);
+
+    generate_request_options (const args::parsed &);
 
     generate_error check () const;
 };

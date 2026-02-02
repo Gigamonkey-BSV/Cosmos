@@ -1,6 +1,6 @@
 
 #include "problem.hpp"
-#include "method.hpp"
+#include "../method.hpp"
 #include "invert_hash.hpp"
 
 #include <gigamonkey/p2p/checksum.hpp>
@@ -8,7 +8,7 @@
 #include <data/net/REST.hpp>
 #include <data/crypto/hash.hpp>
 
-#include <data/tools/map_schema.hpp>
+#include <data/tools/schema.hpp>
 
 using hash_function = Cosmos::hash_function;
 
@@ -127,9 +127,9 @@ net::HTTP::response handle_invert_hash (server &p,
 
     if (http_method == net::HTTP::method::put) {
         auto validated = schema::validate<> (query,
-            schema::key<hash_function> ("function") &&
-                *(schema::key<std::string> ("digest") &&
-                    schema::key<digest_format> ("format")));
+            schema::map::key<hash_function> ("function") &&
+                *(schema::map::key<std::string> ("digest") &&
+                    schema::map::key<digest_format> ("format")));
 
         HashFunction = std::get<0> (validated);
         auto dig = std::get<1> (validated);
@@ -143,9 +143,9 @@ net::HTTP::response handle_invert_hash (server &p,
     } else {
         maybe<hash_function> func;
         std::tie (digest_string, DigestFormat, func) = schema::validate<> (query,
-            schema::key<std::string> ("digest") &&
-            schema::key<digest_format> ("format") &&
-                *schema::key<hash_function> ("function"));
+            schema::map::key<std::string> ("digest") &&
+            schema::map::key<digest_format> ("format") &&
+                *schema::map::key<hash_function> ("function"));
 
         if (bool (func)) HashFunction = *func;
     }

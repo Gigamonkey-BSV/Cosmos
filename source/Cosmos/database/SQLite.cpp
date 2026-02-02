@@ -429,12 +429,16 @@ namespace Cosmos::SQLite {
         // defines a function that transforms a key
         // (either public or private) into another key.
         std::string derivation;
+
+        // a function that takes a key and
+        std::string serialization;
     };
 
     struct Unused {
         int id;
         int wallet_id;
-        key_expression key;
+        key_expression address;
+        std::string master;
     };
 
     struct Event {
@@ -564,13 +568,15 @@ namespace Cosmos::SQLite {
                 make_column ("index", &Sequence::index),
                 make_column ("derivation", &Sequence::derivation),
                 make_column ("key", &Sequence::key),
+                make_column ("serialization", &Sequence::serialization),
                 unique (&Sequence::wallet_id, &Sequence::name)
             ),
 
             make_table ("unused",
                 make_column ("id", &Unused::id, primary_key ().autoincrement ()),
                 make_column ("wallet_id", &Unused::wallet_id),
-                make_column ("key", &Unused::key)
+                make_column ("key", &Unused::address),
+                make_column ("master", &Unused::master)
             ),
 
             make_table ("events",
@@ -1141,12 +1147,14 @@ namespace Cosmos::SQLite {
 
                     if (!srows.empty ()) {
 
-                        storage.replace (Sequence {srows.front (), wrows.front (), sequence_name, index, sequence.Key, sequence.Derivation});
+                        storage.replace (Sequence {srows.front (), wrows.front (), sequence_name, index,
+                            sequence.Key, sequence.Derivation, sequence.Serialization});
 
                         return true;
                     }
 
-                    storage.insert (Sequence {-1, wrows.front (), sequence_name, index, sequence.Key, sequence.Derivation});
+                    storage.insert (Sequence {-1, wrows.front (), sequence_name, index,
+                        sequence.Key, sequence.Derivation, sequence.Serialization});
 
                     return true;
                 });
@@ -1187,7 +1195,7 @@ namespace Cosmos::SQLite {
             return {};
         };
 
-        bool set_wallet_unused (const std::string &wallet_name, const key_expression &key) final override {
+        bool set_wallet_unused (const std::string &wallet_name, const unused &u) final override {
             try {
                 return storage.transaction ([&] {
                     // 1. Look up the user id
@@ -1195,7 +1203,7 @@ namespace Cosmos::SQLite {
 
                     if (wid.empty ()) return false;
 
-                    storage.insert (Unused {-1, wid.front (), key});
+                    storage.insert (Unused {-1, wid.front (), u.Address, u.Master});
                     return true;
                 });
             } catch (const std::system_error &e) {
@@ -1205,7 +1213,7 @@ namespace Cosmos::SQLite {
             return true;
         };
 
-        bool set_wallet_used (const std::string &wallet_name, const key_expression &key) final override {
+        bool set_wallet_used (const std::string &wallet_name, const key_expression &address) final override {
             try {
                 return storage.transaction ([&] {
                     // 1. Look up the user id
@@ -1214,7 +1222,7 @@ namespace Cosmos::SQLite {
                     if (wid.empty ()) return false;
 
                     storage.remove_all<Unused> (
-                        where (c (&Unused::key) == key && c (&Unused::id) == wid.front ()));
+                        where (c (&Unused::address) == address && c (&Unused::id) == wid.front ()));
 
                     return true;
                 });
@@ -1225,8 +1233,8 @@ namespace Cosmos::SQLite {
             return true;
         };
 
-        data::list<key_expression> get_wallet_unused (const std::string &wallet_name) final override {
-            data::list<key_expression> result;
+        data::list<unused> get_wallet_unused (const std::string &wallet_name) final override {
+            data::list<unused> result;
             try {
                 storage.transaction ([&] {
                     // 1. Look up the user id
@@ -1234,7 +1242,10 @@ namespace Cosmos::SQLite {
 
                     if (wid.empty ()) return false;
 
-                    for (const auto &k : storage.select (&Unused::key, where (c (&Unused::wallet_id) == wid.front ()))) result <<= key_expression {k};
+                    for (const auto &k : storage.select (
+                        columns (&Unused::address, &Unused::master),
+                        where (c (&Unused::wallet_id) == wid.front ())))
+                            result <<= unused {std::get<0> (k), std::get<1> (k)};
 
                     return true;
                 });

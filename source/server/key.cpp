@@ -1,7 +1,7 @@
 #include "key.hpp"
-#include "method.hpp"
+#include "../method.hpp"
 #include "server.hpp"
-#include <data/tools/map_schema.hpp>
+#include <data/tools/schema.hpp>
 #include <data/crypto/random.hpp>
 
 namespace Gigamonkey::Bitcoin {
@@ -79,10 +79,10 @@ net::HTTP::response handle_key (server &p,
         return error_response (405, method::KEY, problem::invalid_method, "use POST");
 
     auto [KeyName, method_random] = data::schema::validate<> (query,
-        data::schema::key<Diophant::symbol> ("name") &&
-        *(data::schema::key<key_type> ("type") &&
-            *data::schema::key<Bitcoin::net> ("net") &&
-            *data::schema::key<bool> ("compressed")));
+        data::schema::map::key<Diophant::symbol> ("name") &&
+        *(data::schema::map::key<key_type> ("type") &&
+            *data::schema::map::key<Bitcoin::net> ("net") &&
+            *data::schema::map::key<bool> ("compressed")));
 
     // make sure the name is a valid symbol name
     if (!KeyName.valid ())

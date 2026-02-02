@@ -1,4 +1,4 @@
-#include "../source/server/method.hpp"
+#include "../source/Cosmos.hpp"
 #include "../source/server/server.hpp"
 #include "../source/server/key.hpp"
 #include "../source/server/generate.hpp"
@@ -28,7 +28,7 @@ server get_test_server () {
     if (!log_init) data::log::init ({.threshold = data::log::normal});
     Shutdown = false;
     DATA_LOG (normal) << "about to setup program options";
-    options program_options {args {arg_count, arg_values}};
+    options program_options {args::parsed {arg_count, arg_values}};
     data::random::init ({
         .seed = bytes (data::hex_string {"ffffffffffffffffedcba98765432100"}),
         .nonce = bytes (data::hex_string {"0123abcd4567fe98"})});
@@ -41,7 +41,6 @@ server get_test_server () {
     return server {program_options.spend_options (), *DB, nullptr, nullptr};
 }
 
-net::HTTP::request make_shutdown_request ();
 maybe<net::error> read_error (const net::HTTP::response &);
 
 bool is_error (const net::HTTP::response &r) {
@@ -54,7 +53,7 @@ net::HTTP::response make_request (server &x, const net::HTTP::request &r) {
 
 TEST (Server, Shutdown) {
     auto test_server = get_test_server ();
-    EXPECT_FALSE (is_error (make_request (test_server, make_shutdown_request ())));
+    EXPECT_FALSE (is_error (make_request (test_server, request_shutdown ())));
     EXPECT_TRUE (Shutdown);
 }
 
@@ -64,7 +63,6 @@ bool is_bool_response (bool expected, const net::HTTP::response &);
 bool is_string_response (const net::HTTP::response &);
 bool is_data_response (const bytes &expected, const net::HTTP::response &);
 
-net::HTTP::request make_list_wallets_request ();
 bool is_JSON_response (const JSON &, const net::HTTP::response &r);
 
 net::HTTP::request inline make_create_wallet_request (const std::string &wallet_name) {
@@ -130,13 +128,13 @@ TEST (Server, CreateWallet) {
     auto test_server = get_test_server ();
 
     // list_wallets should return an empty list.
-    EXPECT_TRUE (is_JSON_response (JSON::array_t (), make_request (test_server, make_list_wallets_request ())));
+    EXPECT_TRUE (is_JSON_response (JSON::array_t (), make_request (test_server, request_list_wallets ())));
 
     // Make a wallet.
     ASSERT_TRUE (is_ok_response (make_request (test_server, make_create_wallet_request ("Wally"))));
 
     // list wallets should now be a non-empty list.
-    EXPECT_TRUE (is_JSON_response (JSON::array_t {"Wally"}, make_request (test_server, make_list_wallets_request ())));
+    EXPECT_TRUE (is_JSON_response (JSON::array_t {"Wally"}, make_request (test_server, request_list_wallets ())));
 
     // try to make the wallet again and fail.
     ASSERT_TRUE (is_error (make_request (test_server, make_create_wallet_request ("Wally"))));
@@ -278,8 +276,18 @@ TEST (Server, Generate) {
 
     // generate a wallet of each type
     // we should simply get a bool response when we don't request the restoration words.
-    ASSERT_TRUE (is_ok_response (make_request (test_server,
-        generate_request_options {"A"}.wallet_style (wallet_style::BIP_44).coin_type_none ())));
+    generate_request_options gen_req_A {"A"};
+    gen_req_A.wallet_style (wallet_style::BIP_44).coin_type_none ();
+
+    generate_request_options gen_req_D {"D"};
+    gen_req_D.wallet_style (
+        wallet_style::BIP_44
+    ).mnemonic_style (
+        mnemonic_style::BIP_39
+    ).coin_type (
+        HD::BIP_44::coin_type_Bitcoin);
+
+    ASSERT_TRUE (is_ok_response (make_request (test_server, req_A)));
 
     // These are not ready yet.
     /*
@@ -289,12 +297,7 @@ TEST (Server, Generate) {
         generate_request_options {"C"}.wallet_style (wallet_style::experimental))));*/
 
     maybe<std::string> maybe_words_D = read_string_response (make_request (test_server,
-        generate_request_options {"D"}.wallet_style (
-            wallet_style::BIP_44
-        ).mnemonic_style (
-            mnemonic_style::BIP_39
-        ).coin_type (
-            HD::BIP_44::coin_type_Bitcoin)));
+        gen_req_D));
     ASSERT_TRUE (bool (maybe_words_D));
 
 /*
@@ -395,10 +398,6 @@ maybe<string> read_string_response (const net::HTTP::response &r) {
     return {};
 }
 
-net::HTTP::request make_list_wallets_request () {
-    return net::HTTP::request::make ().path ("/list_wallets").method (net::HTTP::method::get).host ("localhost");
-}
-
 net::HTTP::request make_next_address_request (const std::string &wallet_name, const std::string &sequence_name) {
     return net::HTTP::request::make ().method (
         net::HTTP::method::post
@@ -432,14 +431,6 @@ bool is_JSON_response (const JSON &expected, const net::HTTP::response &r) {
 maybe<std::string> read_string (const net::HTTP::response &r) {
     if (!r.content_type () == net::HTTP::content::type::text_plain) return {};
     return string (r.Body);
-}
-
-net::HTTP::request make_shutdown_request () {
-    return net::HTTP::request::make {}.method (
-        net::HTTP::method::put
-    ).path (
-        "/shutdown"
-    ).host ("localhost");
 }
 
 maybe<net::error> read_error (const net::HTTP::response &r) {
@@ -484,14 +475,6 @@ bool is_data_response (const bytes &expected, const net::HTTP::response &r) {
     maybe<bytes> result = read_data_response (r);
     if (!bool (result)) return false;
     return *result == expected;
-}
-
-net::HTTP::request make_add_entropy_request (const string &entropy) {
-    return net::HTTP::request::make {}.method (
-            net::HTTP::method::post
-        ).path (
-            "/add_entropy"
-        ).body (bytes (entropy)).host ("localhost");
 }
 
 template <size_t x> maybe<data::hash::digest<x>> read_digest (const net::HTTP::response &r) {

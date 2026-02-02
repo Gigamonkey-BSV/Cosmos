@@ -6,62 +6,60 @@
 
 namespace BoostPOW {
 
-    script_options script_options::read (const argh::parser &command_line, int start_pos) {
+    script_options script_options::read (const args &command_line, int start_pos) {
 
         script_options options;
 
-        string content_hex;
-
-        if (auto positional = command_line (start_pos); positional) positional >> content_hex;
-        else if (auto option = command_line ("content"); option) option >> content_hex;
+        maybe<std::string> content_hex;
+        if (command_line.get (start_pos, content_hex); content_hex) options.Content = digest256 {*content_hex};
+        else if (command_line.get ("content", content_hex); content_hex) options.Content = digest256 {*content_hex};
         else throw data::exception {"option content not provided "};
+        if (!options.Content.valid ()) throw data::exception {} << "invalid content string: " << *content_hex;
 
-        options.Content = digest256 {content_hex};
-        if (!options.Content.valid ()) throw data::exception {} << "invalid content string: " << content_hex;
-
-        if (auto positional = command_line (start_pos + 1); positional) positional >> options.Difficulty;
-        else if (auto option = command_line ("difficulty"); option) option >> options.Difficulty;
+        maybe<double> difficulty;
+        if (command_line.get (start_pos + 1, difficulty); difficulty) options.Difficulty = *difficulty;
+        else if (command_line.get ("difficulty", difficulty); difficulty) options.Difficulty = *difficulty;
         else throw data::exception {"option difficulty not provided "};
 
-        if (options.Difficulty <= 0) throw data::exception {} << "difficulty must be >= 0; value provided was " << options.Difficulty;
+        if (options.Difficulty <= 0) throw data::exception {} << "difficulty must be > 0; value provided was " << options.Difficulty;
 
-        if (auto positional = command_line (start_pos + 2); positional) options.Topic = positional.str ();
-        else if (auto option = command_line ("topic"); option) options.Topic = option.str ();
+        maybe<std::string> topic;
+        if (command_line.get (start_pos + 2, topic); topic) options.Topic = *topic;
+        else if (command_line.get ("topic", topic); topic) options.Topic = *topic;
 
-        if (auto positional = command_line (start_pos + 3); positional) options.Data = positional.str ();
-        else if (auto option = command_line ("data"); option) options.Data = option.str ();
+        maybe<std::string> data;
+        if (command_line.get (start_pos + 3, data); data) options.Data = *data;
+        else if (command_line.get ("data", data); data) options.Data = *data;
 
-        string address;
+        maybe<std::string> address;
 
-        if (auto positional = command_line (start_pos + 4); positional) positional >> address;
-        else if (auto option = command_line ("address"); option) option >> address;
-
-        if (address != "") {
-            Bitcoin::address miner_address {address};
+        command_line.get (start_pos + 4, address);
+        if (!bool (address)) command_line.get ("address", address);
+        else if (bool (address) && *address != "") {
+            Bitcoin::address miner_address {*address};
             if (!miner_address.valid ()) throw data::exception {} << "invalid address provided: " << address;
             options.MinerPubkeyHash = miner_address.digest ();
-        }
+        } else throw data::exception {} << "no address provided. ";
 
-        if (auto option = command_line ("version"); option) option >> options.Version;
+        maybe<uint32> version;
+        if (command_line.get<uint32> ("version", version); version) options.Version = *version;
 
         if (options.Version < 1 || options.Version > 2) throw data::exception {} << "invalid script version " << options.Version;
 
-        if (auto option = command_line ("user_nonce"); option) {
-            uint32 user_nonce;
-            option >> user_nonce;
-            options.UserNonce = user_nonce;
-        }
+        maybe<uint32> unonce;
+        if (command_line.get<uint32> ("user_nonce", unonce); unonce)
+            options.UserNonce = *unonce;
 
-        if (auto option = command_line ("category"); option) {
-            uint32 category;
-            option >> category;
-            options.Category = category;
-        }
+        maybe<int32> category;
+        if (command_line.get<int32> ("category", category); category)
+            options.Category = *category;
 
         return options;
     }
 
-    script_options::operator Boost::output_script () const {
+    script_options::operator output_script () const {
+
+        namespace work = Gigamonkey::work;
 
         work::compact target {work::difficulty {Difficulty}};
         if (!target.valid ()) throw data::exception {} << "could not read difficulty " << Difficulty;
@@ -92,12 +90,12 @@ namespace BoostPOW {
         // one who can mine that boost output.
 
         return MinerPubkeyHash ?
-            Boost::output_script::contract (
+            output_script::contract (
                 category, Content, target,
                 bytes (Topic), user_nonce,
                 bytes (Data), *MinerPubkeyHash,
                 use_general_purpose_bits) :
-            Boost::output_script::bounty (
+            output_script::bounty (
                 category, Content, target,
                 bytes (Topic), user_nonce,
                 bytes (Data),

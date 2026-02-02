@@ -4,90 +4,66 @@
 #include <data/io/arg_parser.hpp>
 #include <data/io/error.hpp>
 #include <Cosmos/types.hpp>
+#include "method.hpp"
 
-using namespace data;
+std::string version ();
 
-using arg_parser = io::arg_parser;
-using error = io::error;
-using filepath = Cosmos::filepath;
+std::string help (method m = method::UNSET);
 
-enum meth {
-    UNSET,
-    HELP,             // print help messages
-    VERSION,          // print a version message
-    SHUTDOWN,
-    ADD_ENTROPY,      // add entropy to the random number generator.
-    LIST_WALLETS,
-    MAKE_WALLET,
-    SET_KEY,
-    TO_PRIVATE,
-    INVERT_HASH,
-    ADD_KEY_SEQUENCE,
-    NEXT_ADDRESS,     // next address
-    NEXT_XPUB,        // next xpub (if supported)
-    GENERATE,         // generate a wallet
-    ACCEPT,           // accept a payment
-    RESTORE,          // restore a wallet
-    UPDATE,           // depricated: check if txs in pending have been mined.
-    VALUE,            // the value in the wallet.
-    DETAILS,
-    SEND,             // (depricated)
-    SPEND,            //
-    REQUEST,          // request a payment
-    PAY,              // make a payment.
-    SIGN,             // sign an unsigned transaction
-    IMPORT,           // import a utxo with private key
-    BOOST,            // boost some content
-    SPLIT,            // split your wallet into tiny pieces for privacy.
-    TAXES,            // calculate income and capital gain for a given year.
-    ENCRYPT_KEY,
-    DECRYPT_KEY
-};
+net::HTTP::request inline request_shutdown (const UTF8 &host = "localhost") {
+    return net::HTTP::request::make {}.method (
+        net::HTTP::method::put
+    ).path (
+        "/shutdown"
+    ).host (host);
+}
 
-meth read_method (const UTF8 &);
 
-std::ostream &operator << (std::ostream &, meth);
+net::HTTP::request inline request_add_entropy (const string &entropy, const UTF8 &host = "localhost") {
+    return net::HTTP::request::make {}.method (
+        net::HTTP::method::post
+    ).path (
+        "/add_entropy"
+    ).body (bytes (entropy)).host (host);
+}
 
-std::ostream &version (std::ostream &);
+net::HTTP::request inline request_list_wallets (const UTF8 &host = "localhost") {
+    return net::HTTP::request::make ().path ("/list_wallets").method (net::HTTP::method::get).host (host);
+}
 
-std::ostream &help (std::ostream &, meth m = UNSET);
+net::HTTP::request request_value (const UTF8 &host = "localhost");
 
-net::HTTP::request request_generate (const arg_parser &);
-net::HTTP::request request_update (const arg_parser &);
-net::HTTP::request request_restore (const arg_parser &);
-net::HTTP::request request_value (const arg_parser &);
-net::HTTP::request request_request (const arg_parser &);
-net::HTTP::request request_accept (const arg_parser &);
-net::HTTP::request request_pay (const arg_parser &);
-net::HTTP::request request_sign (const arg_parser &);
-net::HTTP::request request_spend (const arg_parser &);
-net::HTTP::request request_import (const arg_parser &);
-net::HTTP::request request_boost (const arg_parser &);
-net::HTTP::request request_split (const arg_parser &);
-net::HTTP::request request_taxes (const arg_parser &);
-net::HTTP::request request_encrypt_private_keys (const arg_parser &);
-net::HTTP::request request_decrypt_private_keys (const arg_parser &);
+namespace args = data::io::args;
 
-void command_generate (const arg_parser &); // offline
-void command_update (const arg_parser &);
-void command_restore (const arg_parser &);
-void command_value (const arg_parser &);    // offline
-void command_request (const arg_parser &);  // offline
-void command_accept (const arg_parser &);  // offline
-void command_pay (const arg_parser &);      // offline
-void command_sign (const arg_parser &);     // offline
-void command_send (const arg_parser &);     // depricated
-void command_import (const arg_parser &);
-void command_boost (const arg_parser &);    // offline
-void command_split (const arg_parser &);
-void command_taxes (const arg_parser &);    // offline
-void command_encrypt_private_keys (const arg_parser &);    // offline
-void command_decrypt_private_keys (const arg_parser &);    // offline
+net::HTTP::request request_generate (const args::parsed &);
+net::HTTP::request request_update (const args::parsed &);
+net::HTTP::request request_restore (const args::parsed &);
+net::HTTP::request request_value (const args::parsed &);
+net::HTTP::request request_request (const args::parsed &);
+net::HTTP::request request_accept (const args::parsed &);
+net::HTTP::request request_pay (const args::parsed &);
+net::HTTP::request request_sign (const args::parsed &);
+net::HTTP::request request_spend (const args::parsed &);
+net::HTTP::request request_import (const args::parsed &);
+net::HTTP::request request_split (const args::parsed &);
+net::HTTP::request request_taxes (const args::parsed &);
+net::HTTP::request request_encrypt_private_keys (const args::parsed &);
+net::HTTP::request request_decrypt_private_keys (const args::parsed &);
 
-// TODO offline methods function without an internet connection.
-
-meth read_method (const io::arg_parser &, uint32 index = 1);
-
-std::string sanitize (const std::string &in);
+void command_generate (const args::parsed &); // offline
+void command_update (const args::parsed &);
+void command_restore (const args::parsed &);
+void command_value (const args::parsed &);    // offline
+void command_request (const args::parsed &);  // offline
+void command_accept (const args::parsed &);   // offline
+void command_pay (const args::parsed &);      // offline
+void command_sign (const args::parsed &);     // offline
+void command_send (const args::parsed &);     // depricated
+void command_import (const args::parsed &);
+void command_boost (const args::parsed &);    // offline
+void command_split (const args::parsed &);
+void command_taxes (const args::parsed &);    // offline
+void command_encrypt_private_keys (const args::parsed &);    // offline
+void command_decrypt_private_keys (const args::parsed &);    // offline
 
 #endif

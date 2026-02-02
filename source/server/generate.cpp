@@ -1,9 +1,9 @@
 
-#include "method.hpp"
+#include "../method.hpp"
 #include "generate.hpp"
 
 #include <gigamonkey/schema/bip_39.hpp>
-#include <data/tools/map_schema.hpp>
+#include <data/tools/schema.hpp>
 #include <data/crypto/random.hpp>
 
 namespace schema = data::schema;
@@ -47,7 +47,7 @@ std::ostream &operator << (std::ostream &o, coin_type x) {
     return o << v;
 }
 
-generate_request_options::operator net::HTTP::request () const {
+net::HTTP::request generate_request_options::request (const UTF8 &host) const {
     std::stringstream query_stream;
     query_stream << "style=" << WalletStyle;
     if (!bool (CoinTypeDerivationParameter)) query_stream << "&coin_type=none";
@@ -55,7 +55,7 @@ generate_request_options::operator net::HTTP::request () const {
     if (MnemonicStyle != mnemonic_style::none)
         query_stream << "&mnemonic=" << MnemonicStyle << "&number_of_words=" << NumberOfWords;
     return net::HTTP::request::make {}.path (
-        string::write ("/generate/", Name)).query (query_stream.str ()).host ("localhost").method (net::HTTP::method::post);
+        string::write ("/generate/", Name)).query (query_stream.str ()).host (host).method (net::HTTP::method::post);
 }
 
 std::ostream &operator << (std::ostream &o, wallet_style x) {
@@ -170,19 +170,19 @@ generate_request_options::generate_request_options (
     // there are differences of opinion in what should
     // be used as the coin_type parameter in a BIP44
     // derivation path.
-    auto derivation_path_schema = schema::key<restore_wallet_type> ("format") ||
-        (schema::key<::wallet_style> ("style") &&
-        *schema::key<::derivation_style> ("derivation_style") &&
-        *schema::key<::coin_type> ("coin_type"));
+    auto derivation_path_schema = schema::map::key<restore_wallet_type> ("format") ||
+        (schema::map::key<::wallet_style> ("style") &&
+        *schema::map::key<::derivation_style> ("derivation_style") &&
+        *schema::map::key<::coin_type> ("coin_type"));
 
     // we may not use a mnemonic at all but if we do
     // there are some options that apply. In particular
     // ElectrumSV uses a special set of words.
-    auto mnemonic_schema = schema::key<::mnemonic_style> ("mnemonic") &&
-        *schema::key<uint32> ("number_of_words") &&
-        *schema::key<std::string> ("password");
+    auto mnemonic_schema = schema::map::key<::mnemonic_style> ("mnemonic") &&
+        *schema::map::key<uint32> ("number_of_words") &&
+        *schema::map::key<std::string> ("password");
 
-    auto generate_schema = *mnemonic_schema && *schema::key<uint32> ("accounts") && derivation_path_schema;
+    auto generate_schema = *mnemonic_schema && *schema::map::key<uint32> ("accounts") && derivation_path_schema;
 
     auto [mnemonic_options, accounts_param, wallet_generation] =
         schema::validate<> (query, generate_schema);

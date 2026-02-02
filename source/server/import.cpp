@@ -1,5 +1,5 @@
 
-#include "method.hpp"
+#include "../method.hpp"
 #include "import.hpp"
 #include <gigamonkey/pay/BEEF.hpp>
 
@@ -34,8 +34,8 @@ net::HTTP::response handle_import (
                 "Invalid transaction.");
 
         map<digest160, maybe<HD::BIP_32::pubkey>> unused;
-
-        for (const std::string &u : p.DB.get_wallet_unused (wallet_name)) {
+/*
+        for (const database::unused &u : p.DB.get_wallet_unused (wallet_name)) {
             if (Bitcoin::address a {u}; a.valid ())
                 unused = unused.insert (a.digest (), {});
             else if (HD::BIP_32::pubkey pp {u}; pp.valid ())
@@ -43,7 +43,7 @@ net::HTTP::response handle_import (
                 for (uint32 i = 0; i < 3; i++)
                     unused = unused.insert (pp.derive ({i}).address ().Digest, pp);
 
-        }
+        }*/
 
         // now go through the tx and check for these unused addresses.
 

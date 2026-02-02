@@ -1,6 +1,6 @@
 #include "restore.hpp"
-#include "method.hpp"
-#include <data/tools/map_schema.hpp>
+#include "../method.hpp"
+#include <data/tools/schema.hpp>
 
 #include <gigamonkey/wif.hpp>
 #include <gigamonkey/schema/electrum_sv.hpp>
@@ -38,21 +38,21 @@ net::HTTP::response handle_restore (server &p,
         key_options,
         accounts_param,
         max_lookup_param] = schema::validate<> (query,
-        (schema::key<restore_wallet_type> ("wallet_type") || (
-            *schema::key<wallet_style> ("wallet_style") &&
-            *schema::key<derivation_style> ("derivation_style") &&
-            *(schema::key<coin_type> ("coin_type") ||
-                schema::key<bool> ("guess_coin_type")))) &&
-        (schema::key<UTF8> ("key") &&
-            *schema::key<master_key_type> ("key_type") ||
-            (*(schema::key<UTF8> ("password") ||
-                schema::key<uint16> ("CentBee_PIN") ||
-                schema::key<bool> ("guess_CentBee_PIN")) &&
-                (schema::key<UTF8> ("mnemonic") ||
-                    schema::key<bytes> ("entropy")) &&
-                    *schema::key<mnemonic_style> ("mnemonic_style"))) &&
-        *schema::key<uint32> ("accounts") &&
-        *schema::key<uint32> ("max_lookup"));
+        (schema::map::key<restore_wallet_type> ("wallet_type") || (
+            *schema::map::key<wallet_style> ("wallet_style") &&
+            *schema::map::key<derivation_style> ("derivation_style") &&
+            *(schema::map::key<coin_type> ("coin_type") ||
+                schema::map::key<bool> ("guess_coin_type")))) &&
+        (schema::map::key<UTF8> ("key") &&
+            *schema::map::key<master_key_type> ("key_type") ||
+            (*(schema::map::key<UTF8> ("password") ||
+                schema::map::key<uint16> ("CentBee_PIN") ||
+                schema::map::key<bool> ("guess_CentBee_PIN")) &&
+                (schema::map::key<UTF8> ("mnemonic") ||
+                    schema::map::key<bytes> ("entropy")) &&
+                    *schema::map::key<mnemonic_style> ("mnemonic_style"))) &&
+        *schema::map::key<uint32> ("accounts") &&
+        *schema::map::key<uint32> ("max_lookup"));
 
     uint32 total_accounts = set_with_default (accounts_param, uint32 {1});
     uint32 max_lookup = set_with_default (max_lookup_param, uint32 {25});

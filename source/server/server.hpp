@@ -1,6 +1,8 @@
 #ifndef SERVER_SERVER
 #define SERVER_SERVER
 
+#include "../method.hpp"
+#include "problem.hpp"
 #include "options.hpp"
 #include <Diophant/machine.hpp>
 #include <Cosmos/network.hpp>
@@ -14,6 +16,14 @@ namespace HD = Gigamonkey::HD;
 using key_expression = Cosmos::key_expression;
 using key_derivation = Cosmos::key_derivation;
 using key_sequence = Cosmos::key_sequence;
+
+std::ostream &version (std::ostream &);
+
+std::ostream &help (std::ostream &, method m = method::UNSET);
+
+net::HTTP::response error_response (unsigned int status, method m, problem, const std::string & = "");
+
+net::HTTP::response help_response (method = method::UNSET);
 
 struct server {
 

@@ -10,11 +10,11 @@ include (GoogleTest)
 
 add_executable (
   unit_tests
+  ../source/method.cpp
   ../source/Cosmos/database/SQLite.cpp
   ../source/server/db.cpp
   ../source/server/options.cpp
   ../source/server/problem.cpp
-  ../source/server/method.cpp
   ../source/server/server.cpp
   ../source/server/key.cpp
   ../source/server/invert_hash.cpp
