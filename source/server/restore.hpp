@@ -22,7 +22,9 @@ std::istream &operator >> (std::istream &, master_key_type &);
 
 struct restore_request_options : generate_request_options {
 
-    net::HTTP::request request (const UTF8 & = "localhost");
+    net::HTTP::request request (const UTF8 & = "localhost") {
+        throw data::method::unimplemented {"restore_request_options -> HTTP request"};
+    }
 
     restore_request_options (
         Diophant::symbol wallet_name, map<UTF8, UTF8> query,

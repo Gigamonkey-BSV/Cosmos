@@ -11,7 +11,7 @@
 
 // TODO: in here we have 'using namespace data' and that causes a
 // problem if the includes are in the wrong order. This should be fixed. 
-#include "method.hpp"
+#include "Cosmos.hpp"
 #include "server/server.hpp"
 
 #include <Cosmos/options.hpp>

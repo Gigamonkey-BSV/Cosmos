@@ -20,112 +20,6 @@
 #include "Cosmos.hpp"
 //#include "interface.hpp"
 
-
-std::string regex_replace (const std::string &x, const std::regex &r, const std::string &n) {
-    std::stringstream ss;
-    std::regex_replace (std::ostreambuf_iterator<char> (ss), x.begin (), x.end (), r, n);
-    return ss.str ();
-}
-
-std::string sanitize (const std::string &in) {
-    return regex_replace (data::to_lower (in), std::regex {"_|-"}, "");
-}
-
-std::ostream &version (std::ostream &o) {
-    return o << "Cosmos Wallet version 0.0.2 alpha";
-}
-
-std::ostream &help (std::ostream &o, method meth) {
-    switch (meth) {
-        default :
-            return version (o) << "\n" << "input should be <method> <args>... where method is "
-                "\n\tgenerate   -- create a new wallet."
-                "\n\tupdate     -- get Merkle proofs for txs that were pending last time the program ran."
-                "\n\tvalue      -- print the total value in the wallet."
-                "\n\trequest    -- generate a payment_request."
-                "\n\tpay        -- create a transaction based on a payment request."
-                "\n\treceive    -- accept a new transaction for a payment request."
-                "\n\tsign       -- sign an unsigned transaction."
-                "\n\timport     -- add a utxo to this wallet."
-                "\n\tsend       -- send to an address or script. (depricated)"
-                "\n\tboost      -- boost content."
-                "\n\tsplit      -- split an output into many pieces"
-                "\n\trestore    -- restore a wallet from words, a key, or many other options."
-                "\nuse help \"method\" for information on a specific method";
-        case method::GENERATE :
-            return o << "Generate a new wallet in terms of 24 words (BIP 39) or as an extended private key."
-                "\narguments for method generate:"
-                "\n\t(--name=)<wallet name>"
-                "\n\t(--words) (use BIP 39)"
-                "\n\t(--no_words) (don't use BIP 39)"
-                "\n\t(--accounts=<uint32> (=10)) (how many accounts to pre-generate)"
-                // TODO: as in method restore, a string should be accepted here which
-                // could have "bitcoin" "bitcoin_cash" or "bitcoinSV" as its values,
-                // ignoring case, spaces, and '_'.
-                "\n\t(--coin_type=<uint32> (=0)) (value of BIP 44 coin_type)";
-        case method::VALUE :
-            return o << "Print the value in a wallet. No parameters.";
-        case method::REQUEST :
-            return o << "Generate a new payment request."
-                "\narguments for method request:"
-                "\n\t(--name=)<wallet name>"
-                "\n\t(--payment_type=\"pubkey\"|\"address\"|\"xpub\") (= \"address\")"
-                "\n\t(--expires=<number of minutes before expiration>)"
-                "\n\t(--memo=\"<explanation of the nature of the payment>\")"
-                "\n\t(--amount=<expected amount of payment>)";
-        case method::PAY :
-            return o << "Respond to a payment request by creating a payment."
-                "\narguments for method pay:"
-                "\n\t(--name=)<wallet name>"
-                "\n\t(--request=)<payment request>"
-                "\n\t(--address=<address to pay to>)"
-                "\n\t(--amount=<amount to pay>)"
-                "\n\t(--memo=<what is the payment about>)"
-                "\n\t(--output=<output in hex>)"
-                "\n\t(--min_sats_per_output=<float>) (= " << Cosmos::spend_options::DefaultMinSatsPerOutput << ")"
-                "\n\t(--max_sats_per_output=<float>) (= " << Cosmos::spend_options::DefaultMaxSatsPerOutput << ")"
-                "\n\t(--mean_sats_per_output=<float>) (= " << Cosmos::spend_options::DefaultMeanSatsPerOutput << ") ";
-        case method::ACCEPT :
-            return o << "Accept a payment."
-                "\narguments for method accept:"
-                "\n\t(--payment=)<payment tx in BEEF or SPV envelope>";
-        case method::SIGN :
-            return o << "arguments for method sign not yet available.";
-        case method::IMPORT :
-            return o << "arguments for method import not yet available.";
-        case method::SEND :
-            return o << "This method is DEPRICATED";
-        case method::SPEND :
-            return o << "Spend coins";
-        case method::BOOST :
-            return o << "arguments for method boost not yet available.";
-        case method::SPLIT :
-            return o << "Split outputs in your wallet into many tiny outputs with small values over a triangular distribution. "
-                "\narguments for method split:"
-                "\n\t(--name=)<wallet name>"
-                "\n\t(--address=)<address | xpub | script hash>"
-                "\n\t(--max_look_ahead=)<integer> (= 10) ; (only used if parameter 'address' is provided as an xpub"
-                "\n\t(--min_sats_per_output=<float>) (= " << Cosmos::spend_options::DefaultMinSatsPerOutput << ")"
-                "\n\t(--max_sats_per_output=<float>) (= " << Cosmos::spend_options::DefaultMaxSatsPerOutput << ")"
-                "\n\t(--mean_sats_per_output=<float>) (= " << Cosmos::spend_options::DefaultMeanSatsPerOutput << ") ";
-        case method::RESTORE :
-            o << "arguments for method restore:"
-                "\n\t(--name=)<wallet name>"
-                "\n\t(--key=)<xpub | xpriv>"
-                "\n\t(--max_look_ahead=)<integer> (= 10)"
-                "\n\t(--words=<string>)"
-                "\n\t(--key_type=\"HD_sequence\"|\"BIP44_account\"|\"BIP44_master\") (= \"HD_sequence\")"
-                "\n\t(--coin_type=\"Bitcoin\"|\"BitcoinCash\"|\"BitcoinSV\"|<integer>)"
-                "\n\t(--wallet_type=\"RelayX\"|\"ElectrumSV\"|\"SimplyCash\"|\"CentBee\"|<string>)"
-                "\n\t(--entropy=<string>)";
-        case method::ENCRYPT_KEY:
-            o << "Encrypt the private key file so that it can only be accessed with a password. No parameters.";
-        case method::DECRYPT_KEY :
-            return o << "Decrypt the private key file again. No parameters.";
-    }
-
-}
-
 maybe<std::string> de_escape (string_view input) {
 
     string rt {};
@@ -142,6 +36,35 @@ maybe<std::string> de_escape (string_view input) {
     }
 
     return {decoded.str ()};
+}
+
+net::HTTP::response error_response (unsigned int status, method m, problem tt, const std::string &detail) {
+    std::stringstream meth_string;
+    meth_string << m;
+    std::stringstream problem_type;
+    problem_type << tt;
+
+    JSON err {
+        {"method", meth_string.str ()},
+        {"status", status},
+        {"title", problem_type.str ()}};
+
+        if (detail != "") err["detail"] = detail;
+
+        return net::HTTP::response (status, {{"content-type", "application/problem+json"}}, bytes (data::string (err.dump ())));
+}
+
+net::HTTP::response help_response (method m) {
+    std::stringstream ss;
+    help (ss, m);
+    return net::HTTP::response (200, {{"content-type", "text/plain"}}, bytes (data::string (ss.str ())));
+}
+
+net::HTTP::response version_response () {
+    std::stringstream ss;
+    version (ss);
+    auto res = net::HTTP::response (200, {{"content-type", "text/plain"}}, bytes (data::string (ss.str ())));
+    return res;
 }
 /*
 void command_value (const arg_parser &p) {

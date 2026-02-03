@@ -1,5 +1,5 @@
 #include "server.hpp"
-#include "../method.hpp"
+#include "../Cosmos.hpp"
 #include "invert_hash.hpp"
 #include "key.hpp"
 #include "to_private.hpp"
@@ -20,35 +20,6 @@
 
 namespace schema = data::schema;
 using BEEF = Gigamonkey::BEEF;
-
-net::HTTP::response error_response (unsigned int status, method m, problem tt, const std::string &detail) {
-    std::stringstream meth_string;
-    meth_string << m;
-    std::stringstream problem_type;
-    problem_type << tt;
-
-    JSON err {
-        {"method", meth_string.str ()},
-        {"status", status},
-        {"title", problem_type.str ()}};
-
-        if (detail != "") err["detail"] = detail;
-
-        return net::HTTP::response (status, {{"content-type", "application/problem+json"}}, bytes (data::string (err.dump ())));
-}
-
-net::HTTP::response help_response (method m) {
-    std::stringstream ss;
-    help (ss, m);
-    return net::HTTP::response (200, {{"content-type", "text/plain"}}, bytes (data::string (ss.str ())));
-}
-
-net::HTTP::response version_response () {
-    std::stringstream ss;
-    version (ss);
-    auto res = net::HTTP::response (200, {{"content-type", "text/plain"}}, bytes (data::string (ss.str ())));
-    return res;
-}
 
 // for methods that operate on the database 
 // without a particular wallet. 
@@ -210,28 +181,6 @@ net::HTTP::response process_method (
     return error_response (500, m, problem::invalid_wallet_name, "wallet method called without wallet name");
 }
 
-bool parse_uint32 (const std::string &str, uint32_t &result) {
-    try {
-        size_t idx = 0;
-        unsigned long val = std::stoul (str, &idx, 10);  // base 10
-
-        // Extra characters after number
-        if (idx != str.size ()) return false;
-
-        // Out of range for uint32_t
-        if (val > std::numeric_limits<uint32_t>::max ())
-            return false;
-
-        result = static_cast<uint32_t> (val);
-        return true;
-
-    } catch (const std::invalid_argument &) {
-        return false;  // Not a number
-    } catch (const std::out_of_range &) {
-        return false;  // Too large for unsigned long
-    }
-}
-
 net::HTTP::response process_wallet_method (
     server &p, net::HTTP::method http_method, method m,
     Diophant::symbol wallet_name,
@@ -330,21 +279,19 @@ net::HTTP::response process_wallet_method (
         if (!data::contains (p.DB.list_wallet_names (), static_cast<const std::string &> (wallet_name)))
             return error_response (400, m, problem::invalid_parameter,
                 string::write ("cannot find wallet named ", wallet_name));
-        
-        // look at the given key sequence.
-        Diophant::symbol sequence_name =
-            schema::validate<> (query,
-                schema::map::key<Diophant::symbol> ("name"));
 
-        if (!sequence_name.valid ())
-            return error_response (400, m, problem::invalid_parameter, "name");
+        request_next_options opts (wallet_name, query);
+
+        // in the future we will look for a default sequence name, but for now we don't.
+        if (!opts.Sequence || !opts.Sequence->valid ())
+            return error_response (400, m, problem::invalid_parameter, "sequence");
         
         // do we have a sequence by this name? 
         Cosmos::key_source sequence;
 
         {
-            maybe<Cosmos::key_source> seq = p.DB.get_wallet_sequence (wallet_name, sequence_name);
-            if (!bool (seq)) return error_response (400, m, problem::invalid_query, string::write ("no key named ", sequence_name));
+            maybe<Cosmos::key_source> seq = p.DB.get_wallet_sequence (wallet_name, *opts.Sequence);
+            if (!bool (seq)) return error_response (400, m, problem::invalid_query, string::write ("no key named ", *opts.Sequence));
             sequence = *seq;
         }
 
@@ -357,7 +304,7 @@ net::HTTP::response process_wallet_method (
         // make an unused reference to put in the database for later.
         p.DB.set_wallet_unused (wallet_name, database::unused {next_key, sequence.Sequence.Key});
 
-        p.DB.set_wallet_sequence (wallet_name, sequence_name, sequence.Sequence, sequence.Index + 1);
+        p.DB.set_wallet_sequence (wallet_name, *opts.Sequence, sequence.Sequence, sequence.Index + 1);
 
         return string_response (std::string (next_key));
     }

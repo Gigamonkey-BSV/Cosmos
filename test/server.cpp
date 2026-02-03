@@ -57,7 +57,6 @@ TEST (Server, Shutdown) {
     EXPECT_TRUE (Shutdown);
 }
 
-net::HTTP::request make_add_entropy_request (const string &entropy);
 bool is_ok_response (const net::HTTP::response &r);
 bool is_bool_response (bool expected, const net::HTTP::response &);
 bool is_string_response (const net::HTTP::response &);
@@ -164,7 +163,7 @@ TEST (Server, Entropy) {
 
     // initialize random number generator.
     ASSERT_TRUE (is_ok_response (make_request (test_server,
-        make_add_entropy_request ("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"))));
+        request_add_entropy ("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"))));
 
     // fail to generate a key that we already generated.
     ASSERT_TRUE (is_error (make_request (test_server,
@@ -267,7 +266,9 @@ TEST (Server, Key) {
 
 using JSON = data::JSON;
 
-net::HTTP::request make_next_address_request (const std::string &wallet_name, const std::string &sequence_name = "receive");
+net::HTTP::request inline make_next_address_request (const std::string &wallet_name, const std::string &sequence_name = "receive") {
+    return request_next_options {}.name (wallet_name).sequence (sequence_name).request ();
+}
 
 net::HTTP::request make_next_xpub_request (const std::string &wallet_name, const std::string &sequence_name);
 
@@ -276,18 +277,9 @@ TEST (Server, Generate) {
 
     // generate a wallet of each type
     // we should simply get a bool response when we don't request the restoration words.
-    generate_request_options gen_req_A {"A"};
-    gen_req_A.wallet_style (wallet_style::BIP_44).coin_type_none ();
 
-    generate_request_options gen_req_D {"D"};
-    gen_req_D.wallet_style (
-        wallet_style::BIP_44
-    ).mnemonic_style (
-        mnemonic_style::BIP_39
-    ).coin_type (
-        HD::BIP_44::coin_type_Bitcoin);
-
-    ASSERT_TRUE (is_ok_response (make_request (test_server, req_A)));
+    ASSERT_TRUE (is_ok_response (make_request (test_server,
+        generate_request_options {}.name ("A").wallet_style (wallet_style::BIP_44).coin_type_none ().request ())));
 
     // These are not ready yet.
     /*
@@ -297,7 +289,13 @@ TEST (Server, Generate) {
         generate_request_options {"C"}.wallet_style (wallet_style::experimental))));*/
 
     maybe<std::string> maybe_words_D = read_string_response (make_request (test_server,
-        gen_req_D));
+        generate_request_options {}.name ("D").wallet_style (
+                wallet_style::BIP_44
+            ).mnemonic_style (
+                mnemonic_style::BIP_39
+            ).coin_type (
+                HD::BIP_44::coin_type_Bitcoin).request ()));
+
     ASSERT_TRUE (bool (maybe_words_D));
 
 /*
@@ -372,7 +370,7 @@ TEST (Server, ImportPay) {
 
 server prepare (server x, const string &entropy) {
     data::synced (&server::operator (), &x,
-        make_add_entropy_request (entropy));
+        request_add_entropy (entropy));
     data::synced (&server::operator (), &x, make_create_wallet_request ("Wally"));
     return x;
 }
@@ -396,14 +394,6 @@ maybe<string> read_string_response (const net::HTTP::response &r) {
         throw data::exception {} << "Expected string response but got error response " << *err;
     else DATA_LOG (normal) << "response is " << r;
     return {};
-}
-
-net::HTTP::request make_next_address_request (const std::string &wallet_name, const std::string &sequence_name) {
-    return net::HTTP::request::make ().method (
-        net::HTTP::method::post
-    ).path (
-        string::write ("/next_address/", wallet_name)
-    ).query_map ({{"name", sequence_name}}).host ("localhost");
 }
 
 net::HTTP::request make_next_xpub_request (const std::string &wallet_name, const std::string &sequence_name) {

@@ -1,5 +1,5 @@
 
-#include "../method.hpp"
+#include "../Cosmos.hpp"
 #include "import.hpp"
 #include <gigamonkey/pay/BEEF.hpp>
 

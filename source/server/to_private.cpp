@@ -1,5 +1,5 @@
 #include "to_private.hpp"
-#include "../method.hpp"
+#include "../Cosmos.hpp"
 
 #include <data/tools/schema.hpp>
 

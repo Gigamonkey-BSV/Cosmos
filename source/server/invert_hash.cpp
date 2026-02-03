@@ -1,6 +1,6 @@
 
 #include "problem.hpp"
-#include "../method.hpp"
+#include "../Cosmos.hpp"
 #include "invert_hash.hpp"
 
 #include <gigamonkey/p2p/checksum.hpp>

@@ -2,10 +2,11 @@
 #define SERVER_OPTIONS
 
 #include "db.hpp"
-
+#include "../method.hpp"
 #include <Cosmos/types.hpp>
 #include <data/io/arg_parser.hpp>
 
+namespace schema = data::schema;
 namespace args = data::io::args;
 
 struct options : args::parsed {

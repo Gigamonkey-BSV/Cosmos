@@ -4,7 +4,9 @@
 #include <data/tuple.hpp>
 #include <data/math.hpp>
 #include <data/numbers.hpp>
+#include <data/net/JSON.hpp>
 #include <Gigamonkey.hpp>
+#include <gigamonkey/script/pattern/pay_to_address.hpp>
 #include <gigamonkey/script/pattern/pay_to_address.hpp>
 
 namespace net = data::net;
@@ -52,6 +54,8 @@ template <typename K, typename V> using map = data::map<K, V>;
 template <typename K, typename V> using entry = data::entry<K, V>;
 template <typename K, typename V> using dispatch = data::dispatch<K, V>;
 template <typename X> using set = data::set<X>;
+
+using JSON = data::JSON;
 
 namespace Cosmos {
 

@@ -11,6 +11,7 @@ include (GoogleTest)
 add_executable (
   unit_tests
   ../source/method.cpp
+  ../source/Cosmos.cpp
   ../source/Cosmos/database/SQLite.cpp
   ../source/server/db.cpp
   ../source/server/options.cpp

@@ -239,6 +239,7 @@ add_executable (
     CosmosWalletServer
     source/Cosmos/database/SQLite.cpp
     source/method.cpp
+    source/Cosmos.cpp
     source/server/db.cpp
     source/server/options.cpp
     source/server/problem.cpp
@@ -275,6 +276,10 @@ add_executable (
     CosmosWalletClient
     source/Cosmos.cpp
     source/method.cpp
+    source/Client.cpp
+    source/server/problem.cpp
+    source/server/generate.cpp
+    source/server/restore.cpp
 #    source/interface.cpp
 #    source/import.cpp
 #    source/generate.cpp
@@ -282,7 +287,6 @@ add_executable (
 #    source/split.cpp
 #    source/request.cpp
 #    source/accept.cpp
-    source/Client.cpp
 )
 
 target_link_libraries (

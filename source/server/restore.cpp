@@ -389,3 +389,8 @@ net::HTTP::response handle_restore (server &p,
     throw data::method::unimplemented {"method RESTORE"};
 
 }
+
+restore_request_options::restore_request_options (const args::parsed &) {
+
+    throw data::method::unimplemented {"method RESTORE"};
+}

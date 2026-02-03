@@ -9,12 +9,18 @@
 #include "server/restore.hpp"
 #include "server/split.hpp"
 #include "server/spend.hpp"
+#include "server/import.hpp"
 
 #include <Cosmos/boost/miner_options.hpp>
+#include <Cosmos/Diophant.hpp>
 
 error run (const args::parsed &p);
 
 using error = data::io::error;
+
+namespace data::random {
+    bytes Personalization {string {"Cosmos wallet client v1alpha"}};
+}
 
 namespace data {
     void signal_handler (int signal) noexcept {
@@ -22,6 +28,8 @@ namespace data {
     }
 
     error main (std::span<const char *const> rr) {
+
+        data::random::init ({.secure = false});
 
         try {
 
@@ -45,20 +53,6 @@ namespace data {
 }
 
 net::HTTP::request read_command (const data::io::args::parsed &);
-
-namespace schema = data::schema;
-
-auto inline prefix (method m) {
-    return schema::list::value<std::string> () + schema::list::equal<method> (m);
-}
-
-auto inline no_params (method m) {
-    return args::command (set<std::string> {}, prefix (m), schema::map::empty ());
-}
-
-auto inline call_options () {
-    return (schema::map::key<net::URL> ("url") || schema::map::key<net::URL> ("URL"));
-}
 
 net::HTTP::request make_HTTP_request (method m, const args::parsed &p) {
     switch (m) {
@@ -86,7 +80,16 @@ net::HTTP::request make_HTTP_request (method m, const args::parsed &p) {
 
         case method::GENERATE: return generate_request_options (p).request ();
 
-        case method::VALUE: return request_value ();
+        case method::VALUE:
+            return request_value (
+                std::get<2> (
+                    args::validate (p,
+                        args::command {
+                            set<std::string> {},
+                            prefix (method::VALUE),
+                            schema::map::key<Diophant::symbol> ("name")})));
+
+        case method::NEXT: request_next_options {p}.request ();
 
         case method::IMPORT: return request_import (p);
 
@@ -211,3 +214,108 @@ error run (const args::parsed &p) {
 
     return {};
 }
+
+
+std::ostream &version (std::ostream &o) {
+    return o << "Cosmos Wallet version 0.0.2 alpha";
+}
+
+std::ostream &help (std::ostream &o, method meth) {
+    switch (meth) {
+        default :
+            return version (o) << "\n" << "input should be <method> <args>... where method is "
+            "\n\tgenerate   -- create a new wallet."
+            "\n\tupdate     -- get Merkle proofs for txs that were pending last time the program ran."
+            "\n\tvalue      -- print the total value in the wallet."
+            "\n\trequest    -- generate a payment_request."
+            "\n\tpay        -- create a transaction based on a payment request."
+            "\n\treceive    -- accept a new transaction for a payment request."
+            "\n\tsign       -- sign an unsigned transaction."
+            "\n\timport     -- add a utxo to this wallet."
+            "\n\tsend       -- send to an address or script. (depricated)"
+            "\n\tboost      -- boost content."
+            "\n\tsplit      -- split an output into many pieces"
+            "\n\trestore    -- restore a wallet from words, a key, or many other options."
+            "\nuse help \"method\" for information on a specific method";
+        case method::GENERATE :
+            return o << "Generate a new wallet in terms of 24 words (BIP 39) or as an extended private key."
+            "\narguments for method generate:"
+            "\n\t(--name=) (wallet name)"
+            "\n\t" R"((--style=)<"address" | "hd_sequence" | "bip44">)"
+            "\n\t(--words) (use BIP 39)"
+            "\n\t(--no_words) (don't use BIP 39)"
+            "\n\t(--accounts=<uint32> (=10)) (how many accounts to pre-generate)"
+            "\n\t" R"((--coin_type=<uint32|string> (=0)) (value of BIP 44 coin_type | "none" | "bitcoin" | "bitcoin_cash" | "bitcoin_sv"))"
+            "\n\t" R"((--derivation_style=) ("bip44" | "centbee"))"
+            "\n\t" R"((--mnemonic_style=) ("none" | "bip39" | "electrumsv"))"
+            "\n\t" R"((--format=) ("moneybutton" | "relayx" | "centbee" | "electrumsv"))"
+            "\n\t(--number_of_words=<uint32>)"
+            "\n\t(--password=<string>)";
+        case method::VALUE :
+            return o << "Print the value in a wallet. No parameters.";
+        case method::NEXT :
+            return o << "Generate the next receive address"
+            "\narguments for method next:"
+            "\n\t(--name=) (wallet name)"
+            "\n\t" R"((--sequence=) (sequence name))";
+        case method::REQUEST :
+            return o << "Generate a new payment request."
+                "\narguments for method request:"
+                "\n\t(--name=)<wallet name>"
+                "\n\t(--payment_type=\"pubkey\"|\"address\"|\"xpub\") (= \"address\")"
+                "\n\t(--expires=<number of minutes before expiration>)"
+                "\n\t(--memo=\"<explanation of the nature of the payment>\")"
+                "\n\t(--amount=<expected amount of payment>)";
+        case method::PAY :
+            return o << "Respond to a payment request by creating a payment."
+                "\narguments for method pay:"
+                "\n\t(--name=)<wallet name>"
+                "\n\t(--request=)<payment request>"
+                "\n\t(--address=<address to pay to>)"
+                "\n\t(--amount=<amount to pay>)"
+                "\n\t(--memo=<what is the payment about>)"
+                "\n\t(--output=<output in hex>)"
+                "\n\t(--min_sats_per_output=<float>) (= " << Cosmos::spend_options::DefaultMinSatsPerOutput << ")"
+                "\n\t(--max_sats_per_output=<float>) (= " << Cosmos::spend_options::DefaultMaxSatsPerOutput << ")"
+                "\n\t(--mean_sats_per_output=<float>) (= " << Cosmos::spend_options::DefaultMeanSatsPerOutput << ") ";
+        case method::ACCEPT :
+            return o << "Accept a payment."
+            "\narguments for method accept:"
+            "\n\t(--payment=)<payment tx in BEEF or SPV envelope>";
+        case method::SIGN :
+            return o << "arguments for method sign not yet available.";
+        case method::IMPORT :
+            return o << "arguments for method import not yet available.";
+        case method::SEND :
+            return o << "This method is DEPRICATED";
+        case method::SPEND :
+            return o << "Spend coins";
+        case method::BOOST :
+            return o << "arguments for method boost not yet available.";
+        case method::SPLIT :
+            return o << "Split outputs in your wallet into many tiny outputs with small values over a triangular distribution. "
+            "\narguments for method split:"
+            "\n\t(--name=)<wallet name>"
+            "\n\t(--address=)<address | xpub | script hash>"
+            "\n\t(--max_look_ahead=)<integer> (= 10) ; (only used if parameter 'address' is provided as an xpub"
+            "\n\t(--min_sats_per_output=<float>) (= " << Cosmos::spend_options::DefaultMinSatsPerOutput << ")"
+            "\n\t(--max_sats_per_output=<float>) (= " << Cosmos::spend_options::DefaultMaxSatsPerOutput << ")"
+            "\n\t(--mean_sats_per_output=<float>) (= " << Cosmos::spend_options::DefaultMeanSatsPerOutput << ") ";
+        case method::RESTORE :
+            o << "arguments for method restore:"
+            "\n\t(--name=)<wallet name>"
+            "\n\t(--key=)<xpub | xpriv>"
+            "\n\t(--max_look_ahead=)<integer> (= 10)"
+            "\n\t(--words=<string>)"
+            "\n\t(--key_type=\"HD_sequence\"|\"BIP44_account\"|\"BIP44_master\") (= \"HD_sequence\")"
+            "\n\t(--coin_type=\"Bitcoin\"|\"BitcoinCash\"|\"BitcoinSV\"|<integer>)"
+            "\n\t(--wallet_type=\"RelayX\"|\"ElectrumSV\"|\"SimplyCash\"|\"CentBee\"|<string>)"
+            "\n\t(--entropy=<string>)";
+        case method::ENCRYPT_KEY:
+            o << "Encrypt the private key file so that it can only be accessed with a password. No parameters.";
+        case method::DECRYPT_KEY :
+            return o << "Decrypt the private key file again. No parameters.";
+    }
+
+}
+

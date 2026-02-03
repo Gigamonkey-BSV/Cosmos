@@ -1,5 +1,5 @@
 #include "key.hpp"
-#include "../method.hpp"
+#include "../Cosmos.hpp"
 #include "server.hpp"
 #include <data/tools/schema.hpp>
 #include <data/crypto/random.hpp>

@@ -57,7 +57,9 @@ namespace BoostPOW {
         static script_options read (const args &, int start_pos = 2);
         explicit operator output_script () const;
 
-        net::HTTP::request request (const UTF8 & = "localhost");
+        net::HTTP::request request (const UTF8 & = "localhost") {
+            throw data::method::unimplemented {"http request from boost options"};
+        }
     };
 }
 

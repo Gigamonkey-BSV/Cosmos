@@ -17,14 +17,6 @@ using key_expression = Cosmos::key_expression;
 using key_derivation = Cosmos::key_derivation;
 using key_sequence = Cosmos::key_sequence;
 
-std::ostream &version (std::ostream &);
-
-std::ostream &help (std::ostream &, method m = method::UNSET);
-
-net::HTTP::response error_response (unsigned int status, method m, problem, const std::string & = "");
-
-net::HTTP::response help_response (method = method::UNSET);
-
 struct server {
 
     Cosmos::spend_options SpendOptions;
@@ -62,34 +54,7 @@ struct server {
 
 };
 
-bool parse_uint32 (const std::string &str, uint32_t &result);
-
 net::HTTP::response favicon ();
 net::HTTP::response HTML_JS_UI_response ();
-net::HTTP::response version_response ();
-
-net::HTTP::response inline ok_response () {
-    return net::HTTP::response (204);
-}
-
-net::HTTP::response inline JSON_response (const JSON &j) {
-    return net::HTTP::response (200, {{"content-type", "application/json"}}, bytes (data::string (j.dump ())));
-}
-
-net::HTTP::response inline string_response (const string &str) {
-    return net::HTTP::response (200, {{"content-type", "text/plain"}}, bytes (str));
-}
-
-net::HTTP::response inline data_response (const bytes &str) {
-    return net::HTTP::response (200, {{"content-type", "application/octet-stream"}}, str);
-}
-
-net::HTTP::response inline boolean_response (bool b) {
-    return JSON_response (b);
-}
-
-net::HTTP::response inline value_response (Bitcoin::satoshi x) {
-    return JSON_response (JSON (int64 (x)));
-}
 
 #endif

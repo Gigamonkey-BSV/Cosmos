@@ -1,12 +1,11 @@
 
 #include "../method.hpp"
+#include "options.hpp"
 #include "generate.hpp"
 
 #include <gigamonkey/schema/bip_39.hpp>
 #include <data/tools/schema.hpp>
 #include <data/crypto/random.hpp>
-
-namespace schema = data::schema;
 
 coin_type::coin_type (coin_type::value v): maybe<uint32> {} {
     switch (v) {
@@ -33,7 +32,12 @@ std::istream &operator >> (std::istream &i, coin_type &x) {
     else if (sanitized == "bitcoin") x = coin_type {coin_type::Bitcoin};
     else if (sanitized == "bitcoincash") x = coin_type {coin_type::Bitcoin_Cash};
     else if (sanitized == "bitcoinsv") x = coin_type {coin_type::Bitcoin_SV};
-    else if (!parse_uint32 (word, *x)) i.setstate (std::ios::failbit);
+    else {
+        auto val = data::encoding::read<uint32> {} (word);
+        if (!val) {
+            i.setstate (std::ios::failbit);
+        } else x = coin_type {*val};
+    }
     return i;
 }
 
@@ -170,7 +174,7 @@ generate_request_options::generate_request_options (
     // there are differences of opinion in what should
     // be used as the coin_type parameter in a BIP44
     // derivation path.
-    auto derivation_path_schema = schema::map::key<restore_wallet_type> ("format") ||
+    auto derivation_path_schema = schema::map::key<::restore_wallet_type> ("format") ||
         (schema::map::key<::wallet_style> ("style") &&
         *schema::map::key<::derivation_style> ("derivation_style") &&
         *schema::map::key<::coin_type> ("coin_type"));
@@ -190,21 +194,21 @@ generate_request_options::generate_request_options (
     switch (wallet_generation.index ()) {
         case 0: {
             WalletStyle = wallet_style::BIP_44;
-            restore_wallet_type WalletType = std::get<0> (wallet_generation);
+            ::restore_wallet_type WalletType = std::get<0> (wallet_generation);
             switch (WalletType) {
-                case restore_wallet_type::Money_Button: {
+                case ::restore_wallet_type::Money_Button: {
                     CoinTypeDerivationParameter = HD::BIP_44::moneybutton_coin_type;
                 } break;
-                case restore_wallet_type::RelayX: {
+                case ::restore_wallet_type::RelayX: {
                     CoinTypeDerivationParameter = HD::BIP_44::relay_x_coin_type;
                 } break;
-                case restore_wallet_type::Simply_Cash: {
+                case ::restore_wallet_type::Simply_Cash: {
                     CoinTypeDerivationParameter = HD::BIP_44::simply_cash_coin_type;
                 } break;
-                case restore_wallet_type::Electrum_SV: {
+                case ::restore_wallet_type::Electrum_SV: {
                     CoinTypeDerivationParameter = HD::BIP_44::electrum_sv_coin_type;
                 } break;
-                case restore_wallet_type::CentBee: {
+                case ::restore_wallet_type::CentBee: {
                     CoinTypeDerivationParameter = ::coin_type {};
                 } break;
                 default: throw data::method::unimplemented {"wallet types for GENERATE method"};
@@ -270,15 +274,15 @@ generate_error generate (database &DB, const std::string &wallet_words, const ge
     auto master = root.derive (root_derivation);
 
     // having read all the settings, we proceed to alter the database.
-    if (!DB.make_wallet (gen.Name))
+    if (!DB.make_wallet (gen.name ()))
         return generate_error::wallet_already_exists;
 
     // set root key
-    DB.set_key (gen.Name, Diophant::symbol {"root"}, key_expression {root});
-    DB.set_key (gen.Name, Diophant::symbol {"master"}, key_expression {master});
+    DB.set_key (gen.name (), Diophant::symbol {"root"}, key_expression {root});
+    DB.set_key (gen.name (), Diophant::symbol {"master"}, key_expression {master});
 
     // generate all the accounts.
-    for (uint32 account_number = 0; account_number < gen.Accounts; account_number++) {
+    for (uint32 account_number = 0; account_number < gen.accounts (); account_number++) {
 
         list<uint32> account_derivation = {HD::BIP_32::harden (account_number)};
 
@@ -308,12 +312,12 @@ generate_error generate (database &DB, const std::string &wallet_words, const ge
         }
 
         // note that each of these returns a regular pubkey rather than an xpub.
-        DB.set_wallet_sequence (gen.Name, receive_name,
+        DB.set_wallet_sequence (gen.name (), receive_name,
             key_sequence {
                 receive_pubkey,
                 key_derivation {"@ key index -> key / index"}}, 0);
 
-        DB.set_wallet_sequence (gen.Name, change_name,
+        DB.set_wallet_sequence (gen.name (), change_name,
             key_sequence {
                 change_pubkey,
                 key_derivation {"@ key index -> key / index"}}, 0);
@@ -349,7 +353,7 @@ net::HTTP::response handle_generate (server &p,
                     "if mnemonic is none, then number_of_words must not be present");
             case generate_error::invalid_number_of_words:
                 return error_response (400, method::GENERATE, problem::invalid_parameter,
-                    string::write ("'number_of_words' should be either 12 or 24 and instead is ", gen.NumberOfWords));
+                    string::write ("'number_of_words' should be either 12 or 24 and instead is ", gen.number_of_words ()));
             case generate_error::zero_accounts:
                 return error_response (400, method::GENERATE, problem::invalid_parameter,
                     "cannot have zero accounts");
@@ -360,7 +364,7 @@ net::HTTP::response handle_generate (server &p,
 
     // we generate the wallet the same way regardless of whether the user wants words.
     bytes wallet_entropy {};
-    wallet_entropy.resize (gen.NumberOfWords * 4 / 3);
+    wallet_entropy.resize (gen.number_of_words () * 4 / 3);
 
     // generate master key.
     data::crypto::random::get () >> wallet_entropy;
@@ -372,14 +376,30 @@ net::HTTP::response handle_generate (server &p,
         switch (result) {
             case generate_error::wallet_already_exists:
                 return error_response (500, method::GENERATE, problem::failed,
-                    string::write ("wallet ", gen.Name, " already exists"));
+                    string::write ("wallet ", gen.name (), " already exists"));
             default:
                 return error_response (500, method::GENERATE, problem::failed);
         }
 
-    if (gen.MnemonicStyle != mnemonic_style::none)
+    if (gen.mnemonic_style () != ::mnemonic_style::none)
         return string_response (wallet_words);
 
     return ok_response ();
 
+}
+
+generate_request_options::generate_request_options (const args::parsed &p) {
+    args::validate (p, args::command {
+        set<std::string> {"words", "no_words"},
+        prefix (method::GENERATE),
+        schema::map::key<Diophant::symbol> ("name") &&
+            *schema::map::key<::wallet_style> ("style") &&
+            *schema::map::key<::restore_wallet_type> ("format") &&
+            *schema::map::key<uint32> ("number_of_words") &&
+            *schema::map::key<uint32> ("accounts") &&
+            *schema::map::key<derivation_style> ("derivation_style") &&
+            *schema::map::key<::mnemonic_style> ("mnemonic_style") &&
+            *schema::map::key<std::string> ("password")});
+
+    throw data::method::unimplemented {"generate_request_options from parsed"};
 }
