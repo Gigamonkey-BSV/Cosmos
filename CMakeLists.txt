@@ -224,6 +224,7 @@ target_link_libraries (
 
   diophant
   Gigamonkey::gigamonkey
+  Gigamonkey::Merkle
   Data::io
   Data::crypto
   Data::net

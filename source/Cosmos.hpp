@@ -3,6 +3,7 @@
 
 #include <data/io/arg_parser.hpp>
 #include <data/io/error.hpp>
+#include <data/net/URL.hpp>
 #include <Cosmos/types.hpp>
 #include "method.hpp"
 #include "server/problem.hpp"
@@ -36,7 +37,9 @@ auto inline no_params (method m) {
 }
 
 auto inline call_options () {
-    return (schema::map::key<net::URL> ("url") || schema::map::key<net::URL> ("URL"));
+    return +*schema::map::key<net::authority> ("authority") ||
+        +*schema::map::key<net::domain_name> ("domain") ||
+        +(*schema::map::key<net::IP::address> ("ip_address") && *schema::map::key<uint32> ("port"));
 }
 
 struct request_next_options {
@@ -90,6 +93,14 @@ net::HTTP::response inline boolean_response (bool b) {
 net::HTTP::response inline value_response (Bitcoin::satoshi x) {
     return JSON_response (JSON (int64 (x)));
 }
+
+maybe<net::error> read_error_response (const net::HTTP::response &r);
+
+bool read_ok_response (const net::HTTP::response &r);
+
+maybe<string> read_string_response (const net::HTTP::response &r);
+
+maybe<JSON> read_JSON_response (const net::HTTP::response &r);
 
 std::string inline version () {
     std::stringstream ss;

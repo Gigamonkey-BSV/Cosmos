@@ -14,6 +14,8 @@
 #include <Cosmos/boost/miner_options.hpp>
 #include <Cosmos/Diophant.hpp>
 
+#include <data/net/URL.hpp>
+
 error run (const args::parsed &p);
 
 using error = data::io::error;
@@ -48,19 +50,76 @@ namespace data {
         }
 
         return {};
-
     }
 }
 
 net::HTTP::request read_command (const data::io::args::parsed &);
 
-net::HTTP::request make_HTTP_request (method m, const args::parsed &p) {
+using authority = data::net::authority;
+
+authority read_authority (const args::parsed &p) {
+    maybe<authority> auth;
+    p.get ("authority", auth);
+
+    maybe<net::domain_name> dom;
+    p.get ("domain", dom);
+
+    maybe<net::IP::address> addr;
+    p.get ("ip_address", addr);
+
+    maybe<uint16> port;
+    p.get ("port", port);
+
+    if (dom) {
+        authority auth_from_dom;
+        auth_from_dom = authority {*dom};
+        if (auth && *auth != auth_from_dom)
+            throw data::exception {3} << "authority from option 'authority' and option 'domain' disagree";
+        else auth = auth_from_dom;
+    }
+
+    if (addr) {
+        authority auth_from_ip_port;
+        if (port) auth_from_ip_port = authority {*addr, *port};
+        else auth_from_ip_port = authority {*addr};
+        if (auth && *auth != auth_from_ip_port)
+            throw data::exception {3} << "authority from option 'authority' and options 'ip_address' and 'port' disagree";
+        else auth = auth_from_ip_port;
+    }
+
+    return *auth;
+
+}
+
+net::HTTP::response call (const authority &a, const net::HTTP::request &req) {
+    return data::synced ([&] () -> awaitable<net::HTTP::response> {
+        auto stream = co_await net::HTTP::connect (net::HTTP::version_1_1, a);
+        auto res = co_await stream->request (req);
+        stream->close ();
+        co_return res;
+    });
+}
+
+error process_unexpected_response (const net::HTTP::response &r) {
+    if (auto err = read_error_response (r))
+        return error {error::user_action, string::write ("received error response: ", *err)};
+
+    // TODO look at the response code and try to define the error more narrowly.
+
+    return error {error::programmer_action, "Cannot read server response"};
+}
+
+error call_server (method m, const args::parsed &p) {
+    auto a = read_authority (p);
+
     switch (m) {
 
         // TODO URL parameter
         case method::SHUTDOWN: {
             auto validated = args::validate (p, no_params (method::SHUTDOWN));
-            return request_shutdown ();
+            auto res = call (a, request_shutdown ());
+            if (read_ok_response (res)) return {};
+            return process_unexpected_response (res);
         }
 
         case method::ADD_ENTROPY: {
@@ -69,37 +128,98 @@ net::HTTP::request make_HTTP_request (method m, const args::parsed &p) {
                     args::command {
                         set<std::string> {},
                         prefix (method::ADD_ENTROPY) + schema::list::value<std::string> (),
-                        schema::map::empty ()}));
-            return request_add_entropy (entropy_string);
+                        -call_options ()}));
+            auto res = call (a, request_add_entropy (entropy_string));
+            if (read_ok_response (res)) return {};
+            return process_unexpected_response (res);
         }
 
         case method::LIST_WALLETS: {
-            auto validated = args::validate (p, no_params (method::LIST_WALLETS));
-            return request_list_wallets ();
+            auto validated = args::validate (p,
+                    args::command {
+                        set<std::string> {},
+                        prefix (method::LIST_WALLETS),
+                        -call_options ()});
+            auto res = call (a, request_list_wallets ());
+            auto names = read_JSON_response (res);
+            if (!names) return process_unexpected_response (res);
+            std::cout << *names << std::endl;
+            return {};
         }
 
-        case method::GENERATE: return generate_request_options (p).request ();
+        case method::GENERATE: {
+            auto res = call (a, generate_request_options (p).request ());
+            if (read_ok_response (res)) return {};
+            auto words = read_string_response (res);
+            if (words) {
+                std::cout << *words << std::endl;
+                return {};
+            }
+            return process_unexpected_response (res);
+        }
 
-        case method::VALUE:
-            return request_value (
-                std::get<2> (
-                    args::validate (p,
-                        args::command {
-                            set<std::string> {},
-                            prefix (method::VALUE),
-                            schema::map::key<Diophant::symbol> ("name")})));
+        case method::VALUE: {
+            auto [wallet_name, _] = std::get<2> (
+                args::validate (p,
+                    args::command {
+                        set<std::string> {},
+                        prefix (method::VALUE),
+                        schema::map::key<Diophant::symbol> ("name") && -call_options ()}));
 
-        case method::NEXT: request_next_options {p}.request ();
+            auto res = call (a, request_value (wallet_name));
+            auto val = read_string_response (res);
+            if (!val) return process_unexpected_response (res);
+            std::cout << *val << std::endl;
+            return {};
+        }
 
-        case method::IMPORT: return request_import (p);
+        case method::NEXT: {
+            auto res = call (a, request_next_options {p}.request ());
+            auto addr = read_string_response (res);
+            if (!addr) return process_unexpected_response (res);
+            std::cout << *addr << std::endl;
+            return {};
+        }
 
-        case method::RESTORE: return restore_request_options (p).request ();
+        case method::IMPORT: {
+            auto res = call (a, request_import (p));
+            auto result = read_JSON_response (res);
+            if (!result) return process_unexpected_response (res);
+            std::cout << *result << std::endl;
+            return {};
+        }
 
-        case method::SPEND: return spend_request_options (p).request ();
+        case method::RESTORE: {
+            auto res = call (a, restore_request_options (p).request ());
+            auto result = read_JSON_response (res);
+            if (!result) return process_unexpected_response (res);
+            std::cout << *result << std::endl;
+            return {};
+        }
 
-        case method::SPLIT: return split_request_options (p).request ();
+        case method::SPEND: {
+            auto res = call (a, spend_request_options (p).request ());
+            auto txids = read_string_response (res);
+            if (!txids) return process_unexpected_response (res);
+            std::cout << *txids << std::endl;
+            return {};
+        }
 
-        case method::BOOST: return BoostPOW::script_options::read (p).request ();
+        case method::SPLIT: {
+            auto res = call (a, split_request_options (p).request ());
+            auto result = read_string_response (res);
+            if (!result) return process_unexpected_response (res);
+            std::cout << *result << std::endl;
+            return {};
+        }
+
+        case method::BOOST: {
+            auto res = call (a, BoostPOW::script_options::read (p).request ());
+            auto result = read_string_response (res);
+            if (!result ) return process_unexpected_response (res);
+            std::cout << *result << std::endl;
+            return {};
+        }
 /*
         case UPDATE: {
             command_update (p);
@@ -147,6 +267,8 @@ net::HTTP::request make_HTTP_request (method m, const args::parsed &p) {
     }
 }
 
+boost::asio::io_context IO;
+
 error try_with_method (method m, const args::parsed &p) {
     switch (m) {
         case method::VERSION: {
@@ -170,9 +292,7 @@ error try_with_method (method m, const args::parsed &p) {
         } return {};
 
         default: {
-            auto req = make_HTTP_request (m, p);
-            // TODO try to dial into the server
-            return {};
+            return call_server (m, p);
         }
     }
 }

@@ -57,6 +57,8 @@ template <typename X> using set = data::set<X>;
 
 using JSON = data::JSON;
 
+using exception = data::exception;
+
 namespace Cosmos {
 
     // 1580790300

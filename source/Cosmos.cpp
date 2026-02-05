@@ -66,6 +66,38 @@ net::HTTP::response version_response () {
     auto res = net::HTTP::response (200, {{"content-type", "text/plain"}}, bytes (data::string (ss.str ())));
     return res;
 }
+
+maybe<net::error> read_error_response (const net::HTTP::response &r) {
+    auto ct = r.content_type ();
+    if (!bool (ct)) return {};
+
+    if (*ct != "application/problem+json") return {};
+
+    auto j = JSON::parse (string (r.Body));
+
+    if (!net::error::valid (j)) return {};
+
+    return j;
+}
+
+bool read_ok_response (const net::HTTP::response &r) {
+    return !bool (r.content_type ()) && r.Body == bytes {} && r.Status == 204;
+}
+
+maybe<string> read_string_response (const net::HTTP::response &r) {
+    bool ok = bool (r.content_type ()) && *r.content_type () == "text/plain" && r.Status == 200;
+    if (ok) return string (r.Body);
+    return {};
+}
+
+maybe<JSON> read_JSON_response (const net::HTTP::response &r) {
+    if (!(bool (r.content_type ()) && *r.content_type () == "application/json" && r.Status == 200)) return {};
+    try {
+        return JSON::parse (string (r.Body));
+    } catch (...) {
+        return {};
+    }
+}
 /*
 void command_value (const arg_parser &p) {
     Cosmos::Interface e {};

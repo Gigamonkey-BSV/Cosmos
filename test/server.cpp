@@ -41,10 +41,8 @@ server get_test_server () {
     return server {program_options.spend_options (), *DB, nullptr, nullptr};
 }
 
-maybe<net::error> read_error (const net::HTTP::response &);
-
 bool is_error (const net::HTTP::response &r) {
-    return bool (read_error (r));
+    return bool (read_error_response (r));
 }
 
 net::HTTP::response make_request (server &x, const net::HTTP::request &r) {
@@ -140,7 +138,7 @@ TEST (Server, CreateWallet) {
 
 }
 
-maybe<string> read_string_response (const net::HTTP::response &r);
+maybe<string> expect_string_response (const net::HTTP::response &r);
 
 TEST (Server, Entropy) {
     auto test_server = get_test_server ();
@@ -170,7 +168,7 @@ TEST (Server, Entropy) {
         post_key_request ("Wally", "X", key_type::secp256k1))));
 
     // successfully generate a new key
-    maybe<string> successfully_create_key = read_string_response (make_request (test_server,
+    maybe<string> successfully_create_key = expect_string_response (make_request (test_server,
         post_key_request ("Wally", "Y", key_type::secp256k1)));
 
     ASSERT_TRUE (successfully_create_key);
@@ -178,7 +176,7 @@ TEST (Server, Entropy) {
     // fail to get the key from the wrong wallet.
     ASSERT_TRUE (is_error (make_request (test_server, get_key_request ("Sally", "Y"))));
 
-    auto get_new_key = read_string_response (make_request (test_server, get_key_request ("Wally", "Y")));
+    auto get_new_key = expect_string_response (make_request (test_server, get_key_request ("Wally", "Y")));
 
     // successfully retrieve the key.
     ASSERT_TRUE (get_new_key);
@@ -199,7 +197,7 @@ template <size_t x> net::HTTP::request request_post_invert_hash (Cosmos::hash_fu
 key_expression read_key_expression (const net::HTTP::response &);
 
 bool is_string_response (const net::HTTP::response &r) {
-    return bool (read_string_response (r));
+    return bool (expect_string_response (r));
 }
 
 // make three random keys of different types.
@@ -210,13 +208,13 @@ TEST (Server, Key) {
     EXPECT_TRUE (is_error (make_request (test_server, get_key_request ("Wally", "X"))));
 
     // generate keys of different types and retrieve them.
-    auto res_gen_X = read_string_response (make_request (test_server, post_key_request ("Wally", "X", key_type::secp256k1)));
+    auto res_gen_X = expect_string_response (make_request (test_server, post_key_request ("Wally", "X", key_type::secp256k1)));
     ASSERT_TRUE (bool (res_gen_X));
 
-    auto res_gen_Y = read_string_response (make_request (test_server, post_key_request ("Wally", "Y", key_type::WIF)));
+    auto res_gen_Y = expect_string_response (make_request (test_server, post_key_request ("Wally", "Y", key_type::WIF)));
     ASSERT_TRUE (bool (res_gen_Y));
 
-    auto res_gen_Z = read_string_response (make_request (test_server, post_key_request ("Wally", "Z", key_type::xpriv)));
+    auto res_gen_Z = expect_string_response (make_request (test_server, post_key_request ("Wally", "Z", key_type::xpriv)));
     EXPECT_TRUE (bool (res_gen_Z));
 
     key_expression secret_X;
@@ -250,9 +248,9 @@ TEST (Server, Key) {
     maybe<string> secret_Y_retrieved;
     maybe<string> secret_Z_retrieved;
 
-    EXPECT_NO_THROW (secret_X_retrieved = read_string_response (make_request (test_server, make_to_private_get_request (pubkey_X))));
-    EXPECT_NO_THROW (secret_Y_retrieved = read_string_response (make_request (test_server, make_to_private_get_request (pubkey_Y))));
-    EXPECT_NO_THROW (secret_Z_retrieved = read_string_response (make_request (test_server, make_to_private_get_request (pubkey_Z))));
+    EXPECT_NO_THROW (secret_X_retrieved = expect_string_response (make_request (test_server, make_to_private_get_request (pubkey_X))));
+    EXPECT_NO_THROW (secret_Y_retrieved = expect_string_response (make_request (test_server, make_to_private_get_request (pubkey_Y))));
+    EXPECT_NO_THROW (secret_Z_retrieved = expect_string_response (make_request (test_server, make_to_private_get_request (pubkey_Z))));
 
     EXPECT_EQ (secret_X, key_expression {*secret_X_retrieved}) << "expect " << secret_X << " to equal " << *secret_X_retrieved;
     EXPECT_EQ (secret_Y, key_expression {*secret_Y_retrieved}) << "expect " << secret_Y << " to equal " << *secret_Y_retrieved;
@@ -288,7 +286,7 @@ TEST (Server, Generate) {
     ASSERT_TRUE (is_ok_response (true, make_request (test_server,
         generate_request_options {"C"}.wallet_style (wallet_style::experimental))));*/
 
-    maybe<std::string> maybe_words_D = read_string_response (make_request (test_server,
+    maybe<std::string> maybe_words_D = expect_string_response (make_request (test_server,
         generate_request_options {}.name ("D").wallet_style (
                 wallet_style::BIP_44
             ).mnemonic_style (
@@ -299,11 +297,11 @@ TEST (Server, Generate) {
     ASSERT_TRUE (bool (maybe_words_D));
 
 /*
-    maybe<std::string> maybe_words_E = read_string_response (make_request (test_server,
+    maybe<std::string> maybe_words_E = expect_string_response (make_request (test_server,
         generate_request_options {"E"}.wallet_style (wallet_style::BIP_44_plus).mnemonic_style (mnemonic_style::BIP_39)));
     EXPECT_TRUE (bool (maybe_words_E));
 
-    maybe<std::string> maybe_words_F = read_string_response (make_request (test_server,
+    maybe<std::string> maybe_words_F = expect_string_response (make_request (test_server,
         generate_request_options {"F"}.wallet_style (wallet_style::experimental).mnemonic_style (mnemonic_style::BIP_39)));
     ASSERT_TRUE (bool (maybe_words_F));*/
 
@@ -315,16 +313,16 @@ TEST (Server, Generate) {
     maybe<std::string> next_change_D;
 
     EXPECT_NO_THROW (next_receive_A =
-        read_string_response (make_request (test_server, make_next_address_request ("A", "receive"))));
+        expect_string_response (make_request (test_server, make_next_address_request ("A", "receive"))));
 
     EXPECT_NO_THROW (next_change_A =
-        read_string_response (make_request (test_server, make_next_address_request ("A", "change"))));
+        expect_string_response (make_request (test_server, make_next_address_request ("A", "change"))));
 
     EXPECT_NO_THROW (next_receive_D =
-        read_string_response (make_request (test_server, make_next_address_request ("D", "receive"))));
+        expect_string_response (make_request (test_server, make_next_address_request ("D", "receive"))));
 
     EXPECT_NO_THROW (next_change_D =
-        read_string_response (make_request (test_server, make_next_address_request ("D", "change"))));
+        expect_string_response (make_request (test_server, make_next_address_request ("D", "change"))));
 
     // TODO ensure that we can regenerate these from the word for wallet D.
 
@@ -332,15 +330,15 @@ TEST (Server, Generate) {
 
     EXPECT_TRUE (is_error (make_request (test_server, make_next_xpub_request ("A", "xreceive"))));
 /*
-    maybe<std::string> next_xpub_B = read_string_response (make_request (test_server, make_next_xpub_request ("B")));
+    maybe<std::string> next_xpub_B = expect_string_response (make_request (test_server, make_next_xpub_request ("B")));
 
-    maybe<std::string> next_xpub_C = read_string_response (make_request (test_server, make_next_xpub_request ("C")));
+    maybe<std::string> next_xpub_C = expect_string_response (make_request (test_server, make_next_xpub_request ("C")));
 */
     EXPECT_TRUE (is_error (make_request (test_server, make_next_xpub_request ("D", "xreceive"))));
 /*
-    maybe<std::string> next_xpub_E = read_string_response (make_request (test_server, make_next_xpub_request ("E")));
+    maybe<std::string> next_xpub_E = expect_string_response (make_request (test_server, make_next_xpub_request ("E")));
 
-    maybe<std::string> next_xpub_F = read_string_response (make_request (test_server, make_next_xpub_request ("F")));*/
+    maybe<std::string> next_xpub_F = expect_string_response (make_request (test_server, make_next_xpub_request ("F")));*/
 
     // TODO Generate the signing key where appropriate.
 
@@ -376,20 +374,19 @@ server prepare (server x, const string &entropy) {
 }
 
 bool is_ok_response (const net::HTTP::response &r) {
-    bool ok = !bool (r.content_type ()) && r.Body == bytes {} && r.Status == 204;
-    if (ok) return true;
+    if (read_ok_response (r)) return true;
     // check if this is an error response instead.
-    maybe<net::error> err = read_error (r);
+    maybe<net::error> err = read_error_response (r);
     if (bool (err))
         throw data::exception {} << "Expected ok response but got error response " << *err;
     return false;
 }
 
-maybe<string> read_string_response (const net::HTTP::response &r) {
-    bool ok = bool (r.content_type ()) && *r.content_type () == "text/plain" && r.Status == 200;
-    if (ok) return string (r.Body);
+maybe<string> expect_string_response (const net::HTTP::response &r) {
+    auto z = read_string_response (r);
+    if (z) return z;
     // check if this is an error response instead.
-    maybe<net::error> err = read_error (r);
+    maybe<net::error> err = read_error_response (r);
     if (bool (err))
         throw data::exception {} << "Expected string response but got error response " << *err;
     else DATA_LOG (normal) << "response is " << r;
@@ -404,14 +401,6 @@ net::HTTP::request make_next_xpub_request (const std::string &wallet_name, const
     ).query_map ({{"name", sequence_name}}).host ("localhost");
 }
 
-maybe<JSON> read_JSON_response (const net::HTTP::response &r) {
-    try {
-        return JSON::parse (string (r.Body));
-    } catch (...) {
-        return {};
-    }
-}
-
 bool is_JSON_response (const JSON &expected, const net::HTTP::response &r) {
     maybe<JSON> result = read_JSON_response (r);
     if (!bool (result)) return false;
@@ -421,19 +410,6 @@ bool is_JSON_response (const JSON &expected, const net::HTTP::response &r) {
 maybe<std::string> read_string (const net::HTTP::response &r) {
     if (!r.content_type () == net::HTTP::content::type::text_plain) return {};
     return string (r.Body);
-}
-
-maybe<net::error> read_error (const net::HTTP::response &r) {
-    auto ct = r.content_type ();
-    if (!bool (ct)) return {};
-
-    if (*ct != "application/problem+json") return {};
-
-    auto j = JSON::parse (string (r.Body));
-
-    if (!net::error::valid (j)) return {};
-
-    return j;
 }
 
 maybe<bool> read_bool_response (const net::HTTP::response &r) {
@@ -446,7 +422,7 @@ maybe<bool> read_bool_response (const net::HTTP::response &r) {
 maybe<bytes> read_data_response (const net::HTTP::response &r) {
     auto ct = r.content_type ();
     if (!bool (ct) || *ct != "application/octet-stream") {
-        auto err = read_error (r);
+        auto err = read_error_response (r);
         if (bool (err))
             throw data::exception {} << "expected data response but got error " << *err;
         return {};
