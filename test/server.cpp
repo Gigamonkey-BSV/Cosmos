@@ -1,14 +1,15 @@
 #include "../source/Cosmos.hpp"
 #include "../source/server/server.hpp"
 #include "../source/server/key.hpp"
-#include "../source/server/generate.hpp"
 #include "../source/server/invert_hash.hpp"
 #include "../source/server/options.hpp"
 #include "../source/server/to_private.hpp"
 #include <data/net/JSON.hpp>
 #include <data/net/error.hpp>
 #include <Cosmos/Diophant.hpp>
+#include <Cosmos/REST/REST.hpp>
 #include <data/io/random.hpp>
+#include <gigamonkey/teranode.hpp>
 #include "gtest/gtest.h"
 
 std::atomic<bool> Shutdown {false};
@@ -41,6 +42,10 @@ server get_test_server () {
     return server {program_options.spend_options (), *DB, nullptr, nullptr};
 }
 
+using namespace Cosmos;
+
+REST rest {"/"};
+
 bool is_error (const net::HTTP::response &r) {
     return bool (read_error_response (r));
 }
@@ -51,7 +56,7 @@ net::HTTP::response make_request (server &x, const net::HTTP::request &r) {
 
 TEST (Server, Shutdown) {
     auto test_server = get_test_server ();
-    EXPECT_FALSE (is_error (make_request (test_server, request_shutdown ())));
+    EXPECT_FALSE (is_error (make_request (test_server, rest.request_shutdown ())));
     EXPECT_TRUE (Shutdown);
 }
 
@@ -125,13 +130,13 @@ TEST (Server, CreateWallet) {
     auto test_server = get_test_server ();
 
     // list_wallets should return an empty list.
-    EXPECT_TRUE (is_JSON_response (JSON::array_t (), make_request (test_server, request_list_wallets ())));
+    EXPECT_TRUE (is_JSON_response (JSON::array_t (), make_request (test_server, rest.request_list_wallets ())));
 
     // Make a wallet.
     ASSERT_TRUE (is_ok_response (make_request (test_server, make_create_wallet_request ("Wally"))));
 
     // list wallets should now be a non-empty list.
-    EXPECT_TRUE (is_JSON_response (JSON::array_t {"Wally"}, make_request (test_server, request_list_wallets ())));
+    EXPECT_TRUE (is_JSON_response (JSON::array_t {"Wally"}, make_request (test_server, rest.request_list_wallets ())));
 
     // try to make the wallet again and fail.
     ASSERT_TRUE (is_error (make_request (test_server, make_create_wallet_request ("Wally"))));
@@ -161,7 +166,7 @@ TEST (Server, Entropy) {
 
     // initialize random number generator.
     ASSERT_TRUE (is_ok_response (make_request (test_server,
-        request_add_entropy ("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"))));
+        rest.request_add_entropy ("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"))));
 
     // fail to generate a key that we already generated.
     ASSERT_TRUE (is_error (make_request (test_server,
@@ -264,8 +269,8 @@ TEST (Server, Key) {
 
 using JSON = data::JSON;
 
-net::HTTP::request inline make_next_address_request (const std::string &wallet_name, const std::string &sequence_name = "receive") {
-    return request_next_options {}.name (wallet_name).sequence (sequence_name).request ();
+net::HTTP::request inline make_next_request (const std::string &wallet_name, const std::string &sequence_name = "receive") {
+    return rest.request (next_request_options {}.name (wallet_name).sequence (sequence_name));
 }
 
 net::HTTP::request make_next_xpub_request (const std::string &wallet_name, const std::string &sequence_name);
@@ -277,7 +282,7 @@ TEST (Server, Generate) {
     // we should simply get a bool response when we don't request the restoration words.
 
     ASSERT_TRUE (is_ok_response (make_request (test_server,
-        generate_request_options {}.name ("A").wallet_style (wallet_style::BIP_44).coin_type_none ().request ())));
+        rest.request (generate_request_options {}.name ("A").wallet_style (wallet_style::BIP_44).coin_type_none ()))));
 
     // These are not ready yet.
     /*
@@ -287,12 +292,12 @@ TEST (Server, Generate) {
         generate_request_options {"C"}.wallet_style (wallet_style::experimental))));*/
 
     maybe<std::string> maybe_words_D = expect_string_response (make_request (test_server,
-        generate_request_options {}.name ("D").wallet_style (
+        rest.request (generate_request_options {}.name ("D").wallet_style (
                 wallet_style::BIP_44
             ).mnemonic_style (
                 mnemonic_style::BIP_39
             ).coin_type (
-                HD::BIP_44::coin_type_Bitcoin).request ()));
+                HD::BIP_44::coin_type_Bitcoin))));
 
     ASSERT_TRUE (bool (maybe_words_D));
 
@@ -313,28 +318,28 @@ TEST (Server, Generate) {
     maybe<std::string> next_change_D;
 
     EXPECT_NO_THROW (next_receive_A =
-        expect_string_response (make_request (test_server, make_next_address_request ("A", "receive"))));
+        expect_string_response (make_request (test_server, make_next_request ("A", "receive"))));
 
     EXPECT_NO_THROW (next_change_A =
-        expect_string_response (make_request (test_server, make_next_address_request ("A", "change"))));
+        expect_string_response (make_request (test_server, make_next_request ("A", "change"))));
 
     EXPECT_NO_THROW (next_receive_D =
-        expect_string_response (make_request (test_server, make_next_address_request ("D", "receive"))));
+        expect_string_response (make_request (test_server, make_next_request ("D", "receive"))));
 
     EXPECT_NO_THROW (next_change_D =
-        expect_string_response (make_request (test_server, make_next_address_request ("D", "change"))));
+        expect_string_response (make_request (test_server, make_next_request ("D", "change"))));
 
     // TODO ensure that we can regenerate these from the word for wallet D.
 
     // generate a new xpub where appropriate
 
-    EXPECT_TRUE (is_error (make_request (test_server, make_next_xpub_request ("A", "xreceive"))));
+    EXPECT_TRUE (is_error (make_request (test_server, make_next_request ("A", "xreceive"))));
 /*
     maybe<std::string> next_xpub_B = expect_string_response (make_request (test_server, make_next_xpub_request ("B")));
 
     maybe<std::string> next_xpub_C = expect_string_response (make_request (test_server, make_next_xpub_request ("C")));
 */
-    EXPECT_TRUE (is_error (make_request (test_server, make_next_xpub_request ("D", "xreceive"))));
+    EXPECT_TRUE (is_error (make_request (test_server, make_next_request ("D", "xreceive"))));
 /*
     maybe<std::string> next_xpub_E = expect_string_response (make_request (test_server, make_next_xpub_request ("E")));
 
@@ -368,7 +373,7 @@ TEST (Server, ImportPay) {
 
 server prepare (server x, const string &entropy) {
     data::synced (&server::operator (), &x,
-        request_add_entropy (entropy));
+        rest.request_add_entropy (entropy));
     data::synced (&server::operator (), &x, make_create_wallet_request ("Wally"));
     return x;
 }
@@ -391,14 +396,6 @@ maybe<string> expect_string_response (const net::HTTP::response &r) {
         throw data::exception {} << "Expected string response but got error response " << *err;
     else DATA_LOG (normal) << "response is " << r;
     return {};
-}
-
-net::HTTP::request make_next_xpub_request (const std::string &wallet_name, const std::string &sequence_name) {
-    return net::HTTP::request::make ().method (
-        net::HTTP::method::post
-    ).path (
-        string::write ("/next_xpub/", wallet_name)
-    ).query_map ({{"name", sequence_name}}).host ("localhost");
 }
 
 bool is_JSON_response (const JSON &expected, const net::HTTP::response &r) {

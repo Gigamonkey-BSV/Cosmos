@@ -17,8 +17,8 @@ namespace Cosmos {
 
     awaitable<bool> whatsonchain::transactions::broadcast (const bytes &tx) {
 
-        net::HTTP::request req = net::HTTP::request (API.REST (net::HTTP::request::make {}.method (net::HTTP::method::post).
-            path ("/v1/bsv/main/tx/raw").body (JSON {{"tx_hex", encoding::hex::write (tx)}})));
+        net::HTTP::request req = net::HTTP::request (
+            API.REST (net::HTTP::method::post, "/tx/raw").body (JSON {{"tx_hex", encoding::hex::write (tx)}}));
 
         auto response = co_await API (req);
 

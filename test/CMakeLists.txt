@@ -10,18 +10,14 @@ include (GoogleTest)
 
 add_executable (
   unit_tests
-  ../source/method.cpp
   ../source/Cosmos.cpp
   ../source/Cosmos/database/SQLite.cpp
   ../source/server/db.cpp
   ../source/server/options.cpp
-  ../source/server/problem.cpp
   ../source/server/server.cpp
   ../source/server/key.cpp
   ../source/server/invert_hash.cpp
   ../source/server/to_private.cpp
-  ../source/server/generate.cpp
-  ../source/server/restore.cpp
   ../source/server/import.cpp
   key_expression.cpp
   diophant.cpp
@@ -40,7 +36,7 @@ target_link_libraries (
   PRIVATE
 
   SQLite::SQLite3
-  cosmos_lib
+  cosmos_REST
   gtest_main
 )
 

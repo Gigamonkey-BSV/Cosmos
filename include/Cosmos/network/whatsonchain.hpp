@@ -37,11 +37,11 @@ namespace Cosmos {
 
         whatsonchain (ptr<net::HTTP::SSL> ssl) :
             net::HTTP::client {ssl,
-                net::HTTP::REST {"https", "api.whatsonchain.com"},
+                net::HTTP::REST {"api.whatsonchain.com", "/v1/bsv/main"},
                 data::tools::rate_limiter {3, data::milliseconds {1000}}} {}
 
         whatsonchain (): net::HTTP::client {
-            net::HTTP::REST {"https", "api.whatsonchain.com"},
+            net::HTTP::REST {"api.whatsonchain.com", "/v1/bsv/main"},
             data::tools::rate_limiter {3, data::milliseconds {1000}}} {}
 
         static std::string write (const Bitcoin::TXID &);

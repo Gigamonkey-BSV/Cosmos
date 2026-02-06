@@ -1,5 +1,5 @@
 
-#include "problem.hpp"
+#include <Cosmos/REST/REST.hpp>
 #include "../Cosmos.hpp"
 #include "invert_hash.hpp"
 
@@ -16,6 +16,8 @@ namespace base58 = Gigamonkey::base58;
 
 namespace schema = data::schema;
 
+using namespace Cosmos;
+
 std::ostream &operator << (std::ostream &o, digest_format form) {
     switch (form) {
         case digest_format::HEX: return o << "hex";
@@ -29,7 +31,7 @@ std::istream &operator >> (std::istream &i, digest_format &x) {
     std::string word;
     i >> word;
     if (!i) return i;
-    std::string sanitized = sanitize (word);
+    std::string sanitized = Cosmos::sanitize (word);
     if (sanitized == "hex") x = digest_format::HEX;
     else if (sanitized == "base58check") x = digest_format::BASE58_CHECK;
     else if (sanitized == "base64") x = digest_format::BASE64;

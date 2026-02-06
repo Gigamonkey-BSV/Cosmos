@@ -8,6 +8,7 @@
 #include <data/net/JSON.hpp>
 #include <data/net/HTTP_server.hpp>
 #include <data/io/random.hpp>
+#include <data/io/error.hpp>
 
 // TODO: in here we have 'using namespace data' and that causes a
 // problem if the includes are in the wrong order. This should be fixed. 
@@ -16,6 +17,8 @@
 
 #include <Cosmos/options.hpp>
 #include <Cosmos/Diophant.hpp>
+
+using error = data::io::error;
 
 void run (const options &);
 
@@ -99,6 +102,8 @@ void init_random (const options &program_options) {
         .strength = 256
     });
 }
+
+using namespace Cosmos;
 
 void run (const options &program_options) {
     // print version string.

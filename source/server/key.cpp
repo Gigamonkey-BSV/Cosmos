@@ -4,6 +4,8 @@
 #include <data/tools/schema.hpp>
 #include <data/crypto/random.hpp>
 
+using namespace Cosmos;
+
 namespace Gigamonkey::Bitcoin {
     std::istream &operator >> (std::istream &i, net &x) {
         std::string word;

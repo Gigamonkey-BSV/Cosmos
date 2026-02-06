@@ -3,10 +3,8 @@
 #include <data/io/arg_parser.hpp>
 #include <data/io/log.hpp>
 
-#include <Cosmos/types.hpp>
 #include "Cosmos.hpp"
-#include "server/generate.hpp"
-#include "server/restore.hpp"
+#include <Cosmos/REST/REST.hpp>
 #include "server/split.hpp"
 #include "server/spend.hpp"
 #include "server/import.hpp"
@@ -16,6 +14,8 @@
 
 #include <data/net/URL.hpp>
 
+using error = data::io::error;
+
 error run (const args::parsed &p);
 
 using error = data::io::error;
@@ -23,6 +23,8 @@ using error = data::io::error;
 namespace data::random {
     bytes Personalization {string {"Cosmos wallet client v1alpha"}};
 }
+
+using namespace Cosmos;
 
 namespace data {
     void signal_handler (int signal) noexcept {
@@ -112,12 +114,14 @@ error process_unexpected_response (const net::HTTP::response &r) {
 error call_server (method m, const args::parsed &p) {
     auto a = read_authority (p);
 
+    Cosmos::REST REST {a};
+
     switch (m) {
 
         // TODO URL parameter
         case method::SHUTDOWN: {
             auto validated = args::validate (p, no_params (method::SHUTDOWN));
-            auto res = call (a, request_shutdown ());
+            auto res = call (a, REST.request_shutdown ());
             if (read_ok_response (res)) return {};
             return process_unexpected_response (res);
         }
@@ -129,7 +133,7 @@ error call_server (method m, const args::parsed &p) {
                         set<std::string> {},
                         prefix (method::ADD_ENTROPY) + schema::list::value<std::string> (),
                         -call_options ()}));
-            auto res = call (a, request_add_entropy (entropy_string));
+            auto res = call (a, REST.request_add_entropy (entropy_string));
             if (read_ok_response (res)) return {};
             return process_unexpected_response (res);
         }
@@ -140,7 +144,7 @@ error call_server (method m, const args::parsed &p) {
                         set<std::string> {},
                         prefix (method::LIST_WALLETS),
                         -call_options ()});
-            auto res = call (a, request_list_wallets ());
+            auto res = call (a, REST.request_list_wallets ());
             auto names = read_JSON_response (res);
             if (!names) return process_unexpected_response (res);
             std::cout << *names << std::endl;
@@ -148,7 +152,7 @@ error call_server (method m, const args::parsed &p) {
         }
 
         case method::GENERATE: {
-            auto res = call (a, generate_request_options (p).request ());
+            auto res = call (a, REST.request (generate_request_options {p}));
             if (read_ok_response (res)) return {};
             auto words = read_string_response (res);
             if (words) {
@@ -166,7 +170,7 @@ error call_server (method m, const args::parsed &p) {
                         prefix (method::VALUE),
                         schema::map::key<Diophant::symbol> ("name") && -call_options ()}));
 
-            auto res = call (a, request_value (wallet_name));
+            auto res = call (a, REST.request_value (wallet_name));
             auto val = read_string_response (res);
             if (!val) return process_unexpected_response (res);
             std::cout << *val << std::endl;
@@ -174,7 +178,7 @@ error call_server (method m, const args::parsed &p) {
         }
 
         case method::NEXT: {
-            auto res = call (a, request_next_options {p}.request ());
+            auto res = call (a, REST.request (next_request_options {p}));
             auto addr = read_string_response (res);
             if (!addr) return process_unexpected_response (res);
             std::cout << *addr << std::endl;

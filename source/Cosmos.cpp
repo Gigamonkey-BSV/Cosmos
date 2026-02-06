@@ -38,7 +38,7 @@ maybe<std::string> de_escape (string_view input) {
     return {decoded.str ()};
 }
 
-net::HTTP::response error_response (unsigned int status, method m, problem tt, const std::string &detail) {
+net::HTTP::response error_response (unsigned int status, Cosmos::method m, Cosmos::problem tt, const std::string &detail) {
     std::stringstream meth_string;
     meth_string << m;
     std::stringstream problem_type;
@@ -54,7 +54,7 @@ net::HTTP::response error_response (unsigned int status, method m, problem tt, c
         return net::HTTP::response (status, {{"content-type", "application/problem+json"}}, bytes (data::string (err.dump ())));
 }
 
-net::HTTP::response help_response (method m) {
+net::HTTP::response help_response (Cosmos::method m) {
     std::stringstream ss;
     help (ss, m);
     return net::HTTP::response (200, {{"content-type", "text/plain"}}, bytes (data::string (ss.str ())));

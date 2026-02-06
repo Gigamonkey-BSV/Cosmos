@@ -2,6 +2,7 @@
 #define SERVER_SPLIT
 
 #include <data/net/HTTP.hpp>
+#include "server.hpp"
 
 struct split_request_options {
     // read from a generate request.

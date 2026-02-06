@@ -1,5 +1,5 @@
 #include "options.hpp"
-#include "../method.hpp"
+#include <Cosmos/REST/method.hpp>
 
 using uint16 = data::uint16;
 
@@ -159,7 +159,7 @@ db_options options::db_options () const {
 
     maybe<std::string> db_type;
     this->get ("db_type", db_type);
-    if (bool (db_type) && sanitize (*db_type) != "sqlite")
+    if (bool (db_type) && Cosmos::sanitize (*db_type) != "sqlite")
         throw data::exception {} << "only SQLite is supported as a database";
 
     bool param_in_memory = this->has ("sqlite_in_memory");

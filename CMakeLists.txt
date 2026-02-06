@@ -224,32 +224,54 @@ target_link_libraries (
 
   diophant
   Gigamonkey::gigamonkey
-  Gigamonkey::Merkle
   Data::io
   Data::crypto
   Data::net
   Data::data
   nlohmann_json
   argh
-  secp256k1)
+  secp256k1
+)
 
 target_compile_features (cosmos_lib PUBLIC cxx_std_23)
 set_target_properties (cosmos_lib PROPERTIES CXX_EXTENSIONS OFF)
 
+# A REST server to work with Cosmos Wallet
+add_library (
+    cosmos_REST
+
+    STATIC
+
+    source/Cosmos/REST/method.cpp
+    source/Cosmos/REST/problem.cpp
+    source/Cosmos/REST/generate.cpp
+    source/Cosmos/REST/restore.cpp
+    source/Cosmos/REST/REST.cpp
+)
+
+target_include_directories (cosmos_REST PUBLIC include)
+
+target_link_libraries (
+  cosmos_REST
+
+  PUBLIC
+
+  cosmos_lib
+)
+
+target_compile_features (cosmos_REST PUBLIC cxx_std_23)
+set_target_properties (cosmos_REST PROPERTIES CXX_EXTENSIONS OFF)
+
 add_executable (
     CosmosWalletServer
     source/Cosmos/database/SQLite.cpp
-    source/method.cpp
     source/Cosmos.cpp
     source/server/db.cpp
     source/server/options.cpp
-    source/server/problem.cpp
     source/server/server.cpp
     source/server/invert_hash.cpp
     source/server/key.cpp
     source/server/to_private.cpp
-    source/server/generate.cpp
-    source/server/restore.cpp
     source/server/import.cpp
     source/Server.cpp
 )
@@ -259,7 +281,7 @@ target_link_libraries (
 
   PUBLIC
 
-  cosmos_lib
+  cosmos_REST
   SQLite::SQLite3
 
 )
@@ -276,11 +298,7 @@ set_target_properties (CosmosWalletServer PROPERTIES CXX_EXTENSIONS OFF)
 add_executable (
     CosmosWalletClient
     source/Cosmos.cpp
-    source/method.cpp
     source/Client.cpp
-    source/server/problem.cpp
-    source/server/generate.cpp
-    source/server/restore.cpp
 #    source/interface.cpp
 #    source/import.cpp
 #    source/generate.cpp
@@ -292,7 +310,7 @@ add_executable (
 
 target_link_libraries (
     CosmosWalletClient PUBLIC
-    cosmos_lib
+    cosmos_REST
 )
 
 target_include_directories (

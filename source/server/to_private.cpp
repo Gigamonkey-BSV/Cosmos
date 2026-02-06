@@ -3,6 +3,8 @@
 
 #include <data/tools/schema.hpp>
 
+using namespace Cosmos;
+
 string escaped (const string &x) {
     std::stringstream s;
     s << '\"';

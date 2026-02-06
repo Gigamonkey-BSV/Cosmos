@@ -3,6 +3,8 @@
 #include "import.hpp"
 #include <gigamonkey/pay/BEEF.hpp>
 
+using namespace Cosmos;
+
 net::HTTP::response handle_import (
     server &p, const Diophant::symbol &wallet_name,
     map<UTF8, UTF8> query,
