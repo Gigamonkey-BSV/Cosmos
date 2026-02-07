@@ -322,7 +322,7 @@ namespace Cosmos {
     generate_request_options::generate_request_options (const args::parsed &p) {
         args::validate (p, args::command {
             set<std::string> {"words", "no_words"},
-            prefix (method::GENERATE),
+            schema::list::empty (),
             schema::map::key<Diophant::symbol> ("name") &&
                 *schema::map::key<Cosmos::wallet_style> ("style") &&
                 *schema::map::key<Cosmos::restore_wallet_type> ("format") &&

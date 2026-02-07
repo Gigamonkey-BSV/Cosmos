@@ -41,7 +41,7 @@ std::string inline version () {
 
 std::string inline help (Cosmos::method m) {
     std::stringstream ss;
-    help (m);
+    help (ss, m);
     return ss.str ();
 }
 

@@ -39,16 +39,17 @@ namespace data {
 
             return run (args::parsed {static_cast<int> (rr.size ()), rr.data ()});
 
+        } catch (const schema::mismatch &) {
+            DATA_LOG (normal) << "mismatch (we will provide more information later)";
+            return error {error::code::programmer_action, "failed to generate error upon failure to read user input"};
+        } catch (const JSON::exception &x) {
+            std::cout << "error reading JSON" << std::endl;
+            return error {error::code::user_action, std::string {x.what ()}};
         } catch (const net::HTTP::exception &x) {
             std::cout << "Problem with http: " << std::endl;
             std::cout << "\trequest: " << x.Request << std::endl;
             std::cout << "\tresponse: " << x.Response << std::endl;
             return error {error::code::try_again, std::string {x.what ()}};
-        } catch (const exception &ex) {
-
-            std::cout << "Error: " << ex.what () << std::endl;
-
-            return error::code {ex.Code};
         }
 
         return {};
@@ -57,43 +58,8 @@ namespace data {
 
 net::HTTP::request read_command (const data::io::args::parsed &);
 
-using authority = data::net::authority;
-
-authority read_authority (const args::parsed &p) {
-    maybe<authority> auth;
-    p.get ("authority", auth);
-
-    maybe<net::domain_name> dom;
-    p.get ("domain", dom);
-
-    maybe<net::IP::address> addr;
-    p.get ("ip_address", addr);
-
-    maybe<uint16> port;
-    p.get ("port", port);
-
-    if (dom) {
-        authority auth_from_dom;
-        auth_from_dom = authority {*dom};
-        if (auth && *auth != auth_from_dom)
-            throw data::exception {3} << "authority from option 'authority' and option 'domain' disagree";
-        else auth = auth_from_dom;
-    }
-
-    if (addr) {
-        authority auth_from_ip_port;
-        if (port) auth_from_ip_port = authority {*addr, *port};
-        else auth_from_ip_port = authority {*addr};
-        if (auth && *auth != auth_from_ip_port)
-            throw data::exception {3} << "authority from option 'authority' and options 'ip_address' and 'port' disagree";
-        else auth = auth_from_ip_port;
-    }
-
-    return *auth;
-
-}
-
-net::HTTP::response call (const authority &a, const net::HTTP::request &req) {
+net::HTTP::response call (const data::net::authority &a, const net::HTTP::request &req) {
+    DATA_LOG (debug) << "make call with request " << req;
     return data::synced ([&] () -> awaitable<net::HTTP::response> {
         auto stream = co_await net::HTTP::connect (net::HTTP::version_1_1, a);
         auto res = co_await stream->request (req);
@@ -112,7 +78,7 @@ error process_unexpected_response (const net::HTTP::response &r) {
 }
 
 error call_server (method m, const args::parsed &p) {
-    auto a = read_authority (p);
+    auto a = command::read_authority (p);
 
     Cosmos::REST REST {a};
 
@@ -120,30 +86,24 @@ error call_server (method m, const args::parsed &p) {
 
         // TODO URL parameter
         case method::SHUTDOWN: {
-            auto validated = args::validate (p, no_params (method::SHUTDOWN));
+            auto validated = args::validate (p, command::empty ());
             auto res = call (a, REST.request_shutdown ());
             if (read_ok_response (res)) return {};
             return process_unexpected_response (res);
         }
 
         case method::ADD_ENTROPY: {
-            auto [_a, _b, entropy_string] = std::get<1> (
-                args::validate (p,
-                    args::command {
-                        set<std::string> {},
-                        prefix (method::ADD_ENTROPY) + schema::list::value<std::string> (),
-                        -call_options ()}));
-            auto res = call (a, REST.request_add_entropy (entropy_string));
+            auto res = call (a, REST.request_add_entropy (
+                std::get<1> (args::validate (p,
+                    args::command {set<std::string> {},
+                        schema::list::value<std::string> (),
+                        command::call_options ()}))));
             if (read_ok_response (res)) return {};
             return process_unexpected_response (res);
         }
 
         case method::LIST_WALLETS: {
-            auto validated = args::validate (p,
-                    args::command {
-                        set<std::string> {},
-                        prefix (method::LIST_WALLETS),
-                        -call_options ()});
+            auto validated = args::validate (p, command::empty_call ());
             auto res = call (a, REST.request_list_wallets ());
             auto names = read_JSON_response (res);
             if (!names) return process_unexpected_response (res);
@@ -167,8 +127,8 @@ error call_server (method m, const args::parsed &p) {
                 args::validate (p,
                     args::command {
                         set<std::string> {},
-                        prefix (method::VALUE),
-                        schema::map::key<Diophant::symbol> ("name") && -call_options ()}));
+                        schema::list::empty (),
+                        schema::map::key<Diophant::symbol> ("name") && command::call_options ()}));
 
             auto res = call (a, REST.request_value (wallet_name));
             auto val = read_string_response (res);
@@ -274,66 +234,77 @@ error call_server (method m, const args::parsed &p) {
 boost::asio::io_context IO;
 
 error try_with_method (method m, const args::parsed &p) {
-    switch (m) {
-        case method::VERSION: {
+    try {
+        switch (m) {
+            case method::VERSION: {
 
-            args::validate (p, no_params (method::VERSION));
+                args::validate (p, command::empty ());
 
-            DATA_LOG (normal) << version ();
-        } return {};
+                version (std::cout) << std::endl;
+            } return {};
 
-        case method::HELP: {
+            case method::HELP: {
 
-            auto [_a, _b, help_with] = std::get<1> (
-                args::validate (p,
-                    args::command {set<std::string> {},
-                    prefix (method::HELP) + *schema::list::value<method> (),
-                    schema::map::empty ()}));
+                auto help_with = std::get<1> (
+                    args::validate (p,
+                        args::command {set<std::string> {},
+                        *schema::list::value<method> (),
+                        schema::map::empty ()}));
 
-            if (help_with) DATA_LOG (normal) << help (*help_with);
-            else DATA_LOG (normal) << help ();
+                if (help_with) help (std::cout, *help_with) << std::endl;
+                else help (std::cout) << std::endl;
 
-        } return {};
+            } return {};
 
-        default: {
-            return call_server (m, p);
+            default: {
+                return call_server (m, p);
+            }
         }
-    }
+    } catch (const schema::invalid_entry &x) {
+        throw exception {2} << "invalid value " << p.Options[x.Key] << " for option " << x.Key;
+    } catch (const schema::missing_key &x) {
+        throw exception {2} << "missing expected option " << x.Key;
+    } catch (const schema::incomplete_match &x) {
+        throw exception {2} << "encountered key " << x.Key << " which should not be present because it conflicts with a different option";
+    } catch (const schema::unknown_key &x) {
+        throw exception {2} << "unknown option " << x.Key;
+    } catch (const schema::invalid_value_at &x) {
+        throw exception {2} << "invalid value " << p.Arguments[x.Position] << " at position " << x.Position;
+    } catch (const schema::end_of_sequence &x) {
+        throw exception {2} << "encountered end of argument sequence at position " << x.Position << " but expected more arguments";
+    } catch (const schema::no_end_of_sequence &x) {
+        throw exception {2} << "expected end of argument sequence at position " << x.Position << " but found " << p.Arguments[x.Position];
+    };
 }
 
 error run (const args::parsed &p) {
 
-    try {
+    // try to read a method from the input.
+    maybe<method> Method = p.Arguments.size () > 1 ?
+        data::encoding::read<method> {} (p.Arguments[1]) : maybe<method> {};
 
-        // try to read a method from the input.
-        maybe<method> Method = p.Arguments.size () > 1 ?
-            data::encoding::read<method> {} (p.Arguments[1]) : maybe<method> {};
+    // if we can't, look for --help or --version.
+    if (!Method) {
 
-        // if we can't, look for --help or --version.
-        if (!Method) {
+        if (p.has ("version"))
+            std::cout << version () << std::endl;
 
-            if (p.has ("version"))
-                DATA_LOG (normal) << version ();
+        else if (p.has ("help"))
+            std::cout << help () << std::endl;
 
-            else if (p.has ("help"))
-                DATA_LOG (normal) << help ();
-
-            else {
-                DATA_LOG (normal) << "Error: could not read user's command.";
-                DATA_LOG (normal) << help ();
-            }
+        else {
+            std::cout << "Error: could not read user's command." << std::endl;
+            std::cout << help () << std::endl;
         }
+    }
 
-        else return try_with_method (*Method, p);
+    else {
+        // remove the first two positional arguments which are the
+        // command to initiate the program and the method
+        auto pp = p;
+        pp.Arguments = drop (p.Arguments, 2);
 
-    } catch (const schema::mismatch &) {
-        DATA_LOG (normal) << "mismatch (we will provide more information later)";
-        return error {error::code::user_action};
-    } catch (const net::HTTP::exception &x) {
-        DATA_LOG (normal) << "Problem with http: ";
-        DATA_LOG (normal) << "\trequest: " << x.Request;
-        DATA_LOG (normal) << "\tresponse: " << x.Response;
-        return error {error::code::try_again, std::string {x.what ()}};
+        return try_with_method (*Method, pp);
     }
 
     return {};

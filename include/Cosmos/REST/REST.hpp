@@ -10,21 +10,35 @@
 
 namespace schema = data::schema;
 
-namespace Cosmos {
+namespace Cosmos::command {
 
-    auto inline prefix (method m) {
-        return schema::list::value<std::string> () + schema::list::equal<method> (m);
-    }
-
-    auto inline no_params (method m) {
-        return args::command (set<std::string> {}, prefix (m), schema::map::empty ());
+    auto inline empty () {
+        return args::command (set<std::string> {}, schema::list::empty (), schema::map::empty ());
     }
 
     auto inline call_options () {
-        return +*schema::map::key<net::authority> ("authority") ||
-        +*schema::map::key<net::domain_name> ("domain") ||
-        +(*schema::map::key<net::IP::address> ("ip_address") && *schema::map::key<uint32> ("port"));
+        return *(schema::map::key<net::authority> ("authority") ||
+            schema::map::key<net::domain_name> ("domain") ||
+            schema::map::key<net::domain_name> ("endpoint") ||
+            (schema::map::key<net::IP::address> ("ip_address") && *schema::map::key<uint32> ("port")));
     }
+
+    auto inline empty_call () {
+        return args::command (set<std::string> {}, schema::list::empty (), call_options ());
+    }
+
+    template <typename list_schema, typename map_schema>
+    auto inline call (const list_schema &args, const map_schema &opts, set<std::string> flags = {}) {
+        return args::command (flags, args, opts + call_options ());
+    }
+
+    using authority = data::net::authority;
+
+    authority read_authority (const args::parsed &p);
+
+}
+
+namespace Cosmos {
 
     struct next_request_options {
         Diophant::symbol Name;
@@ -104,13 +118,13 @@ namespace Cosmos {
     }
 
     inline next_request_options::next_request_options (const args::parsed &p) {
-        auto [name, sequence_name] = std::get<2> (
+        auto [name, sequence_name, _] = std::get<2> (
             args::validate (p,
                 args::command {
                     set<std::string> {},
-                    prefix (method::NEXT),
+                    schema::list::empty (),
                     schema::map::key<Diophant::symbol> ("name") &&
-                    *schema::map::key<Diophant::symbol> ("sequence")}));
+                    *schema::map::key<Diophant::symbol> ("sequence") && command::call_options ()}));
 
         Name = name;
         Sequence = sequence_name;

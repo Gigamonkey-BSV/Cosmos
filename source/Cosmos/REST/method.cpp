@@ -16,10 +16,11 @@ namespace Cosmos {
     std::istream &operator >> (std::istream &i, method &m) {
         i >> std::ws;
 
-        UTF8 word;
+        std::string word;
         i >> word;
+        if (!i) return i;
 
-        m = read_method (word);
+        m = read_method (UTF8 {word});
         return i;
     }
 
