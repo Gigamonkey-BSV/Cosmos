@@ -4,12 +4,58 @@ namespace Cosmos {
 
     net::HTTP::request REST::request (const generate_request_options &o) const {
         std::stringstream query_stream;
-        query_stream << "style=" << o.wallet_style ();
-        if (!bool (o.coin_type ())) query_stream << "&coin_type=none";
-        else query_stream << "&coin_type=" << *o.coin_type ();
+        bool need_amp = false;
+
+        if (o.WalletType) {
+            query_stream << "wallet_type=" << *o.WalletType;
+            need_amp = true;
+        }
+
+        if (o.RestoreWalletStyle != Cosmos::restore_wallet_style::unset) {
+            if (need_amp) query_stream << "&";
+            query_stream << "style=" << o.RestoreWalletStyle;
+            need_amp = true;
+        }
+
+        if (bool (o.CoinTypeDerivationParameter)) {
+            if (need_amp) query_stream << "&";
+            query_stream << "coin_type=" << *o.CoinTypeDerivationParameter;
+            need_amp = true;
+        }
+
         if (o.mnemonic_style () != mnemonic_style::none)
             query_stream << "&mnemonic=" << o.mnemonic_style () << "&number_of_words=" << o.number_of_words ();
         return this->operator () (net::HTTP::method::post, string::write ("/generate/", o.name ())).query (query_stream.str ());
+    }
+
+    net::HTTP::request REST::request (const restore_request_options &o) const {
+
+        dispatch<UTF8, UTF8> q {};
+
+        using entry = data::entry<UTF8, UTF8>;
+
+        if (o.Key)
+            q <<= entry ("key", string::write (*o.Key));
+
+        if (o.MaxLookAhead)
+            q <<= entry ("max_look_ahead", string::write (*o.MaxLookAhead));
+
+        if (o.Mnemonic)
+            q <<= entry ("mnemonic", string::write (*o.Mnemonic));
+
+        if (o.Entropy)
+            q <<= entry ("entropy", string::write (*o.Entropy));
+
+        if (o.MasterKeyType)
+            q <<= entry ("master_key_type", string::write (*o.MasterKeyType));
+
+        if (o.CoinTypeDerivationParameter)
+            q <<= entry ("coin_type", string::write (*o.CoinTypeDerivationParameter));
+
+        if (o.RestoreWalletStyle != Cosmos::restore_wallet_style::unset)
+            q <<= entry ("style", string::write (o.RestoreWalletStyle));
+
+        return this->operator () (net::HTTP::method::post, string::write ("/restore/", o.name ())).query_map (q);
     }
 }
 

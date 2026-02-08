@@ -33,6 +33,7 @@ namespace data {
 
     error main (std::span<const char *const> rr) {
 
+        // random number generator.
         data::random::init ({.secure = false});
 
         try {
@@ -112,7 +113,22 @@ error call_server (method m, const args::parsed &p) {
         }
 
         case method::GENERATE: {
-            auto res = call (a, REST.request (generate_request_options {p}));
+            generate_request_options opts {p};
+
+            switch (opts.check ()) {
+                case Cosmos::generate_error::words_vs_mnemonic_style:
+                    return error {error::code {3}};
+                case Cosmos::generate_error::centbee_vs_coin_type:
+                    return error {error::code {3}};
+                case Cosmos::generate_error::neither_style_nor_coin_type:
+                    return error {error::code {3}};
+                case Cosmos::generate_error::mnemonic_vs_number_of_words:
+                    return error {error::code {3}};
+                case Cosmos::generate_error::invalid_number_of_words:
+                    return error {error::code {3}};
+            }
+
+            auto res = call (a, REST.request (opts));
             if (read_ok_response (res)) return {};
             auto words = read_string_response (res);
             if (words) {
@@ -120,6 +136,17 @@ error call_server (method m, const args::parsed &p) {
                 return {};
             }
             return process_unexpected_response (res);
+        }
+
+        case method::RESTORE: {
+
+            restore_request_options opts {p};
+
+            auto res = call (a, REST.request (opts));
+            auto result = read_JSON_response (res);
+            if (!result) return process_unexpected_response (res);
+            std::cout << *result << std::endl;
+            return {};
         }
 
         case method::VALUE: {
@@ -147,14 +174,6 @@ error call_server (method m, const args::parsed &p) {
 
         case method::IMPORT: {
             auto res = call (a, request_import (p));
-            auto result = read_JSON_response (res);
-            if (!result) return process_unexpected_response (res);
-            std::cout << *result << std::endl;
-            return {};
-        }
-
-        case method::RESTORE: {
-            auto res = call (a, restore_request_options (p).request ());
             auto result = read_JSON_response (res);
             if (!result) return process_unexpected_response (res);
             std::cout << *result << std::endl;
@@ -261,20 +280,27 @@ error try_with_method (method m, const args::parsed &p) {
             }
         }
     } catch (const schema::invalid_entry &x) {
-        throw exception {2} << "invalid value " << p.Options[x.Key] << " for option " << x.Key;
+        return error {error::code {3},
+            string::write ("invalid value ", p.Options[x.Key], " for option ", x.Key)};
     } catch (const schema::missing_key &x) {
-        throw exception {2} << "missing expected option " << x.Key;
+        return error {error::code {3},
+            string::write ("missing expected option ", x.Key)};
     } catch (const schema::incomplete_match &x) {
-        throw exception {2} << "encountered key " << x.Key << " which should not be present because it conflicts with a different option";
+        return error {error::code {3},
+            string::write ("encountered key ", x.Key, " which should not be present because it conflicts with a different option")};
     } catch (const schema::unknown_key &x) {
-        throw exception {2} << "unknown option " << x.Key;
+        return error {error::code {3},
+            string::write ("unknown option ", x.Key)};
     } catch (const schema::invalid_value_at &x) {
-        throw exception {2} << "invalid value " << p.Arguments[x.Position] << " at position " << x.Position;
+        return error {error::code {3},
+            string::write ("invalid value ", p.Arguments[x.Position], " at position ", x.Position)};
     } catch (const schema::end_of_sequence &x) {
-        throw exception {2} << "encountered end of argument sequence at position " << x.Position << " but expected more arguments";
+        return error {error::code {3},
+            string::write ("encountered end of argument sequence at position ", x.Position, " but expected more arguments")};
     } catch (const schema::no_end_of_sequence &x) {
-        throw exception {2} << "expected end of argument sequence at position " << x.Position << " but found " << p.Arguments[x.Position];
-    };
+        return error {error::code {3},
+            string::write ("expected end of argument sequence at position ", x.Position, " but found ", p.Arguments[x.Position])};
+    }
 }
 
 error run (const args::parsed &p) {
@@ -320,7 +346,6 @@ std::ostream &help (std::ostream &o, method meth) {
         default :
             return version (o) << "\n" << "input should be <method> <args>... where method is "
             "\n\tgenerate   -- create a new wallet."
-            "\n\tupdate     -- get Merkle proofs for txs that were pending last time the program ran."
             "\n\tvalue      -- print the total value in the wallet."
             "\n\trequest    -- generate a payment_request."
             "\n\tpay        -- create a transaction based on a payment request."
@@ -335,28 +360,40 @@ std::ostream &help (std::ostream &o, method meth) {
         case method::GENERATE :
             return o << "Generate a new wallet in terms of 24 words (BIP 39) or as an extended private key."
             "\narguments for method generate:"
-            "\n\t(--name=) (wallet name)"
-            "\n\t" R"((--style=)<"address" | "hd_sequence" | "bip44">)"
+            "\n\t<string> (wallet name)"
+            "\n\t" R"((--wallet_type=)<"address" | "hd_sequence" | "bip44">)"
             "\n\t(--words) (use BIP 39)"
             "\n\t(--no_words) (don't use BIP 39)"
             "\n\t(--accounts=<uint32> (=10)) (how many accounts to pre-generate)"
             "\n\t" R"((--coin_type=<uint32|string> (=0)) (value of BIP 44 coin_type | "none" | "bitcoin" | "bitcoin_cash" | "bitcoin_sv"))"
             "\n\t" R"((--derivation_style=) ("bip44" | "centbee"))"
             "\n\t" R"((--mnemonic_style=) ("none" | "bip39" | "electrumsv"))"
-            "\n\t" R"((--format=) ("moneybutton" | "relayx" | "centbee" | "electrumsv"))"
+            "\n\t" R"((--style=) ("moneybutton" | "relayx" | "centbee" | "electrumsv"))"
             "\n\t(--number_of_words=<uint32>)"
             "\n\t(--password=<string>)";
+        case method::RESTORE :
+            o << "arguments for method restore:"
+            "\n\t<string> (wallet name)"
+            "\n\t(--key=)<xpub | xpriv>"
+            "\n\t(--max_look_ahead=)<integer> (= 10)"
+            "\n\t(--mnemonic=<string>)"
+            "\n\t(--master_key_type=\"HD_sequence\"|\"BIP44_account\"|\"BIP44_master\") (= \"HD_sequence\")"
+            "\n\t(--coin_type=\"Bitcoin\"|\"BitcoinCash\"|\"BitcoinSV\"|<integer>)"
+            "\n\t(--style=\"RelayX\"|\"ElectrumSV\"|\"SimplyCash\"|\"CentBee\"|<string>)"
+            "\n\t(--entropy=<string>)";
         case method::VALUE :
-            return o << "Print the value in a wallet. No parameters.";
+            return o << "Print the value in a wallet."
+            "\narguments for method value:"
+            "\n\t<string> (wallet name)";
         case method::NEXT :
             return o << "Generate the next receive address"
             "\narguments for method next:"
-            "\n\t(--name=) (wallet name)"
+            "\n\t<string> (wallet name)"
             "\n\t" R"((--sequence=) (sequence name))";
         case method::REQUEST :
             return o << "Generate a new payment request."
                 "\narguments for method request:"
-                "\n\t(--name=)<wallet name>"
+                "\n\t<string> (wallet name)"
                 "\n\t(--payment_type=\"pubkey\"|\"address\"|\"xpub\") (= \"address\")"
                 "\n\t(--expires=<number of minutes before expiration>)"
                 "\n\t(--memo=\"<explanation of the nature of the payment>\")"
@@ -396,16 +433,6 @@ std::ostream &help (std::ostream &o, method meth) {
             "\n\t(--min_sats_per_output=<float>) (= " << Cosmos::spend_options::DefaultMinSatsPerOutput << ")"
             "\n\t(--max_sats_per_output=<float>) (= " << Cosmos::spend_options::DefaultMaxSatsPerOutput << ")"
             "\n\t(--mean_sats_per_output=<float>) (= " << Cosmos::spend_options::DefaultMeanSatsPerOutput << ") ";
-        case method::RESTORE :
-            o << "arguments for method restore:"
-            "\n\t(--name=)<wallet name>"
-            "\n\t(--key=)<xpub | xpriv>"
-            "\n\t(--max_look_ahead=)<integer> (= 10)"
-            "\n\t(--words=<string>)"
-            "\n\t(--key_type=\"HD_sequence\"|\"BIP44_account\"|\"BIP44_master\") (= \"HD_sequence\")"
-            "\n\t(--coin_type=\"Bitcoin\"|\"BitcoinCash\"|\"BitcoinSV\"|<integer>)"
-            "\n\t(--wallet_type=\"RelayX\"|\"ElectrumSV\"|\"SimplyCash\"|\"CentBee\"|<string>)"
-            "\n\t(--entropy=<string>)";
         case method::ENCRYPT_KEY:
             o << "Encrypt the private key file so that it can only be accessed with a password. No parameters.";
         case method::DECRYPT_KEY :

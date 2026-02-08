@@ -282,7 +282,7 @@ TEST (Server, Generate) {
     // we should simply get a bool response when we don't request the restoration words.
 
     ASSERT_TRUE (is_ok_response (make_request (test_server,
-        rest.request (generate_request_options {}.name ("A").wallet_style (wallet_style::BIP_44).coin_type_none ()))));
+        rest.request (generate_request_options {}.name ("A").wallet_type (wallet_type::BIP_44).coin_type_none ()))));
 
     // These are not ready yet.
     /*
@@ -292,8 +292,8 @@ TEST (Server, Generate) {
         generate_request_options {"C"}.wallet_style (wallet_style::experimental))));*/
 
     maybe<std::string> maybe_words_D = expect_string_response (make_request (test_server,
-        rest.request (generate_request_options {}.name ("D").wallet_style (
-                wallet_style::BIP_44
+        rest.request (generate_request_options {}.name ("D").wallet_type (
+                wallet_type::BIP_44
             ).mnemonic_style (
                 mnemonic_style::BIP_39
             ).coin_type (

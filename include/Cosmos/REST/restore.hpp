@@ -23,10 +23,11 @@ namespace Cosmos {
     std::istream &operator >> (std::istream &, master_key_type &);
 
     struct restore_request_options : generate_request_options {
-
-        net::HTTP::request request (const UTF8 & = "localhost") {
-            throw data::method::unimplemented {"restore_request_options -> HTTP request"};
-        }
+        maybe<Cosmos::master_key_type> MasterKeyType;
+        maybe<std::string> Key;
+        maybe<data::string> Entropy;
+        maybe<data::string> Mnemonic;
+        maybe<uint32> MaxLookAhead;
 
         restore_request_options (
             Diophant::symbol wallet_name, map<UTF8, UTF8> query,
@@ -34,6 +35,12 @@ namespace Cosmos {
             const data::bytes &body);
 
         restore_request_options (const args::parsed &);
+
+        restore_request_options &master_key_type (const master_key_type);
+        restore_request_options &key (const std::string &);
+        restore_request_options &entropy (const data::string &);
+        restore_request_options &mnemonic (const data::string &);
+        restore_request_options &max_look_ahead (uint32);
 
         bool valid () const;
     };

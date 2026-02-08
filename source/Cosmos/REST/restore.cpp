@@ -10,6 +10,10 @@ namespace schema = data::schema;
 
 namespace Cosmos {
 
+    std::ostream &operator << (std::ostream &, master_key_type) {
+        throw data::method::unimplemented {" << master_key_type"};
+    }
+
     std::istream &operator >> (std::istream &i, master_key_type &x) {
         std::string word;
         i >> word;

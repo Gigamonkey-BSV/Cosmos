@@ -53,25 +53,25 @@ namespace Cosmos {
         return o << v;
     }
 
-    std::ostream &operator << (std::ostream &o, wallet_style x) {
+    std::ostream &operator << (std::ostream &o, wallet_type x) {
         switch (x) {
-            case wallet_style::BIP_44: return o << "BIP44";
-            case wallet_style::BIP_44_plus: return o << "BIP44plus";
-            case wallet_style::experimental: return o << "experimental";
+            case wallet_type::BIP_44: return o << "BIP44";
+            case wallet_type::BIP_44_plus: return o << "BIP44plus";
+            case wallet_type::experimental: return o << "experimental";
             default: throw 0;
         }
     }
 
-    std::istream &operator >> (std::istream &i, wallet_style &x) {
+    std::istream &operator >> (std::istream &i, wallet_type &x) {
         std::string word;
         i >> word;
         if (!i) return i;
         std::string sanitized = sanitize (word);
-        if (sanitized == "bip44") x = wallet_style::BIP_44;
-        else if (sanitized == "bip44plus") x = wallet_style::BIP_44_plus;
+        if (sanitized == "bip44") x = wallet_type::BIP_44;
+        else if (sanitized == "bip44plus") x = wallet_type::BIP_44_plus;
         // experimental means me generate two secp256k1 keys and use one as the chain code.
         // this allows us to use bip 32 and hd stuff and future protocols.
-        else if (sanitized == "experimental") x = wallet_style::experimental;
+        else if (sanitized == "experimental") x = wallet_type::experimental;
         else i.setstate (std::ios::failbit);
         return i;
     }
@@ -115,27 +115,27 @@ namespace Cosmos {
         }
     }
 
-    std::istream &operator >> (std::istream &i, restore_wallet_type &x) {
+    std::istream &operator >> (std::istream &i, restore_wallet_style &x) {
         std::string word;
         i >> word;
         if (!i) return i;
         std::string sanitized = sanitize (word);
-        if (sanitized == "moneybutton") x = restore_wallet_type::Money_Button;
-        else if (sanitized == "relayx") x = restore_wallet_type::RelayX;
-        else if (sanitized == "simplycash") x = restore_wallet_type::Simply_Cash;
-        else if (sanitized == "electrumsv") x = restore_wallet_type::Electrum_SV;
-        else if (sanitized == "centbee") x = restore_wallet_type::CentBee;
+        if (sanitized == "moneybutton") x = restore_wallet_style::Money_Button;
+        else if (sanitized == "relayx") x = restore_wallet_style::RelayX;
+        else if (sanitized == "simplycash") x = restore_wallet_style::Simply_Cash;
+        else if (sanitized == "electrumsv") x = restore_wallet_style::Electrum_SV;
+        else if (sanitized == "centbee") x = restore_wallet_style::CentBee;
         else i.setstate (std::ios::failbit);
         return i;
     }
 
-    std::ostream &operator << (std::ostream &o, restore_wallet_type x) {
+    std::ostream &operator << (std::ostream &o, restore_wallet_style x) {
         switch (x) {
-            case restore_wallet_type::Money_Button: return o << "MoneyButton";
-            case restore_wallet_type::RelayX: return o << "RelayX";
-            case restore_wallet_type::Simply_Cash: return o << "SimplyCash";
-            case restore_wallet_type::Electrum_SV: return o << "ElectrumSV";
-            case restore_wallet_type::CentBee: return o << "CentBee";
+            case restore_wallet_style::Money_Button: return o << "MoneyButton";
+            case restore_wallet_style::RelayX: return o << "RelayX";
+            case restore_wallet_style::Simply_Cash: return o << "SimplyCash";
+            case restore_wallet_style::Electrum_SV: return o << "ElectrumSV";
+            case restore_wallet_style::CentBee: return o << "CentBee";
             default: return o << "unknown";
         }
     }
@@ -165,8 +165,8 @@ namespace Cosmos {
         // there are differences of opinion in what should
         // be used as the coin_type parameter in a BIP44
         // derivation path.
-        auto derivation_path_schema = schema::map::key<Cosmos::restore_wallet_type> ("format") ||
-            (schema::map::key<Cosmos::wallet_style> ("style") &&
+        auto derivation_path_schema = schema::map::key<Cosmos::restore_wallet_style> ("style") ||
+            (schema::map::key<Cosmos::wallet_type> ("wallet_type") &&
             *schema::map::key<Cosmos::derivation_style> ("derivation_style") &&
             *schema::map::key<Cosmos::coin_type> ("coin_type"));
 
@@ -184,22 +184,22 @@ namespace Cosmos {
 
         switch (wallet_generation.index ()) {
             case 0: {
-                WalletStyle = wallet_style::BIP_44;
-                Cosmos::restore_wallet_type WalletType = std::get<0> (wallet_generation);
+                WalletType = wallet_type::BIP_44;
+                Cosmos::restore_wallet_style WalletType = std::get<0> (wallet_generation);
                 switch (WalletType) {
-                    case Cosmos::restore_wallet_type::Money_Button: {
+                    case Cosmos::restore_wallet_style::Money_Button: {
                         CoinTypeDerivationParameter = HD::BIP_44::moneybutton_coin_type;
                     } break;
-                    case Cosmos::restore_wallet_type::RelayX: {
+                    case Cosmos::restore_wallet_style::RelayX: {
                         CoinTypeDerivationParameter = HD::BIP_44::relay_x_coin_type;
                     } break;
-                    case Cosmos::restore_wallet_type::Simply_Cash: {
+                    case Cosmos::restore_wallet_style::Simply_Cash: {
                         CoinTypeDerivationParameter = HD::BIP_44::simply_cash_coin_type;
                     } break;
-                    case Cosmos::restore_wallet_type::Electrum_SV: {
+                    case Cosmos::restore_wallet_style::Electrum_SV: {
                         CoinTypeDerivationParameter = HD::BIP_44::electrum_sv_coin_type;
                     } break;
-                    case Cosmos::restore_wallet_type::CentBee: {
+                    case Cosmos::restore_wallet_style::CentBee: {
                         CoinTypeDerivationParameter = Cosmos::coin_type {};
                     } break;
                     default: throw data::method::unimplemented {"wallet types for GENERATE method"};
@@ -207,7 +207,7 @@ namespace Cosmos {
             } break;
             case 1: {
                 maybe<derivation_style> dstyle;
-                std::tie (WalletStyle, dstyle, CoinTypeDerivationParameter) = std::get<1> (wallet_generation);
+                std::tie (WalletType, dstyle, CoinTypeDerivationParameter) = std::get<1> (wallet_generation);
 
                 if (bool (dstyle)) DerivationStyle = *dstyle;
             };
@@ -223,7 +223,7 @@ namespace Cosmos {
         if (MnemonicStyle == mnemonic_style::Electrum_SV)
             throw data::method::unimplemented {"Electrum SV mnemonic style"};
 
-        if (WalletStyle == wallet_style::experimental)
+        if (WalletType == wallet_type::experimental)
             throw data::method::unimplemented {"experimental wallet style"};
 
         if (bool (Password))
@@ -233,6 +233,16 @@ namespace Cosmos {
     }
 
     generate_error generate_request_options::check () const {
+        if (RestoreWalletStyle != Cosmos::restore_wallet_style::unset) {
+            // type must be bip44
+
+            // derivation style must match
+
+            // coin type must match
+
+            //
+        }
+
         if (DerivationStyle != Cosmos::derivation_style::unset) {
             if (DerivationStyle == Cosmos::derivation_style::BIP_44) {
                 if (!bool (CoinTypeDerivationParameter) || !bool (*CoinTypeDerivationParameter))
@@ -320,19 +330,72 @@ namespace Cosmos {
     }
 
     generate_request_options::generate_request_options (const args::parsed &p) {
-        args::validate (p, args::command {
+        auto [flags, name, opts] = args::validate (p, args::command {
             set<std::string> {"words", "no_words"},
-            schema::list::empty (),
-            schema::map::key<Diophant::symbol> ("name") &&
-                *schema::map::key<Cosmos::wallet_style> ("style") &&
-                *schema::map::key<Cosmos::restore_wallet_type> ("format") &&
-                *schema::map::key<uint32> ("number_of_words") &&
-                *schema::map::key<uint32> ("accounts") &&
-                *schema::map::key<derivation_style> ("derivation_style") &&
+            schema::list::value<Diophant::symbol> (),
                 *schema::map::key<Cosmos::mnemonic_style> ("mnemonic_style") &&
-                *schema::map::key<std::string> ("password")});
+                *schema::map::key<uint32> ("number_of_words") &&
+                *schema::map::key<Cosmos::coin_type> ("coin_type") &&
+                *schema::map::key<derivation_style> ("derivation_style") &&
+                *schema::map::key<Cosmos::wallet_type> ("wallet_type") &&
+                *schema::map::key<Cosmos::restore_wallet_style> ("style") &&
+                *schema::map::key<uint32> ("accounts") &&
+                *schema::map::key<std::string> ("password") && command::call_options ()});
 
-        throw data::method::unimplemented {"generate_request_options from parsed"};
+        Name = name;
+
+        bool mnemonic = !flags["no_words"];
+
+        // cannot have both words and no words at the same time!
+        if (!mnemonic && flags["words"])
+            throw exception {3} << "cannot have flags 'words' and 'no_words' at the same time!";
+
+        auto [mnx, num_words, coin_type, dx, type, style, accounts, pass, _] = opts;
+
+        if (mnx) {
+            if (!mnemonic && *mnx != Cosmos::mnemonic_style::none)
+                throw exception {3} << "option 'mnemonic_style' with 'no_words'";
+
+            MnemonicStyle = *mnx;
+        }
+
+        if (num_words) {
+            if (mnemonic && *num_words == 0) throw exception {3} << "number of words must be 12 or 24";
+            else if (!mnemonic && *num_words != 0) throw exception {3} << "option 'number_of_words' with 'no_words'";
+            NumberOfWords = *num_words;
+        }
+
+        CoinTypeDerivationParameter = coin_type;
+
+        if (dx) {
+            if (!CoinTypeDerivationParameter || *CoinTypeDerivationParameter == Cosmos::coin_type {}) {
+                if (*dx == Cosmos::derivation_style::BIP_44)
+                throw exception {3} << "If 'derivation_style' is bip44, then 'coin_type' must not be none.";
+            } else if (*dx == Cosmos::derivation_style::CentBee)
+                throw exception {3} << "If 'derivation_style' is centbee, then 'coin_type' must be none.";
+
+            DerivationStyle = *dx;
+        }
+
+        if (type) {
+            if (*type != Cosmos::wallet_type::BIP_44) throw data::method::unimplemented {"Wallet types other than bip 44"};
+            WalletType = *type;
+        }
+
+        if (style) {
+            // type must be bip44
+
+            // derivation style must match
+
+            // coin type must match
+        }
+
+        if (accounts) {
+            if (*accounts == 0) throw exception {3} << "accounts must not be 0";
+            Accounts = *accounts;
+        }
+
+        Password = pass;
     }
 
 }

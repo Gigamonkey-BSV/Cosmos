@@ -512,8 +512,8 @@ net::HTTP::response handle_restore (server &p,
         key_options,
         accounts_param,
         max_lookup_param] = schema::validate<> (query,
-        (schema::map::key<restore_wallet_type> ("wallet_type") || (
-            *schema::map::key<wallet_style> ("wallet_style") &&
+        (schema::map::key<restore_wallet_style> ("wallet_type") || (
+            *schema::map::key<wallet_type> ("wallet_type") &&
             *schema::map::key<derivation_style> ("derivation_style") &&
             *(schema::map::key<coin_type> ("coin_type") ||
                 schema::map::key<bool> ("guess_coin_type")))) &&
@@ -540,7 +540,7 @@ net::HTTP::response handle_restore (server &p,
     // we need to figure out what kind of key it is.
     master_key_type KeyType {master_key_type::invalid};
 
-    wallet_style WalletStyle {wallet_style::invalid};
+    wallet_type WalletStyle {wallet_type::invalid};
 
     maybe<coin_type> CoinType {};
     bool guess_coin_type {false};
@@ -549,22 +549,22 @@ net::HTTP::response handle_restore (server &p,
 
         switch (derivation_options.index ()) {
             case 0: {
-                restore_wallet_type restore_type = std::get<0> (derivation_options);
-                WalletStyle = wallet_style::BIP_44;
+                restore_wallet_style restore_type = std::get<0> (derivation_options);
+                WalletStyle = wallet_type::BIP_44;
                 switch (restore_type) {
-                    case restore_wallet_type::Money_Button: {
+                    case restore_wallet_style::Money_Button: {
                         CoinType = HD::BIP_44::moneybutton_coin_type;
                     } break;
-                    case restore_wallet_type::RelayX: {
+                    case restore_wallet_style::RelayX: {
                         CoinType = HD::BIP_44::relay_x_coin_type;
                     } break;
-                    case restore_wallet_type::Simply_Cash: {
+                    case restore_wallet_style::Simply_Cash: {
                         CoinType = HD::BIP_44::simply_cash_coin_type;
                     } break;
-                    case restore_wallet_type::Electrum_SV: {
+                    case restore_wallet_style::Electrum_SV: {
                         CoinType = HD::BIP_44::electrum_sv_coin_type;
                     } break;
-                    case restore_wallet_type::CentBee: {
+                    case restore_wallet_style::CentBee: {
                         CoinType = coin_type {};
                     } break;
                     default: throw data::method::unimplemented {"wallet types for GENERATE method"};
@@ -573,7 +573,7 @@ net::HTTP::response handle_restore (server &p,
             case 1: {
                 // we need either derivation_style_option or coin_type_option
                 // and if we have both, they need to be consistent.
-                auto [wallet_style_option, derivation_style_option, coin_type_option] = std::get<1> (derivation_options);
+                auto [wallet_type_option, derivation_style_option, coin_type_option] = std::get<1> (derivation_options);
 
                 if (coin_type_option) {
                     // coin type was provided
@@ -601,7 +601,7 @@ net::HTTP::response handle_restore (server &p,
                     return error_response (400, method::RESTORE, problem::invalid_parameter,
                         "Either derivation_style or coin_type must be provided");
 
-                if (bool (wallet_style_option)) WalletStyle = *wallet_style_option;
+                if (bool (wallet_type_option)) WalletStyle = *wallet_type_option;
 
             } break;
             default: throw data::exception {} << "Should not be able to get here";
@@ -666,26 +666,26 @@ net::HTTP::response handle_restore (server &p,
                             return error_response (400, method::RESTORE, problem::invalid_query,
                                 "CentBee option implies that key_type must be BIP_44_master");
 
-                        if (WalletStyle == wallet_style::invalid) WalletStyle = wallet_style::BIP_44;
-                        else if (WalletStyle != wallet_style::BIP_44)
+                        if (WalletStyle == wallet_type::invalid) WalletStyle = wallet_type::BIP_44;
+                        else if (WalletStyle != wallet_type::BIP_44)
                             return error_response (400, method::RESTORE, problem::invalid_query,
-                                "CentBee option implies that wallet_style must be BIP_44");
+                                "CentBee option implies that wallet_type must be BIP_44");
                     }
                 }
             }
             // In some cases, we can guess the wallet style from other options.
             // TODO support single address style.
             switch (WalletStyle) {
-                case wallet_style::invalid: {
+                case wallet_type::invalid: {
                     // assume bip 44 in this case.
                     if (derive_from_mnemonic) {
-                        WalletStyle == wallet_style::BIP_44;
+                        WalletStyle == wallet_type::BIP_44;
                         break;
                     } else return error_response (400, method::RESTORE, problem::missing_parameter,
                         "Need to set parameter style");
                 }
-                case wallet_style::single_address:
-                case wallet_style::HD_sequence:
+                case wallet_type::address:
+                case wallet_type::HD_sequence:
                     return error_response (400, method::RESTORE, problem::invalid_query,
                         "derivation from mnemonic is incompatible with single address or hd sequence wallet styles.");
             }
@@ -765,16 +765,16 @@ net::HTTP::response handle_restore (server &p,
 
             // at this point, it is possible that WalletStyle is not set. Can we set it?
             switch (WalletStyle) {
-                case wallet_style::invalid: {
+                case wallet_type::invalid: {
                     switch (KeyType) {
 
                     }
                 } break;
-                case wallet_style::single_address:
+                case wallet_type::address:
                     if (KeyType != master_key_type::single_address)
                         return error_response (400, method::RESTORE, problem::invalid_query,
                             "derivation from mnemonic is incompatible with single address or hd sequence wallet styles.");
-                case wallet_style::HD_sequence:
+                case wallet_type::HD_sequence:
                     return error_response (400, method::RESTORE, problem::invalid_query,
                         "derivation from mnemonic is incompatible with single address or hd sequence wallet styles.");
             }
@@ -821,7 +821,7 @@ net::HTTP::response handle_restore (server &p,
             key_derivation {string::write ("@ key index -> key / harden (index)")}},
         total_accounts);
 
-    if (WalletStyle == wallet_style::BIP_44_plus || WalletStyle == wallet_style::experimental)
+    if (WalletStyle == wallet_type::BIP_44_plus || WalletStyle == wallet_type::experimental)
         throw data::method::unimplemented {"restore extended bip 44 types"};
 
     // generate all the accounts.

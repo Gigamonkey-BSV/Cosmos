@@ -18,9 +18,9 @@ namespace Cosmos {
         Electrum_SV
     };
 
-    enum class wallet_style {
+    enum class wallet_type {
         invalid,
-        single_address,
+        address,
         HD_sequence,
         BIP_44,
         // same as bip 44 except that we have a new derivation path for
@@ -38,7 +38,7 @@ namespace Cosmos {
         CentBee
     };
 
-    enum class restore_wallet_type {
+    enum class restore_wallet_style {
         unset,
         Money_Button,
         RelayX,
@@ -61,10 +61,14 @@ namespace Cosmos {
         coin_type (uint32 u): maybe<uint32> {HD::BIP_32::harden (u)} {}
         coin_type (): maybe<uint32> {} {}
         coin_type (value);
+
+        bool operator == (const coin_type &ct) const {
+            return static_cast<const maybe<uint32> &> (*this) == static_cast<const maybe<uint32> &> (ct);
+        }
     };
 
-    std::ostream &operator << (std::ostream &, wallet_style);
-    std::istream &operator >> (std::istream &, wallet_style &);
+    std::ostream &operator << (std::ostream &, wallet_type);
+    std::istream &operator >> (std::istream &, wallet_type &);
 
     std::ostream &operator << (std::ostream &, mnemonic_style);
     std::istream &operator >> (std::istream &, mnemonic_style &);
@@ -72,8 +76,8 @@ namespace Cosmos {
     std::ostream &operator << (std::ostream &, derivation_style);
     std::istream &operator >> (std::istream &, derivation_style &);
 
-    std::ostream &operator << (std::ostream &, restore_wallet_type);
-    std::istream &operator >> (std::istream &, restore_wallet_type &);
+    std::ostream &operator << (std::ostream &, restore_wallet_style);
+    std::istream &operator >> (std::istream &, restore_wallet_style &);
 
     std::ostream &operator << (std::ostream &, coin_type);
     std::istream &operator >> (std::istream &, coin_type &);
@@ -94,25 +98,31 @@ namespace Cosmos {
     // set of options provided in a http request that are
     // used to generate a new wallet.
     struct generate_request_options {
-    protected:
         Diophant::symbol Name {};
-        Cosmos::wallet_style WalletStyle {Cosmos::wallet_style::BIP_44};
-        Cosmos::restore_wallet_type RestoreWalletType {Cosmos::restore_wallet_type::unset};
+
+        constexpr static const Cosmos::wallet_type DefaultWalletType {Cosmos::wallet_type::BIP_44};
+
+        maybe<Cosmos::wallet_type> WalletType {};
+
+        Cosmos::restore_wallet_style RestoreWalletStyle {Cosmos::restore_wallet_style::unset};
+
         maybe<Cosmos::coin_type> CoinTypeDerivationParameter {};
         Cosmos::derivation_style DerivationStyle {Cosmos::derivation_style::unset};
-        Cosmos::mnemonic_style MnemonicStyle {Cosmos::mnemonic_style::none};
+
+        constexpr static const Cosmos::mnemonic_style DefaultMnemonicStyle {Cosmos::mnemonic_style::none};
+
+        maybe<Cosmos::mnemonic_style> MnemonicStyle {};
         uint32 NumberOfWords {0};
         maybe<std::string> Password;
         uint32 Accounts {1};
 
-    public:
         generate_request_options &name (const std::string &);
-        generate_request_options &wallet_style (Cosmos::wallet_style);
+        generate_request_options &wallet_type (Cosmos::wallet_type);
         generate_request_options &mnemonic_style (Cosmos::mnemonic_style);
         generate_request_options &number_of_words (uint32);
         generate_request_options &coin_type (uint32);
         generate_request_options &coin_type_none ();
-        generate_request_options &restore_wallet_type (Cosmos::restore_wallet_type);
+        generate_request_options &restore_wallet_style (Cosmos::restore_wallet_style);
 
         Diophant::symbol name () const {
             return Name;
@@ -129,18 +139,20 @@ namespace Cosmos {
         Cosmos::coin_type coin_type () const {
             if (CoinTypeDerivationParameter) return *CoinTypeDerivationParameter;
             if (DerivationStyle == Cosmos::derivation_style::CentBee) return Cosmos::coin_type {};
+            // get coin type from wallet style.
             throw data::exception {"invalid parameters"};
         }
 
         Cosmos::mnemonic_style mnemonic_style () const {
-            return MnemonicStyle;
+            if (MnemonicStyle) return *MnemonicStyle;
+            else return DefaultMnemonicStyle;
         }
 
-        Cosmos::wallet_style wallet_style () const {
-            if (WalletStyle == Cosmos::wallet_style::invalid &&
-                RestoreWalletType != Cosmos::restore_wallet_type::unset)
-                return Cosmos::wallet_style::BIP_44;
-            return WalletStyle;
+        Cosmos::wallet_type wallet_type () const {
+            if ((!WalletType || *WalletType == Cosmos::wallet_type::invalid) &&
+                RestoreWalletStyle != Cosmos::restore_wallet_style::unset)
+                return DefaultWalletType;
+            return *WalletType;
         }
 
         // read from a generate request.
@@ -159,13 +171,18 @@ namespace Cosmos {
     // return the mnemonic if the generate function succeeded
     generate_error generate (database &DB, const std::string &words, const generate_request_options &);
 
+    net::HTTP::response handle_generate (database &DB,
+        Diophant::symbol wallet_name, map<UTF8, UTF8> query,
+        const maybe<net::HTTP::content> &content_type,
+        const data::bytes &body);
+
     generate_request_options inline &generate_request_options::name (const std::string &name) {
         Name = name;
         return *this;
     }
 
-    generate_request_options inline &generate_request_options::wallet_style (Cosmos::wallet_style wx) {
-        WalletStyle = wx;
+    generate_request_options inline &generate_request_options::wallet_type (Cosmos::wallet_type wx) {
+        WalletType = wx;
         return *this;
     }
 
@@ -186,7 +203,7 @@ namespace Cosmos {
     }
 
     generate_request_options inline &generate_request_options::coin_type_none () {
-        CoinTypeDerivationParameter = {};
+        CoinTypeDerivationParameter = {Cosmos::coin_type {}};
         DerivationStyle = Cosmos::derivation_style::CentBee;
         return *this;
     }
