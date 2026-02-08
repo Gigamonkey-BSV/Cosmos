@@ -233,24 +233,14 @@ namespace Cosmos {
     }
 
     generate_error generate_request_options::check () const {
-        if (RestoreWalletStyle != Cosmos::restore_wallet_style::unset) {
-            // type must be bip44
 
-            // derivation style must match
-
-            // coin type must match
-
-            //
-        }
-
-        // if derivation style is unset, then
         if (DerivationStyle != Cosmos::derivation_style::unset) {
             if (DerivationStyle == Cosmos::derivation_style::BIP_44) {
                 if (!bool (CoinTypeDerivationParameter) || !bool (*CoinTypeDerivationParameter))
                     return generate_error::words_vs_mnemonic_style;
             } else if (bool (CoinTypeDerivationParameter) && bool (*CoinTypeDerivationParameter))
                 return generate_error::centbee_vs_coin_type;
-        } else if (!CoinTypeDerivationParameter)
+        } else if (!CoinTypeDerivationParameter && RestoreWalletStyle == Cosmos::restore_wallet_style::unset)
             return generate_error::neither_style_nor_coin_type;
 
         if (MnemonicStyle == mnemonic_style::none && NumberOfWords != 0)
@@ -384,7 +374,9 @@ namespace Cosmos {
         }
 
         if (style) {
-            // type must be bip44
+            std::cout << " set wallet style to " << *style << std::endl;
+
+            RestoreWalletStyle = *style;
 
             // derivation style must match
 

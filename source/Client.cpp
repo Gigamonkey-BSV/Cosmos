@@ -1,7 +1,3 @@
-#include <data/io/main.hpp>
-#include <data/io/random.hpp>
-#include <data/io/arg_parser.hpp>
-#include <data/io/log.hpp>
 
 #include "Cosmos.hpp"
 #include <Cosmos/REST/REST.hpp>
@@ -13,6 +9,11 @@
 #include <Cosmos/Diophant.hpp>
 
 #include <data/net/URL.hpp>
+
+#include <data/io/random.hpp>
+#include <data/io/arg_parser.hpp>
+#include <data/io/log.hpp>
+#include <data/io/main.hpp>
 
 using error = data::io::error;
 
@@ -121,7 +122,7 @@ error call_server (method m, const args::parsed &p) {
                 case Cosmos::generate_error::centbee_vs_coin_type:
                     return error {error::code {3}, "'derivation_style' conflicts with 'coin_type'"};
                 case Cosmos::generate_error::neither_style_nor_coin_type:
-                    return error {error::code {3}, "must provide either derivation_style or coin_type"};
+                    return error {error::code {3}, "must provide either derivation_style, coin_type, or style"};
                 case Cosmos::generate_error::mnemonic_vs_number_of_words:
                     return error {error::code {3}, ""};
                 case Cosmos::generate_error::invalid_number_of_words:

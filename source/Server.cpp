@@ -7,8 +7,6 @@
 #include <data/net/URL.hpp>
 #include <data/net/JSON.hpp>
 #include <data/net/HTTP_server.hpp>
-#include <data/io/random.hpp>
-#include <data/io/error.hpp>
 
 // TODO: in here we have 'using namespace data' and that causes a
 // problem if the includes are in the wrong order. This should be fixed. 
@@ -18,56 +16,21 @@
 #include <Cosmos/options.hpp>
 #include <Cosmos/Diophant.hpp>
 
+#include <data/io/random.hpp>
+#include <data/io/main.hpp>
+
 using error = data::io::error;
 
-void run (const options &);
+void run (const options &p);
 
-void signal_handler (int signal);
-
-template <typename fun, typename ...args>
-requires std::regular_invocable<fun, args...>
-error catch_all (fun f, args... a) {
-    try {
-        std::invoke (std::forward<fun> (f), std::forward<args> (a)...);
-    } catch (const data::method::unimplemented &x) {
-        return error {error::programmer_action, x.what ()};
-    } catch (const net::HTTP::exception &x) {
-        return error {error::operator_action, x.what ()};
-    } catch (const JSON::exception &x) {
-        return error {error::operator_action, x.what ()};
-    } catch (const CryptoPP::Exception &x) {
-        return error {error::programmer_action, x.what ()};
-    }
-
-    return error {};
-}
-
-int main (int arg_count, char **arg_values) {
-    std::signal (SIGINT, signal_handler);
-    std::signal (SIGTERM, signal_handler);
-
-    error err = catch_all (run, options {args::parsed {arg_count, arg_values}});
-
-    if (bool (err)) {
-        if (err.Message) DATA_LOG (error) << "Fail code " << err.Code << ": " << *err.Message << std::endl;
-        else DATA_LOG (error) << "Fail code " << err.Code << "." << std::endl;
-    }
-
-    return err.Code;
-
-}
-
-// we use this to handle all concurrent programming.
-boost::asio::io_context IO;
-
-ptr<database> DB;
-std::unique_ptr<Cosmos::network> Network;
-std::unique_ptr<net::HTTP::server> Server;
+using namespace Cosmos;
 
 std::atomic<bool> Shutdown {false};
 
 bool ShutdownInProgress {false};
 std::mutex ShutdownMutex;
+
+std::unique_ptr<net::HTTP::server> Server;
 
 void shutdown () noexcept {
     std::lock_guard<std::mutex> lock {ShutdownMutex};
@@ -77,12 +40,62 @@ void shutdown () noexcept {
     if (Server != nullptr) Server->close ();
 }
 
-void signal_handler (int signal) {
-    if (signal == SIGINT || signal == SIGTERM) {
-        Shutdown = true;
-        shutdown ();
+namespace data {
+    void signal_handler (int signal) {
+        if (signal == SIGINT || signal == SIGTERM) {
+            Shutdown = true;
+            shutdown ();
+        }
     }
 }
+
+// we only use this to detect unknown options for now.
+args::command input_schema {
+  set<std::string> {"offline", "accept_remote", "sqlite_in_memory", "ignore_user_entropy"},
+  schema::list::value<std::string> (),
+      *schema::map::key<filepath> ("env") &&
+      *schema::map::key<net::IP::TCP::endpoint> ("endpoint") &&
+      *schema::map::key<net::IP::address> ("ip_address") &&
+      *schema::map::key<uint32> ("port") &&
+      *schema::map::key<std::string> ("nonce") &&
+      *schema::map::key<std::string> ("seed")};
+
+namespace data {
+    error main (std::span<const char *const> rr) {
+
+        try {
+
+            args::parsed p {static_cast<int> (rr.size ()), rr.data ()};
+            args::validate (p, input_schema);
+            run (options {p});
+            return error {};
+
+        } catch (const schema::unknown_key &k) {
+            return error {error::code::user_action, string::write ("unknown option ", k.Key)};
+        } catch (const schema::mismatch &) {
+            DATA_LOG (normal) << "mismatch (we will provide more information later)";
+            return error {error::code::programmer_action, "failed to generate error upon failure to read user input"};
+        } catch (const JSON::exception &x) {
+            std::cout << "error reading JSON" << std::endl;
+            return error {error::code::operator_action, std::string {x.what ()}};
+        } catch (const net::HTTP::exception &x) {
+            std::cout << "Problem with http: " << std::endl;
+            std::cout << "\trequest: " << x.Request << std::endl;
+            std::cout << "\tresponse: " << x.Response << std::endl;
+            return error {error::code::operator_action, std::string {x.what ()}};
+        } catch (const CryptoPP::Exception &x) {
+            return error {error::programmer_action, x.what ()};
+        }
+
+        return {};
+    }
+}
+
+// we use this to handle all concurrent programming.
+boost::asio::io_context IO;
+
+ptr<database> DB;
+std::unique_ptr<Cosmos::network> Network;
 
 Cosmos::random::user_entropy UserEntropy;
 
@@ -103,16 +116,18 @@ void init_random (const options &program_options) {
     });
 }
 
-using namespace Cosmos;
-
 void run (const options &program_options) {
     // print version string.
     if (program_options.has ("version")) {
-        version (std::cout);
+        version (std::cout) << std::endl;
         return;
     }
 
-    // TODO what about help?
+    if (program_options.has ("help")) {
+        // TODO the help message here is completely wrong.
+        help (std::cout) << std::endl;
+        return;
+    }
 
     {
         // path to an env file containing program options.
@@ -121,11 +136,11 @@ void run (const options &program_options) {
         std::filesystem::path envpath = bool (envpath_param) ? *envpath_param : ".env";
 
         if (bool (envpath_param)) DATA_LOG (note) << "No env path provided with --env. Using default " << envpath;
-        DATA_LOG (note) << "Searching for env path " << envpath << std::endl;
+        std::cout << "Searching for env path " << envpath << ". Use --env= to provide a different path." << std::endl;
 
         std::error_code ec;
         if (!std::filesystem::exists (envpath, ec)) {
-            DATA_LOG (note) << "No file " << envpath << " found" << std::endl;
+            std::cout << "No file " << envpath << " found" << std::endl;
             // If the user provided a path, it is an error if it is not found.
             // Otherwise we look in the default location but don't throw an
             // error if we don't find it.
@@ -165,8 +180,8 @@ void run (const options &program_options) {
         DATA_LOG (note) << "running with endpoint " << endpoint << std::endl;
         DATA_LOG (note) << "running with ip address " << endpoint.address () << " and listening on port " << endpoint.port () << std::endl;
         DATA_LOG (note) << "connect to " <<
-          net::URL (net::URL::make ().protocol ("http").address (endpoint.address ()).port (endpoint.port ())) <<
-          " to see the GUI." << std::endl;
+            net::URL (net::URL::make ().protocol ("http").address (endpoint.address ()).port (endpoint.port ())) <<
+                " to see the GUI." << std::endl;
 
         Server = std::unique_ptr<net::HTTP::server> {new net::HTTP::server
             (IO.get_executor (), endpoint, server {program_options.spend_options (), *DB, Network.get (), &UserEntropy})};

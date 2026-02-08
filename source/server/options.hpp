@@ -11,6 +11,7 @@ namespace args = data::io::args;
 
 struct options : args::parsed {
     options (args::parsed &&ap) : args::parsed {ap} {}
+    options (const args::parsed &ap) : args::parsed {ap} {}
 
     // path to an env file containing program options. 
     maybe<filepath> env () const;
