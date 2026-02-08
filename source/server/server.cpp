@@ -511,22 +511,7 @@ net::HTTP::response handle_restore (server &p,
         derivation_options,
         key_options,
         accounts_param,
-        max_lookup_param] = schema::validate<> (query,
-        (schema::map::key<restore_wallet_style> ("wallet_type") || (
-            *schema::map::key<wallet_type> ("wallet_type") &&
-            *schema::map::key<derivation_style> ("derivation_style") &&
-            *(schema::map::key<coin_type> ("coin_type") ||
-                schema::map::key<bool> ("guess_coin_type")))) &&
-        (schema::map::key<UTF8> ("key") &&
-            *schema::map::key<master_key_type> ("key_type") ||
-            (*(schema::map::key<UTF8> ("password") ||
-                schema::map::key<uint16> ("CentBee_PIN") ||
-                schema::map::key<bool> ("guess_CentBee_PIN")) &&
-                (schema::map::key<UTF8> ("mnemonic") ||
-                    schema::map::key<bytes> ("entropy")) &&
-                    *schema::map::key<mnemonic_style> ("mnemonic_style"))) &&
-        *schema::map::key<uint32> ("accounts") &&
-        *schema::map::key<uint32> ("max_lookup"));
+        max_lookup_param] = schema::validate<> (query, RestoreOptionsSchema);
 
     uint32 total_accounts = set_with_default (accounts_param, uint32 {1});
     uint32 max_lookup = set_with_default (max_lookup_param, uint32 {25});

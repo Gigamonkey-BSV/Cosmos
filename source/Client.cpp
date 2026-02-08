@@ -117,15 +117,15 @@ error call_server (method m, const args::parsed &p) {
 
             switch (opts.check ()) {
                 case Cosmos::generate_error::words_vs_mnemonic_style:
-                    return error {error::code {3}};
+                    return error {error::code {3}, "'--words' and '--mnemonic_style=none' or '--no_words' and '--mnmonic_style=<not none>'"};
                 case Cosmos::generate_error::centbee_vs_coin_type:
-                    return error {error::code {3}};
+                    return error {error::code {3}, "'derivation_style' conflicts with 'coin_type'"};
                 case Cosmos::generate_error::neither_style_nor_coin_type:
-                    return error {error::code {3}};
+                    return error {error::code {3}, "must provide either derivation_style or coin_type"};
                 case Cosmos::generate_error::mnemonic_vs_number_of_words:
-                    return error {error::code {3}};
+                    return error {error::code {3}, ""};
                 case Cosmos::generate_error::invalid_number_of_words:
-                    return error {error::code {3}};
+                    return error {error::code {3}, "invalid number of words"};
             }
 
             auto res = call (a, REST.request (opts));
@@ -378,9 +378,13 @@ std::ostream &help (std::ostream &o, method meth) {
             "\n\t(--max_look_ahead=)<integer> (= 10)"
             "\n\t(--mnemonic=<string>)"
             "\n\t(--master_key_type=\"HD_sequence\"|\"BIP44_account\"|\"BIP44_master\") (= \"HD_sequence\")"
-            "\n\t(--coin_type=\"Bitcoin\"|\"BitcoinCash\"|\"BitcoinSV\"|<integer>)"
-            "\n\t(--style=\"RelayX\"|\"ElectrumSV\"|\"SimplyCash\"|\"CentBee\"|<string>)"
+            "\n\t" R"((--coin_type=<uint32|string> (=0)) (value of BIP 44 coin_type | "none" | "bitcoin" | "bitcoin_cash" | "bitcoin_sv"))"
+            "\n\t" R"((--derivation_style=) ("bip44" | "centbee"))"
+            "\n\t" R"((--mnemonic_style=) ("none" | "bip39" | "electrumsv"))"
+            "\n\t" R"((--style=) ("moneybutton" | "relayx" | "centbee" | "electrumsv"))"
             "\n\t(--entropy=<string>)";
+            "\n\t(--password=<string>)";
+            "\n\t(--centbee_PIN=<four digits>)";
         case method::VALUE :
             return o << "Print the value in a wallet."
             "\narguments for method value:"

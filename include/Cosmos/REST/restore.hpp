@@ -3,6 +3,8 @@
 
 #include "generate.hpp"
 
+namespace schema = data::schema;
+
 namespace Cosmos {
 
     enum class master_key_type {
@@ -22,7 +24,25 @@ namespace Cosmos {
     std::ostream &operator << (std::ostream &, master_key_type);
     std::istream &operator >> (std::istream &, master_key_type &);
 
+    extern decltype (
+        (schema::map::key<restore_wallet_style> ("style") || (
+            *schema::map::key<wallet_type> ("wallet_type") &&
+            *schema::map::key<derivation_style> ("derivation_style") &&
+            *(schema::map::key<coin_type> ("coin_type") ||
+                schema::map::key<bool> ("guess_coin_type")))) &&
+        (schema::map::key<UTF8> ("key") &&
+            *schema::map::key<master_key_type> ("key_type") ||
+            (*(schema::map::key<UTF8> ("password") ||
+                schema::map::key<uint16> ("CentBee_PIN") ||
+                schema::map::key<bool> ("guess_CentBee_PIN")) &&
+                (schema::map::key<UTF8> ("mnemonic") ||
+                    schema::map::key<bytes> ("entropy")) &&
+                *schema::map::key<mnemonic_style> ("mnemonic_style"))) &&
+        *schema::map::key<uint32> ("accounts") &&
+        *schema::map::key<uint32> ("max_lookup")) RestoreOptionsSchema;
+
     struct restore_request_options : generate_request_options {
+
         maybe<Cosmos::master_key_type> MasterKeyType;
         maybe<std::string> Key;
         maybe<data::string> Entropy;

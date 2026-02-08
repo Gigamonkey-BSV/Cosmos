@@ -206,7 +206,7 @@ namespace Cosmos {
                 };
             } break;
             case 1: {
-                maybe<derivation_style> dstyle;
+                maybe<Cosmos::derivation_style> dstyle;
                 std::tie (WalletType, dstyle, CoinTypeDerivationParameter) = std::get<1> (wallet_generation);
 
                 if (bool (dstyle)) DerivationStyle = *dstyle;
@@ -243,6 +243,7 @@ namespace Cosmos {
             //
         }
 
+        // if derivation style is unset, then
         if (DerivationStyle != Cosmos::derivation_style::unset) {
             if (DerivationStyle == Cosmos::derivation_style::BIP_44) {
                 if (!bool (CoinTypeDerivationParameter) || !bool (*CoinTypeDerivationParameter))
@@ -336,7 +337,7 @@ namespace Cosmos {
                 *schema::map::key<Cosmos::mnemonic_style> ("mnemonic_style") &&
                 *schema::map::key<uint32> ("number_of_words") &&
                 *schema::map::key<Cosmos::coin_type> ("coin_type") &&
-                *schema::map::key<derivation_style> ("derivation_style") &&
+                *schema::map::key<Cosmos::derivation_style> ("derivation_style") &&
                 *schema::map::key<Cosmos::wallet_type> ("wallet_type") &&
                 *schema::map::key<Cosmos::restore_wallet_style> ("style") &&
                 *schema::map::key<uint32> ("accounts") &&

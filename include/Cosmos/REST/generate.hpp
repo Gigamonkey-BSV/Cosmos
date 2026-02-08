@@ -98,6 +98,7 @@ namespace Cosmos {
     // set of options provided in a http request that are
     // used to generate a new wallet.
     struct generate_request_options {
+
         Diophant::symbol Name {};
 
         constexpr static const Cosmos::wallet_type DefaultWalletType {Cosmos::wallet_type::BIP_44};
@@ -123,6 +124,7 @@ namespace Cosmos {
         generate_request_options &coin_type (uint32);
         generate_request_options &coin_type_none ();
         generate_request_options &restore_wallet_style (Cosmos::restore_wallet_style);
+        generate_request_options &derivation_style (Cosmos::derivation_style);
 
         Diophant::symbol name () const {
             return Name;
@@ -153,6 +155,16 @@ namespace Cosmos {
                 RestoreWalletStyle != Cosmos::restore_wallet_style::unset)
                 return DefaultWalletType;
             return *WalletType;
+        }
+
+        Cosmos::derivation_style derivation_style () const {
+            if (DerivationStyle != Cosmos::derivation_style::unset) return DerivationStyle;
+
+            if (RestoreWalletStyle != Cosmos::restore_wallet_style::unset) {
+                if (RestoreWalletStyle == Cosmos::restore_wallet_style::CentBee)
+                    return Cosmos::derivation_style::CentBee;
+                return Cosmos::derivation_style::BIP_44;
+            }
         }
 
         // read from a generate request.
