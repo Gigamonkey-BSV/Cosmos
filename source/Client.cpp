@@ -140,8 +140,17 @@ error call_server (method m, const args::parsed &p) {
         }
 
         case method::RESTORE: {
-
-            restore_request_options opts {p};
+            restore_request_options opts {};
+            try {
+                opts = restore_request_options {p};
+            } catch (const schema::missing_key &x) {
+                std::cout << "missing key for key " << x.Key << std::endl;
+                if (x.Key == "entropy" || x.Key == "master_key" || x.Key == "mnemonic") {
+                    std::cout << "We require a value for either 'mnemonic', 'entropy', or 'master_key' in order to restore a wallet." << std::endl;
+                    return error {error::code {3}};
+                }
+                throw x;
+            }
 
             auto res = call (a, REST.request (opts));
             auto result = read_JSON_response (res);
@@ -375,7 +384,7 @@ std::ostream &help (std::ostream &o, method meth) {
         case method::RESTORE :
             o << "arguments for method restore:"
             "\n\t<string> (wallet name)"
-            "\n\t(--key=)<xpub | xpriv>"
+            "\n\t(--master_key=)<xpub | xpriv>"
             "\n\t(--max_look_ahead=)<integer> (= 10)"
             "\n\t(--mnemonic=<string>)"
             "\n\t(--master_key_type=\"HD_sequence\"|\"BIP44_account\"|\"BIP44_master\") (= \"HD_sequence\")"

@@ -177,11 +177,11 @@ void run (const options &program_options) {
                 "the user must ensure that all connections to the program are authorized. Right now, Cosmos does nothing to hide "
                 "keys from unauthorized access.";
 
-        DATA_LOG (note) << "running with endpoint " << endpoint << std::endl;
-        DATA_LOG (note) << "running with ip address " << endpoint.address () << " and listening on port " << endpoint.port () << std::endl;
+        DATA_LOG (note) << "running with endpoint " << endpoint;
+        DATA_LOG (note) << "running with ip address " << endpoint.address () << " and listening on port " << endpoint.port ();
         DATA_LOG (note) << "connect to " <<
             net::URL (net::URL::make ().protocol ("http").address (endpoint.address ()).port (endpoint.port ())) <<
-                " to see the GUI." << std::endl;
+                " to see the GUI.";
 
         Server = std::unique_ptr<net::HTTP::server> {new net::HTTP::server
             (IO.get_executor (), endpoint, server {program_options.spend_options (), *DB, Network.get (), &UserEntropy})};

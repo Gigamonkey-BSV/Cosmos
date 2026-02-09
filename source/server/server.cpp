@@ -511,7 +511,7 @@ net::HTTP::response handle_restore (server &p,
         derivation_options,
         key_options,
         accounts_param,
-        max_lookup_param] = schema::validate<> (query, RestoreOptionsSchema);
+        max_lookup_param] = schema::validate<> (query, restore_request_options::schema ());
 
     uint32 total_accounts = set_with_default (accounts_param, uint32 {1});
     uint32 max_lookup = set_with_default (max_lookup_param, uint32 {25});
@@ -533,6 +533,8 @@ net::HTTP::response handle_restore (server &p,
     {
 
         switch (derivation_options.index ()) {
+            // in this case, we were given a style option from which we
+            // can derive several wallet parameters.
             case 0: {
                 restore_wallet_style restore_type = std::get<0> (derivation_options);
                 WalletStyle = wallet_type::BIP_44;
@@ -597,9 +599,11 @@ net::HTTP::response handle_restore (server &p,
             return error_response (400, method::RESTORE, problem::invalid_query,
                 "Please provide a coin_type parameter or set guess_coin_type to true");
 
+        // this happens if entropy or mnemonic was provided.
         bool derive_from_mnemonic = key_options.index () == 1;
+
         if (derive_from_mnemonic) {
-            auto [password_option, mnemonic_or_entropy, mnemonic_style_option] = std::get<1> (key_options);
+            auto [mnemonic_or_entropy, password_option, mnemonic_style_option] = std::get<1> (key_options);
 
             mnemonic_style MnemonicStyle = set_with_default (mnemonic_style_option, mnemonic_style::BIP_39);
 
