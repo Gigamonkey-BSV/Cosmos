@@ -2,6 +2,7 @@
 #define SERVER_RESTORE
 
 #include "generate.hpp"
+#include <data/math/number/modular.hpp>
 
 namespace schema = data::schema;
 
@@ -32,7 +33,6 @@ namespace Cosmos {
                     *schema::map::key<Cosmos::wallet_type> ("wallet_type") &&
                     *schema::map::key<Cosmos::derivation_style> ("derivation_style") &&
                     *(schema::map::key<Cosmos::coin_type> ("coin_type") ||
-                        // not officially supported
                         schema::map::key<bool> ("guess_coin_type")))) &&
                 // options relating to the master keys
                 (schema::map::key<UTF8> ("master_key") &&
@@ -40,16 +40,19 @@ namespace Cosmos {
                     (schema::map::key<std::string> ("mnemonic") ||
                         schema::map::key<bytes> ("entropy")) &&
                     *(schema::map::key<UTF8> ("password") ||
-                        schema::map::key<uint16> ("CentBee_PIN") ||
+                        schema::map::key<data::math::number::modular<uint16 (10000)>> ("CentBee_PIN") ||
                         schema::map::key<bool> ("guess_CentBee_PIN")) &&
                     *schema::map::key<Cosmos::mnemonic_style> ("mnemonic_style")) &&
                 *schema::map::key<uint32> ("accounts") &&
                 *schema::map::key<uint32> ("max_lookup");
         }
 
+        bool GuessCoinType {false};
+        bool GuessCentBeePIN {false};
+        maybe<uint16> CentBeePIN;
         maybe<Cosmos::master_key_type> MasterKeyType;
         maybe<std::string> Key;
-        maybe<data::string> Entropy;
+        maybe<bytes> Entropy;
         maybe<data::string> Mnemonic;
         maybe<uint32> MaxLookAhead;
 

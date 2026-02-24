@@ -61,7 +61,7 @@ namespace data {
 net::HTTP::request read_command (const data::io::args::parsed &);
 
 net::HTTP::response call (const data::net::authority &a, const net::HTTP::request &req) {
-    DATA_LOG (debug) << "make call with request " << req;
+    DATA_LOG (debug) << "make call to authority " << a << " with request " << req;
     return data::synced ([&] () -> awaitable<net::HTTP::response> {
         auto stream = co_await net::HTTP::connect (net::HTTP::version_1_1, a);
         auto res = co_await stream->request (req);
@@ -80,6 +80,7 @@ error process_unexpected_response (const net::HTTP::response &r) {
 }
 
 error call_server (method m, const args::parsed &p) {
+    DATA_LOG (normal) << "call server with method " << m;
     auto a = command::read_authority (p);
 
     Cosmos::REST REST {a};
@@ -140,6 +141,7 @@ error call_server (method m, const args::parsed &p) {
         }
 
         case method::RESTORE: {
+            std::cout << "method restore..." << std::endl;
             restore_request_options opts {};
             try {
                 opts = restore_request_options {p};

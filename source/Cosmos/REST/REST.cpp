@@ -55,21 +55,55 @@ namespace Cosmos {
         if (o.RestoreWalletStyle != Cosmos::restore_wallet_style::unset)
             q <<= entry ("style", string::write (o.RestoreWalletStyle));
 
-        return this->operator () (net::HTTP::method::post, string::write ("/restore/", o.name ())).query_map (q);
+        return this->operator () (net::HTTP::method::put, string::write ("/restore/", o.name ())).query_map (q);
     }
 }
 
 namespace Cosmos::command {
 
     authority read_authority (const args::parsed &p) {
+        DATA_LOG (normal) << "read authority";
+
+        auto result = data::schema::validate (p.Options, +call_options ());
+
+        if (result.template is<net::IP::TCP::endpoint> ())
+            return result.template get<net::IP::TCP::endpoint> ();
+
+        auto [port, other_thing] = std::get<1> (result);
+
+        if (other_thing.template is<net::IP::address> ())
+            return net::IP::TCP::endpoint {other_thing.template get<net::IP::address> (), port};
+
+        if (other_thing.template is<net::authority> ()) {
+            auto auth = other_thing.template get<net::authority> ();
+
+            maybe<net::IP::address> addr = auth.address ();
+
+            if (!addr) return {};
+
+            maybe<uint16> port_number = auth.port_number ();
+
+            if (bool (port_number) && *port_number != port) return {};
+
+            return net::IP::TCP::endpoint {*addr, port};
+        }
+
+        // the only allowed domain is localhost
+        net::domain_name ddd = other_thing.template get<net::domain_name> ();
+
+        if (ddd != net::domain_name {"localhost"}) return {};
+
+        return net::IP::TCP::endpoint {"127.0.0.1", port};
+
+/*
+        maybe<net::IP::TCP::endpoint> ep;
+        p.get ("endpoint", ep);
+
         maybe<authority> auth;
         p.get ("authority", auth);
 
         maybe<net::domain_name> dom;
         p.get ("domain", dom);
-
-        maybe<net::IP::TCP::endpoint> ep;
-        p.get ("endpoint", ep);
 
         maybe<net::IP::address> addr;
         p.get ("ip_address", addr);
@@ -77,18 +111,11 @@ namespace Cosmos::command {
         maybe<uint16> port;
         p.get ("port", port);
 
-        if (auth && !data::valid (*auth))
-            throw exception {3} << "invalid value for option 'authority': " << *auth;
-
         if (dom) {
             if (!data::valid (*dom))
                 throw exception {3} << "invalid value for option 'domain': " << *dom;
 
-            authority auth_from_dom;
-            auth_from_dom = authority {*dom};
-            if (auth && *auth != auth_from_dom)
-                throw exception {3} << "authority from option 'authority' and option 'domain' disagree: " << *auth << " vs " << *dom;
-            else auth = auth_from_dom;
+            auth = authority {*dom};
         }
 
         if (ep) {
@@ -99,6 +126,8 @@ namespace Cosmos::command {
             if (auth && *auth != auth_from_ep)
                 throw exception {3} << "authority from options 'authority' and 'endpoint' disagree: " << *auth << " vs " << *ep;
         }
+
+        if (!dom && !ep && !addr) addr = "localhost";
 
         if (addr) {
             authority auth_from_ip_port;
@@ -120,7 +149,7 @@ namespace Cosmos::command {
         }
 
         if (auth) return *auth;
-        return "localhost";
+        return "localhost";*/
 
     }
 

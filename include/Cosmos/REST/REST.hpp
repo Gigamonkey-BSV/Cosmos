@@ -16,11 +16,13 @@ namespace Cosmos::command {
         return args::command (set<std::string> {}, schema::list::empty (), schema::map::empty ());
     }
 
+    // there is a problem with this function as it is supposed to be.
     auto inline call_options () {
-        return *(schema::map::key<std::string> ("authority") ||
-            schema::map::key<std::string> ("domain") ||
-            schema::map::key<std::string> ("endpoint") ||
-            (schema::map::key<std::string> ("ip_address") && *schema::map::key<uint32> ("port")));
+        return schema::map::key<net::IP::TCP::endpoint> ("endpoint") ||
+            schema::map::key<uint16> ("port", 4567) && (
+                schema::map::key<net::IP::address> ("ip_address") ||
+                schema::map::key<net::authority> ("authority") ||
+                schema::map::key<net::domain_name> ("domain", "localhost"));
     }
 
     auto inline empty_call () {
