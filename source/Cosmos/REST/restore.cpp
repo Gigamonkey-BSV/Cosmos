@@ -18,7 +18,7 @@ namespace Cosmos {
         std::string word;
         i >> word;
         if (!i) return i;
-        std::string sanitized = sanitize (word);
+        std::string sanitized = command::sanitize (word);
         if (sanitized == "single_address") x = master_key_type::single_address;
         else if (sanitized == "hdsequence") x = master_key_type::HD_sequence;
         else if (sanitized == "bip44account") x = master_key_type::BIP44_account;

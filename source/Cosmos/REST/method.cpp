@@ -1,7 +1,7 @@
-#include <Cosmos/REST/method.hpp>
+#include <Cosmos/REST/REST.hpp>
 #include <regex>
 
-namespace Cosmos {
+namespace Cosmos::command {
 
     std::string regex_replace (const std::string &x, const std::regex &r, const std::string &n) {
         std::stringstream ss;
@@ -54,6 +54,10 @@ namespace Cosmos {
         if (sanitized == "taxes") return method::TAXES;
         if (sanitized == "encryptprivatekeys") return method::ENCRYPT_KEY;
         if (sanitized == "decryptprivatekeys") return method::DECRYPT_KEY;
+        if (sanitized == "importdb") return method::IMPORT_DB;
+        if (sanitized == "exportdb") return method::EXPORT_DB;
+        if (sanitized == "importwallet") return method::IMPORT_WALLET;
+        if (sanitized == "exportwallet") return method::IMPORT_WALLET;
 
         return method::UNSET;
     }
@@ -89,7 +93,88 @@ namespace Cosmos {
             case method::TAXES: return o << "taxes";              // calculate income and capital gain for a given year.
             case method::ENCRYPT_KEY: return o << "encrypt_key";
             case method::DECRYPT_KEY: return o << "decrypt_key";
+
+            case method::IMPORT_DB: return o << "import_db";
+            case method::EXPORT_DB: return o << "export_db";
+            case method::IMPORT_WALLET: return o << "import_wallet";
+            case method::EXPORT_WALLET: return o << "export_wallet";
+
             default: throw data::exception {} << "unknown method";
         }
+    }
+
+    template <> net::HTTP::request make_request<SHUTDOWN> (const args::parsed &p) {
+        auto validated = args::validate (p, empty_call ());
+        return REST {read_authority (p)}.request_shutdown ();
+    }
+
+    template <> net::HTTP::request make_request<ADD_ENTROPY> (const args::parsed &p) {
+        auto z = args::validate (p,
+            args::command {
+                set<std::string> {},
+                schema::list::value<std::string> () +
+                    schema::list::value<method> () +
+                    schema::list::value<std::string> (),
+                call_options ()}).Arguments;
+        return REST {
+            read_authority (p)
+        }.request_add_entropy (std::get<2> (z));
+    }
+
+    template <> net::HTTP::request make_request<LIST_WALLETS> (const args::parsed &p) {
+        auto validated = args::validate (p, empty_call ());
+        return REST {read_authority (p)}.request_list_wallets ();
+    }
+
+    template <> net::HTTP::request make_request<VALUE> (const args::parsed &p) {
+        return REST {read_authority (p)}.request_value (std::get<2> (args::validate (p, wallet_method ()).Arguments));
+    }
+
+    template <> net::HTTP::request make_request<NEXT> (const args::parsed &p) {
+        return REST {read_authority (p)}.request (next_request_options {p});
+    }
+
+    template <> net::HTTP::request make_request<GENERATE> (const args::parsed &p) {
+        return REST {read_authority (p)}.request (generate_request_options {p});
+    }
+
+    template <> net::HTTP::request make_request<RESTORE> (const args::parsed &p) {
+        return REST {read_authority (p)}.request (restore_request_options {p});
+    }
+
+    template <> net::HTTP::request make_request<IMPORT> (const args::parsed &p) {
+        throw data::method::unimplemented {"make_request<IMPORT>"};
+    }
+
+    template <> net::HTTP::request make_request<SPEND> (const args::parsed &p) {
+        throw data::method::unimplemented {"make_request<SPEND>"};
+    }
+
+    template <> net::HTTP::request make_request<BOOST> (const args::parsed &p) {
+        throw data::method::unimplemented {"make_request<BOOST>"};
+    }
+
+    template <> net::HTTP::request make_request<SPLIT> (const args::parsed &p) {
+        throw data::method::unimplemented {"make_request<SPLIT>"};
+    }
+
+    template <> net::HTTP::request make_request<TAXES> (const args::parsed &p) {
+        throw data::method::unimplemented {"make_request<TAXES>"};
+    }
+
+    template <> net::HTTP::request make_request<IMPORT_DB> (const args::parsed &p) {
+        throw data::method::unimplemented {"make_request<IMPORT_DB>"};
+    }
+
+    template <> net::HTTP::request make_request<EXPORT_DB> (const args::parsed &p) {
+        throw data::method::unimplemented {"make_request<IMPORT_DB>"};
+    }
+
+    template <> net::HTTP::request make_request<IMPORT_WALLET> (const args::parsed &p) {
+        throw data::method::unimplemented {"make_request<IMPORT_WALLET>"};
+    }
+
+    template <> net::HTTP::request make_request<EXPORT_WALLET> (const args::parsed &p) {
+        throw data::method::unimplemented {"make_request<IMPORT_WALLET>"};
     }
 }

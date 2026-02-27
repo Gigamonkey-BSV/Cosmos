@@ -13,15 +13,15 @@ namespace schema = data::schema;
 
 std::string version ();
 
-std::string help (Cosmos::method m = Cosmos::method::UNSET);
+std::string help (Cosmos::command::method m = Cosmos::command::UNSET);
 
 std::ostream &version (std::ostream &o);
 
-std::ostream &help (std::ostream &o, Cosmos::method meth = Cosmos::method::UNSET);
+std::ostream &help (std::ostream &o, Cosmos::command::method meth = Cosmos::command::UNSET);
 
-net::HTTP::response error_response (unsigned int status, Cosmos::method m, Cosmos::problem, const std::string & = "");
+net::HTTP::response error_response (unsigned int status, Cosmos::command::method m, Cosmos::problem, const std::string & = "");
 
-net::HTTP::response help_response (Cosmos::method = Cosmos::method::UNSET);
+net::HTTP::response help_response (Cosmos::command::method = Cosmos::command::UNSET);
 
 net::HTTP::response version_response ();
 
@@ -39,7 +39,7 @@ std::string inline version () {
     return ss.str ();
 }
 
-std::string inline help (Cosmos::method m) {
+std::string inline help (Cosmos::command::method m) {
     std::stringstream ss;
     help (ss, m);
     return ss.str ();

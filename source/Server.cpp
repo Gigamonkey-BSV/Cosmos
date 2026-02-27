@@ -257,8 +257,8 @@ std::ostream &version (std::ostream &o) {
     return o << "Cosmos Wallet version 0.0.2 alpha";
 }
 
-std::ostream &help (std::ostream &o, method meth) {
-    switch (meth) {
+std::ostream &help (std::ostream &o, command::method method) {
+    switch (method) {
         default :
             return version (o) << "\n" << "input should be <method> <args>... where method is "
                 "\n\tgenerate   -- create a new wallet."
@@ -274,7 +274,7 @@ std::ostream &help (std::ostream &o, method meth) {
                 "\n\tsplit      -- split an output into many pieces"
                 "\n\trestore    -- restore a wallet from words, a key, or many other options."
                 "\nuse help \"method\" for information on a specific method";
-        case method::GENERATE :
+        case command::GENERATE :
             return o << "Generate a new wallet in terms of 24 words (BIP 39) or as an extended private key."
                 "\narguments for method generate:"
                 "\n\t(--name=)<wallet name>"
@@ -285,9 +285,9 @@ std::ostream &help (std::ostream &o, method meth) {
                 // could have "bitcoin" "bitcoin_cash" or "bitcoinSV" as its values,
                 // ignoring case, spaces, and '_'.
                 "\n\t(--coin_type=<uint32> (=0)) (value of BIP 44 coin_type)";
-        case method::VALUE :
+        case command::VALUE :
             return o << "Print the value in a wallet. No parameters.";
-        case method::REQUEST :
+        case command::REQUEST :
             return o << "Generate a new payment request."
                 "\narguments for method request:"
                 "\n\t(--name=)<wallet name>"
@@ -295,7 +295,7 @@ std::ostream &help (std::ostream &o, method meth) {
                 "\n\t(--expires=<number of minutes before expiration>)"
                 "\n\t(--memo=\"<explanation of the nature of the payment>\")"
                 "\n\t(--amount=<expected amount of payment>)";
-        case method::PAY :
+        case command::PAY :
             return o << "Respond to a payment request by creating a payment."
                 "\narguments for method pay:"
                 "\n\t(--name=)<wallet name>"
@@ -307,21 +307,21 @@ std::ostream &help (std::ostream &o, method meth) {
                 "\n\t(--min_sats_per_output=<float>) (= " << Cosmos::spend_options::DefaultMinSatsPerOutput << ")"
                 "\n\t(--max_sats_per_output=<float>) (= " << Cosmos::spend_options::DefaultMaxSatsPerOutput << ")"
                 "\n\t(--mean_sats_per_output=<float>) (= " << Cosmos::spend_options::DefaultMeanSatsPerOutput << ") ";
-        case method::ACCEPT :
+        case command::ACCEPT :
             return o << "Accept a payment."
                 "\narguments for method accept:"
                 "\n\t(--payment=)<payment tx in BEEF or SPV envelope>";
-        case method::SIGN :
+        case command::SIGN :
             return o << "arguments for method sign not yet available.";
-        case method::IMPORT :
+        case command::IMPORT :
             return o << "arguments for method import not yet available.";
-        case method::SEND :
+        case command::SEND :
             return o << "This method is DEPRICATED";
-        case method::SPEND :
+        case command::SPEND :
             return o << "Spend coins";
-        case method::BOOST :
+        case command::BOOST :
             return o << "arguments for method boost not yet available.";
-        case method::SPLIT :
+        case command::SPLIT :
             return o << "Split outputs in your wallet into many tiny outputs with small values over a triangular distribution. "
                 "\narguments for method split:"
                 "\n\t(--name=)<wallet name>"
@@ -330,7 +330,7 @@ std::ostream &help (std::ostream &o, method meth) {
                 "\n\t(--min_sats_per_output=<float>) (= " << Cosmos::spend_options::DefaultMinSatsPerOutput << ")"
                 "\n\t(--max_sats_per_output=<float>) (= " << Cosmos::spend_options::DefaultMaxSatsPerOutput << ")"
                 "\n\t(--mean_sats_per_output=<float>) (= " << Cosmos::spend_options::DefaultMeanSatsPerOutput << ") ";
-        case method::RESTORE :
+        case command::RESTORE :
             o << "arguments for method restore:"
                 "\n\t(--name=)<wallet name>"
                 "\n\t(--key=)<xpub | xpriv>"
@@ -340,9 +340,9 @@ std::ostream &help (std::ostream &o, method meth) {
                 "\n\t(--coin_type=\"Bitcoin\"|\"BitcoinCash\"|\"BitcoinSV\"|<integer>)"
                 "\n\t(--wallet_type=\"RelayX\"|\"ElectrumSV\"|\"SimplyCash\"|\"CentBee\"|<string>)"
                 "\n\t(--entropy=<string>)";
-        case method::ENCRYPT_KEY:
+        case command::ENCRYPT_KEY:
             o << "Encrypt the private key file so that it can only be accessed with a password. No parameters.";
-        case method::DECRYPT_KEY :
+        case command::DECRYPT_KEY :
             return o << "Decrypt the private key file again. No parameters.";
     }
 

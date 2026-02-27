@@ -14,7 +14,7 @@ std::istream &Cosmos::operator >> (std::istream &i, Cosmos::hash_function &f) {
     std::string word;
     i >> word;
     if (!i) return i;
-    std::string sanitized = sanitize (word);
+    std::string sanitized = command::sanitize (word);
     if (sanitized == "sha1") f = hash_function::SHA1;
     else if (sanitized == "md5") f = hash_function::MD5;
     else if (sanitized == "sha2256") f = hash_function::SHA2_256;

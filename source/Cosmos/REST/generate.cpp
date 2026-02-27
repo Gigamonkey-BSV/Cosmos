@@ -29,7 +29,7 @@ namespace Cosmos {
         std::string word;
         i >> word;
         if (!i) return i;
-        std::string sanitized = sanitize (word);
+        std::string sanitized = command::sanitize (word);
         if (sanitized == "none") x = coin_type {};
         else if (sanitized == "bitcoin") x = coin_type {coin_type::Bitcoin};
         else if (sanitized == "bitcoincash") x = coin_type {coin_type::Bitcoin_Cash};
@@ -66,7 +66,7 @@ namespace Cosmos {
         std::string word;
         i >> word;
         if (!i) return i;
-        std::string sanitized = sanitize (word);
+        std::string sanitized = command::sanitize (word);
         if (sanitized == "bip44") x = wallet_type::BIP_44;
         else if (sanitized == "bip44plus") x = wallet_type::BIP_44_plus;
         // experimental means me generate two secp256k1 keys and use one as the chain code.
@@ -89,7 +89,7 @@ namespace Cosmos {
         std::string word;
         i >> word;
         if (!i) return i;
-        std::string sanitized = sanitize (word);
+        std::string sanitized = command::sanitize (word);
         if (sanitized == "electrumsv") x = mnemonic_style::Electrum_SV;
         else if (sanitized == "bip39") x = mnemonic_style::BIP_39;
         else i.setstate (std::ios::failbit);
@@ -100,7 +100,7 @@ namespace Cosmos {
         std::string word;
         i >> word;
         if (!i) return i;
-        std::string sanitized = sanitize (word);
+        std::string sanitized = command::sanitize (word);
         if (sanitized == "bip44") x = derivation_style::BIP_44;
         else if (sanitized == "centbee") x = derivation_style::CentBee;
         else i.setstate (std::ios::failbit);
@@ -119,7 +119,7 @@ namespace Cosmos {
         std::string word;
         i >> word;
         if (!i) return i;
-        std::string sanitized = sanitize (word);
+        std::string sanitized = command::sanitize (word);
         if (sanitized == "moneybutton") x = restore_wallet_style::Money_Button;
         else if (sanitized == "relayx") x = restore_wallet_style::RelayX;
         else if (sanitized == "simplycash") x = restore_wallet_style::Simply_Cash;

@@ -1,9 +1,11 @@
 
 #include "Cosmos.hpp"
-#include <Cosmos/REST/REST.hpp>
+#include <Cosmos/REST/method.hpp>
 #include "server/split.hpp"
 #include "server/spend.hpp"
 #include "server/import.hpp"
+
+#include "old.hpp"
 
 #include <Cosmos/boost/miner_options.hpp>
 #include <Cosmos/Diophant.hpp>
@@ -60,10 +62,10 @@ namespace data {
 
 net::HTTP::request read_command (const data::io::args::parsed &);
 
-net::HTTP::response call (const data::net::authority &a, const net::HTTP::request &req) {
-    DATA_LOG (debug) << "make call to authority " << a << " with request " << req;
+net::HTTP::response call (const net::HTTP::request &req) {
+    DATA_LOG (debug) << "make call with request " << req;
     return data::synced ([&] () -> awaitable<net::HTTP::response> {
-        auto stream = co_await net::HTTP::connect (net::HTTP::version_1_1, a);
+        auto stream = co_await net::HTTP::connect (net::HTTP::version_1_1, req.host ());
         auto res = co_await stream->request (req);
         stream->close ();
         co_return res;
@@ -79,68 +81,71 @@ error process_unexpected_response (const net::HTTP::response &r) {
     return error {error::programmer_action, "Cannot read server response"};
 }
 
-error call_server (method m, const args::parsed &p) {
-    DATA_LOG (normal) << "call server with method " << m;
-    auto a = command::read_authority (p);
+error process_ok_response (const net::HTTP::response &res) {
+    if (read_ok_response (res)) return {};
+    return process_unexpected_response (res);
+}
 
-    Cosmos::REST REST {a};
+error process_string_response (const net::HTTP::response &res) {
+    auto x = read_string_response (res);
+    if (!x) return process_unexpected_response (res);
+    std::cout << *x << std::endl;
+    return {};
+}
+
+error process_JSON_response (const net::HTTP::response &res) {
+    auto j = read_JSON_response (res);
+    if (!j) return process_unexpected_response (res);
+    std::cout << *j << std::endl;
+    return {};
+}
+
+error call_server (command::method m, const args::parsed &p) {
+    DATA_LOG (normal) << "call server with method " << m;
+
+    using namespace command;
 
     switch (m) {
 
         // TODO URL parameter
-        case method::SHUTDOWN: {
-            auto validated = args::validate (p, command::empty ());
-            auto res = call (a, REST.request_shutdown ());
-            if (read_ok_response (res)) return {};
-            return process_unexpected_response (res);
-        }
+        case SHUTDOWN:
+            return process_ok_response (call (make_request<SHUTDOWN> (p)));
 
-        case method::ADD_ENTROPY: {
-            auto res = call (a, REST.request_add_entropy (
-                std::get<1> (args::validate (p,
-                    args::command {set<std::string> {},
-                        schema::list::value<std::string> (),
-                        command::call_options ()}))));
-            if (read_ok_response (res)) return {};
-            return process_unexpected_response (res);
-        }
+        case ADD_ENTROPY:
+            return process_ok_response (call (make_request<ADD_ENTROPY> (p)));
 
-        case method::LIST_WALLETS: {
-            auto validated = args::validate (p, command::empty_call ());
-            auto res = call (a, REST.request_list_wallets ());
-            auto names = read_JSON_response (res);
-            if (!names) return process_unexpected_response (res);
-            std::cout << *names << std::endl;
-            return {};
-        }
+        case LIST_WALLETS:
+            return process_JSON_response (call (make_request<LIST_WALLETS> (p)));
 
-        case method::GENERATE: {
+        case GENERATE: {
             generate_request_options opts {p};
 
             switch (opts.check ()) {
-                case Cosmos::generate_error::words_vs_mnemonic_style:
+                case generate_error::words_vs_mnemonic_style:
                     return error {error::code {3}, "'--words' and '--mnemonic_style=none' or '--no_words' and '--mnmonic_style=<not none>'"};
-                case Cosmos::generate_error::centbee_vs_coin_type:
+                case generate_error::centbee_vs_coin_type:
                     return error {error::code {3}, "'derivation_style' conflicts with 'coin_type'"};
-                case Cosmos::generate_error::neither_style_nor_coin_type:
+                case generate_error::neither_style_nor_coin_type:
                     return error {error::code {3}, "must provide either derivation_style, coin_type, or style"};
-                case Cosmos::generate_error::mnemonic_vs_number_of_words:
+                case generate_error::mnemonic_vs_number_of_words:
                     return error {error::code {3}, ""};
-                case Cosmos::generate_error::invalid_number_of_words:
+                case generate_error::invalid_number_of_words:
                     return error {error::code {3}, "invalid number of words"};
             }
 
-            auto res = call (a, REST.request (opts));
+            auto res = call (make_request<GENERATE> (p));
+
             if (read_ok_response (res)) return {};
             auto words = read_string_response (res);
             if (words) {
                 std::cout << *words << std::endl;
                 return {};
             }
+
             return process_unexpected_response (res);
         }
 
-        case method::RESTORE: {
+        case RESTORE: {
             std::cout << "method restore..." << std::endl;
             restore_request_options opts {};
             try {
@@ -154,62 +159,45 @@ error call_server (method m, const args::parsed &p) {
                 throw x;
             }
 
-            auto res = call (a, REST.request (opts));
-            auto result = read_JSON_response (res);
-            if (!result) return process_unexpected_response (res);
-            std::cout << *result << std::endl;
-            return {};
+            return process_JSON_response (call (make_request<RESTORE> (p)));
         }
 
-        case method::VALUE: {
-            auto [wallet_name, _] = std::get<2> (
-                args::validate (p,
-                    args::command {
-                        set<std::string> {},
-                        schema::list::empty (),
-                        schema::map::key<Diophant::symbol> ("name") && command::call_options ()}));
-
-            auto res = call (a, REST.request_value (wallet_name));
+        case VALUE: {
+            auto res = call (make_request<VALUE> (p));
             auto val = read_string_response (res);
             if (!val) return process_unexpected_response (res);
             std::cout << *val << std::endl;
             return {};
         }
 
-        case method::NEXT: {
-            auto res = call (a, REST.request (next_request_options {p}));
-            auto addr = read_string_response (res);
-            if (!addr) return process_unexpected_response (res);
-            std::cout << *addr << std::endl;
-            return {};
-        }
+        case NEXT: return process_string_response (call (make_request<NEXT> (p)));
 
-        case method::IMPORT: {
-            auto res = call (a, request_import (p));
+        case IMPORT: {
+            auto res = call (make_request<IMPORT> (p));
             auto result = read_JSON_response (res);
             if (!result) return process_unexpected_response (res);
             std::cout << *result << std::endl;
             return {};
         }
 
-        case method::SPEND: {
-            auto res = call (a, spend_request_options (p).request ());
+        case SPEND: {
+            auto res = call (make_request<SPEND> (p));
             auto txids = read_string_response (res);
             if (!txids) return process_unexpected_response (res);
             std::cout << *txids << std::endl;
             return {};
         }
 
-        case method::SPLIT: {
-            auto res = call (a, split_request_options (p).request ());
+        case SPLIT: {
+            auto res = call (make_request<SPLIT> (p));
             auto result = read_string_response (res);
             if (!result) return process_unexpected_response (res);
             std::cout << *result << std::endl;
             return {};
         }
 
-        case method::BOOST: {
-            auto res = call (a, BoostPOW::script_options::read (p).request ());
+        case BOOST: {
+            auto res = call (make_request<BOOST> (p));
             auto result = read_string_response (res);
             if (!result ) return process_unexpected_response (res);
             std::cout << *result << std::endl;
@@ -256,31 +244,44 @@ error call_server (method m, const args::parsed &p) {
             break;
         }*/
 
-        default: {
+        case IMPORT_DB:
+            return process_JSON_response (call (make_request<command::IMPORT_DB> (p)));
+
+        case command::EXPORT_DB:
+            return process_JSON_response (call (make_request<EXPORT_DB> (p)));
+
+        case IMPORT_WALLET:
+            return process_JSON_response (call (make_request<IMPORT_WALLET> (p)));
+
+        case EXPORT_WALLET:
+            return process_JSON_response (call (make_request<EXPORT_WALLET> (p)));
+
+        default:
             throw data::exception {} << "Error: could not read user's command.";
-        }
     }
 }
 
 boost::asio::io_context IO;
 
-error try_with_method (method m, const args::parsed &p) {
+error try_with_method (command::method m, const args::parsed &p) {
     try {
         switch (m) {
-            case method::VERSION: {
+            case command::VERSION: {
 
                 args::validate (p, command::empty ());
 
                 version (std::cout) << std::endl;
             } return {};
 
-            case method::HELP: {
+            case command::HELP: {
 
-                auto help_with = std::get<1> (
+                maybe<command::method> help_with = std::get<2> (
                     args::validate (p,
                         args::command {set<std::string> {},
-                        *schema::list::value<method> (),
-                        schema::map::empty ()}));
+                        schema::list::value<std::string> () +
+                            schema::list::value<command::method> () +
+                            *schema::list::value<command::method> (),
+                        schema::map::empty ()}).Arguments);
 
                 if (help_with) help (std::cout, *help_with) << std::endl;
                 else help (std::cout) << std::endl;
@@ -318,8 +319,8 @@ error try_with_method (method m, const args::parsed &p) {
 error run (const args::parsed &p) {
 
     // try to read a method from the input.
-    maybe<method> Method = p.Arguments.size () > 1 ?
-        data::encoding::read<method> {} (p.Arguments[1]) : maybe<method> {};
+    maybe<command::method> Method = p.Arguments.size () > 1 ?
+        data::encoding::read<command::method> {} (p.Arguments[1]) : maybe<command::method> {};
 
     // if we can't, look for --help or --version.
     if (!Method) {
@@ -336,14 +337,7 @@ error run (const args::parsed &p) {
         }
     }
 
-    else {
-        // remove the first two positional arguments which are the
-        // command to initiate the program and the method
-        auto pp = p;
-        pp.Arguments = drop (p.Arguments, 2);
-
-        return try_with_method (*Method, pp);
-    }
+    else return try_with_method (*Method, p);
 
     return {};
 }
@@ -353,7 +347,7 @@ std::ostream &version (std::ostream &o) {
     return o << "Cosmos Wallet version 0.0.2 alpha";
 }
 
-std::ostream &help (std::ostream &o, method meth) {
+std::ostream &help (std::ostream &o, command::method meth) {
     switch (meth) {
         default :
             return version (o) << "\n" << "input should be <method> <args>... where method is "
@@ -369,7 +363,7 @@ std::ostream &help (std::ostream &o, method meth) {
             "\n\tsplit      -- split an output into many pieces"
             "\n\trestore    -- restore a wallet from words, a key, or many other options."
             "\nuse help \"method\" for information on a specific method";
-        case method::GENERATE :
+        case command::GENERATE :
             return o << "Generate a new wallet in terms of 24 words (BIP 39) or as an extended private key."
             "\narguments for method generate:"
             "\n\t<string> (wallet name)"
@@ -383,7 +377,7 @@ std::ostream &help (std::ostream &o, method meth) {
             "\n\t" R"((--style=) ("moneybutton" | "relayx" | "centbee" | "electrumsv"))"
             "\n\t(--number_of_words=<uint32>)"
             "\n\t(--password=<string>)";
-        case method::RESTORE :
+        case command::RESTORE :
             o << "arguments for method restore:"
             "\n\t<string> (wallet name)"
             "\n\t(--master_key=)<xpub | xpriv>"
@@ -397,16 +391,16 @@ std::ostream &help (std::ostream &o, method meth) {
             "\n\t(--entropy=<string>)";
             "\n\t(--password=<string>)";
             "\n\t(--centbee_PIN=<four digits>)";
-        case method::VALUE :
+        case command::VALUE :
             return o << "Print the value in a wallet."
             "\narguments for method value:"
             "\n\t<string> (wallet name)";
-        case method::NEXT :
+        case command::NEXT :
             return o << "Generate the next receive address"
             "\narguments for method next:"
             "\n\t<string> (wallet name)"
             "\n\t" R"((--sequence=) (sequence name))";
-        case method::REQUEST :
+        case command::REQUEST :
             return o << "Generate a new payment request."
                 "\narguments for method request:"
                 "\n\t<string> (wallet name)"
@@ -414,7 +408,7 @@ std::ostream &help (std::ostream &o, method meth) {
                 "\n\t(--expires=<number of minutes before expiration>)"
                 "\n\t(--memo=\"<explanation of the nature of the payment>\")"
                 "\n\t(--amount=<expected amount of payment>)";
-        case method::PAY :
+        case command::PAY :
             return o << "Respond to a payment request by creating a payment."
                 "\narguments for method pay:"
                 "\n\t(--name=)<wallet name>"
@@ -426,21 +420,21 @@ std::ostream &help (std::ostream &o, method meth) {
                 "\n\t(--min_sats_per_output=<float>) (= " << Cosmos::spend_options::DefaultMinSatsPerOutput << ")"
                 "\n\t(--max_sats_per_output=<float>) (= " << Cosmos::spend_options::DefaultMaxSatsPerOutput << ")"
                 "\n\t(--mean_sats_per_output=<float>) (= " << Cosmos::spend_options::DefaultMeanSatsPerOutput << ") ";
-        case method::ACCEPT :
+        case command::ACCEPT :
             return o << "Accept a payment."
             "\narguments for method accept:"
             "\n\t(--payment=)<payment tx in BEEF or SPV envelope>";
-        case method::SIGN :
+        case command::SIGN :
             return o << "arguments for method sign not yet available.";
-        case method::IMPORT :
+        case command::IMPORT :
             return o << "arguments for method import not yet available.";
-        case method::SEND :
+        case command::SEND :
             return o << "This method is DEPRICATED";
-        case method::SPEND :
+        case command::SPEND :
             return o << "Spend coins";
-        case method::BOOST :
+        case command::BOOST :
             return o << "arguments for method boost not yet available.";
-        case method::SPLIT :
+        case command::SPLIT :
             return o << "Split outputs in your wallet into many tiny outputs with small values over a triangular distribution. "
             "\narguments for method split:"
             "\n\t(--name=)<wallet name>"
@@ -449,9 +443,9 @@ std::ostream &help (std::ostream &o, method meth) {
             "\n\t(--min_sats_per_output=<float>) (= " << Cosmos::spend_options::DefaultMinSatsPerOutput << ")"
             "\n\t(--max_sats_per_output=<float>) (= " << Cosmos::spend_options::DefaultMaxSatsPerOutput << ")"
             "\n\t(--mean_sats_per_output=<float>) (= " << Cosmos::spend_options::DefaultMeanSatsPerOutput << ") ";
-        case method::ENCRYPT_KEY:
+        case command::ENCRYPT_KEY:
             o << "Encrypt the private key file so that it can only be accessed with a password. No parameters.";
-        case method::DECRYPT_KEY :
+        case command::DECRYPT_KEY :
             return o << "Decrypt the private key file again. No parameters.";
     }
 

@@ -55,6 +55,9 @@ namespace Cosmos {
         if (o.RestoreWalletStyle != Cosmos::restore_wallet_style::unset)
             q <<= entry ("style", string::write (o.RestoreWalletStyle));
 
+        if (o.DerivationStyle != Cosmos::derivation_style::unset)
+            q <<= entry ("derivation_style", string::write (o.DerivationStyle));
+
         return this->operator () (net::HTTP::method::put, string::write ("/restore/", o.name ())).query_map (q);
     }
 }
@@ -93,63 +96,7 @@ namespace Cosmos::command {
 
         if (ddd != net::domain_name {"localhost"}) return {};
 
-        return net::IP::TCP::endpoint {"127.0.0.1", port};
-
-/*
-        maybe<net::IP::TCP::endpoint> ep;
-        p.get ("endpoint", ep);
-
-        maybe<authority> auth;
-        p.get ("authority", auth);
-
-        maybe<net::domain_name> dom;
-        p.get ("domain", dom);
-
-        maybe<net::IP::address> addr;
-        p.get ("ip_address", addr);
-
-        maybe<uint16> port;
-        p.get ("port", port);
-
-        if (dom) {
-            if (!data::valid (*dom))
-                throw exception {3} << "invalid value for option 'domain': " << *dom;
-
-            auth = authority {*dom};
-        }
-
-        if (ep) {
-            if (!data::valid (ep))
-                throw exception {3} << "invalid value for option 'endpoint': " << *ep;
-            auto auth_from_ep = authority {*ep};
-            if (dom) throw exception {3} << "options 'domain' and 'endpoint' cannot both be present simultaneously";
-            if (auth && *auth != auth_from_ep)
-                throw exception {3} << "authority from options 'authority' and 'endpoint' disagree: " << *auth << " vs " << *ep;
-        }
-
-        if (!dom && !ep && !addr) addr = "localhost";
-
-        if (addr) {
-            authority auth_from_ip_port;
-            if (port) auth_from_ip_port = authority {*addr, *port};
-            else auth_from_ip_port = authority {*addr};
-            if (dom) throw exception {3} << "options 'domain' and 'ip_address' cannot both be present simultaneously";
-
-            if (ep) {
-                auto auth_from_ep = authority {*ep};
-                if (auth_from_ep != auth_from_ip_port)
-                    throw data::exception {3} << "authority from option 'endpoint' and options 'ip_address' and 'port' disagree: " <<
-                        auth_from_ep << " vs " << auth_from_ip_port;
-            }
-
-            if (auth && *auth != auth_from_ip_port)
-                throw data::exception {3} << "authority from option 'authority' and options 'ip_address' and 'port' disagree: " <<
-                    *auth << " vs " << auth_from_ip_port;
-            else auth = auth_from_ip_port;
-        }
-
-        if (auth) return *auth;
-        return "localhost";*/
+        return authority {ddd, port};
 
     }
 

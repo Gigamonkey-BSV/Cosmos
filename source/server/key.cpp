@@ -11,7 +11,7 @@ namespace Gigamonkey::Bitcoin {
         std::string word;
         i >> word;
         if (!i) return i;
-        std::string key_type_san = sanitize (word);
+        std::string key_type_san = command::sanitize (word);
         if (key_type_san == "main") x = net::Main;
         else if (key_type_san == "test") x = net::Test;
         else i.setstate (std::ios::failbit);
@@ -32,7 +32,7 @@ std::istream &operator >> (std::istream &i, key_type &x) {
     std::string word;
     i >> word;
     if (!i) return i;
-    std::string key_type_san = sanitize (word);
+    std::string key_type_san = command::sanitize (word);
     if (key_type_san == "secp256k1") x = key_type::secp256k1;
     else if (key_type_san == "wif") x = key_type::WIF;
     else if (key_type_san == "xpriv") x = key_type::xpriv;
@@ -78,7 +78,7 @@ net::HTTP::response handle_key (server &p,
     const data::bytes &body) {
 
     if (bool (post_key) && http_method != net::HTTP::method::post)
-        return error_response (405, method::KEY, problem::invalid_method, "use POST");
+        return error_response (405, command::KEY, problem::invalid_method, "use POST");
 
     auto [KeyName, method_random] = data::schema::validate<> (query,
         data::schema::map::key<Diophant::symbol> ("name") &&
@@ -88,28 +88,28 @@ net::HTTP::response handle_key (server &p,
 
     // make sure the name is a valid symbol name
     if (!KeyName.valid ())
-        return error_response (400, method::KEY, problem::invalid_parameter,
+        return error_response (400, command::KEY, problem::invalid_parameter,
             "parameter 'name' must be alpha alnum+");
 
     // method is GET
     if (!bool (method_random) && !bool (post_key)) {
 
         if (http_method != net::HTTP::method::get)
-            return error_response (405, method::KEY, problem::invalid_method, "use GET");
+            return error_response (405, command::KEY, problem::invalid_method, "use GET");
 
         key_expression secret = p.DB.get_key (wallet_name, KeyName);
 
         if (secret.valid ()) return string_response (string (secret));
 
-        return error_response (404, method::KEY, problem::failed);
+        return error_response (404, command::KEY, problem::failed);
     }
 
     // if method is not GET, then it must be POST.
     if (http_method != net::HTTP::method::post)
-        return error_response (405, method::KEY, problem::invalid_method, "use POST");
+        return error_response (405, command::KEY, problem::invalid_method, "use POST");
 
     if (bool (method_random) && bool (post_key))
-        return error_response (400, method::KEY, problem::invalid_query,
+        return error_response (400, command::KEY, problem::invalid_query,
             "If you provide a 'type' parameter, we assume you want to generate a key randomly. "
             "If that is what you want, then don't provide a key in the body.");
 
@@ -122,7 +122,7 @@ net::HTTP::response handle_key (server &p,
         if (p.DB.set_key (wallet_name, KeyName, key_expr))
             return string_response (std::string (key_expr));
 
-        return error_response (500, method::KEY, problem::failed, "could not create key");
+        return error_response (500, command::KEY, problem::failed, "could not create key");
     }
 
     // now we know that the method is random.
@@ -130,9 +130,9 @@ net::HTTP::response handle_key (server &p,
     auto [KeyType, net_param, compressed_param] = *method_random;
 
     if (KeyType == key_type::secp256k1) {
-        if (bool (compressed_param)) error_response (400, method::KEY, problem::invalid_query,
+        if (bool (compressed_param)) error_response (400, command::KEY, problem::invalid_query,
             "When key type is secp256k1, parameter compressed is not allowed");
-        if (bool (net_param)) error_response (400, method::KEY, problem::invalid_query,
+        if (bool (net_param)) error_response (400, command::KEY, problem::invalid_query,
             "When key type is secp256k1, parameter net is not allowed");
     }
 
@@ -164,6 +164,6 @@ net::HTTP::response handle_key (server &p,
         else return string_response (key_expr);
     }
 
-    return error_response (500, method::KEY, problem::failed, "could not create key");
+    return error_response (500, command::KEY, problem::failed, "could not create key");
 
 }

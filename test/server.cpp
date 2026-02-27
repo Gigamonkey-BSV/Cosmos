@@ -465,6 +465,6 @@ std::ostream &version (std::ostream &o) {
     return o;
 }
 
-std::ostream &help (std::ostream &o, method meth) {
+std::ostream &help (std::ostream &o, command::method meth) {
     return o;
 }

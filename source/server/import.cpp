@@ -14,7 +14,7 @@ net::HTTP::response handle_import (
         // we need to find addresses and xpubs that we need to check.
 
         if (!content_type)
-            return error_response (405, method::IMPORT, problem::invalid_parameter,
+            return error_response (405, command::IMPORT, problem::invalid_parameter,
                 "put transaction in body");
 
         using WIF = Bitcoin::WIF;
@@ -27,12 +27,12 @@ net::HTTP::response handle_import (
             beef = BEEF {body};
         } else if (*content_type == net::HTTP::content::application_json) {
             //beef = BEEF {JSON (std::string (data::string (body)))};
-        } else return error_response (405, method::IMPORT, problem::invalid_parameter,
+        } else return error_response (405, command::IMPORT, problem::invalid_parameter,
                 "Transaction should be BEEF format in JSON or octet stream");
 
         // TODO go through my old code and incorporate other stuff.
         if (!beef.valid ())
-            return error_response (405, method::IMPORT, problem::invalid_parameter,
+            return error_response (405, command::IMPORT, problem::invalid_parameter,
                 "Invalid transaction.");
 
         map<digest160, maybe<HD::BIP_32::pubkey>> unused;
@@ -51,6 +51,6 @@ net::HTTP::response handle_import (
 
 
         // first we need a function that recognizes output patterns.
-        return error_response (501, method::IMPORT, problem::unimplemented);
+        return error_response (501, command::IMPORT, problem::unimplemented);
 
 }

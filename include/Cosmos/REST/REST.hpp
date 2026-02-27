@@ -10,36 +10,6 @@
 
 namespace schema = data::schema;
 
-namespace Cosmos::command {
-
-    auto inline empty () {
-        return args::command (set<std::string> {}, schema::list::empty (), schema::map::empty ());
-    }
-
-    // there is a problem with this function as it is supposed to be.
-    auto inline call_options () {
-        return schema::map::key<net::IP::TCP::endpoint> ("endpoint") ||
-            schema::map::key<uint16> ("port", 4567) && (
-                schema::map::key<net::IP::address> ("ip_address") ||
-                schema::map::key<net::authority> ("authority") ||
-                schema::map::key<net::domain_name> ("domain", "localhost"));
-    }
-
-    auto inline empty_call () {
-        return args::command (set<std::string> {}, schema::list::empty (), call_options ());
-    }
-
-    template <typename list_schema, typename map_schema>
-    auto inline call (const list_schema &args, const map_schema &opts, set<std::string> flags = {}) {
-        return args::command (flags, args, opts + call_options ());
-    }
-
-    using authority = data::net::authority;
-
-    authority read_authority (const args::parsed &p);
-
-}
-
 namespace Cosmos {
 
     struct next_request_options {
@@ -104,11 +74,11 @@ namespace Cosmos {
     }
 
     net::HTTP::request inline REST::request_shutdown () const {
-        return this->operator () (net::HTTP::method::put, "/shutdown");
+        return (*this) (net::HTTP::method::put, "/shutdown");
     }
 
     net::HTTP::request inline REST::request_add_entropy (const string &entropy) const {
-        return this->operator () (net::HTTP::method::post, "/add_entropy").body (bytes (entropy));
+        return (*this) (net::HTTP::method::post, "/add_entropy").body (entropy);
     }
 
     net::HTTP::request inline REST::request_list_wallets () const {
@@ -120,13 +90,12 @@ namespace Cosmos {
     }
 
     inline next_request_options::next_request_options (const args::parsed &p) {
-        auto [name, sequence_name, _] = std::get<2> (
-            args::validate (p,
-                args::command {
-                    set<std::string> {},
-                    schema::list::empty (),
-                    schema::map::key<Diophant::symbol> ("name") &&
-                    *schema::map::key<Diophant::symbol> ("sequence") && command::call_options ()}));
+        auto [name, sequence_name, _] = args::validate (p,
+            args::command {
+                set<std::string> {},
+                schema::list::empty (), // TODO this is incorrect
+                schema::map::key<Diophant::symbol> ("name") &&
+                *schema::map::key<Diophant::symbol> ("sequence") && command::call_options ()}).Options;
 
         Name = name;
         Sequence = sequence_name;

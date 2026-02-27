@@ -37,6 +37,7 @@ struct options : args::parsed {
     maybe<bytes> nonce () const;
     maybe<bytes> seed () const;
     bool incorporate_user_entropy () const;
+
 };
 
 #endif

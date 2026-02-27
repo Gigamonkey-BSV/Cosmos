@@ -31,7 +31,7 @@ std::istream &operator >> (std::istream &i, digest_format &x) {
     std::string word;
     i >> word;
     if (!i) return i;
-    std::string sanitized = Cosmos::sanitize (word);
+    std::string sanitized = command::sanitize (word);
     if (sanitized == "hex") x = digest_format::HEX;
     else if (sanitized == "base58check") x = digest_format::BASE58_CHECK;
     else if (sanitized == "base64") x = digest_format::BASE64;
@@ -114,7 +114,7 @@ net::HTTP::response handle_invert_hash (server &p,
     const data::bytes &body) {
 
     if (http_method != net::HTTP::method::put && http_method != net::HTTP::method::get)
-        return error_response (405, method::INVERT_HASH, problem::invalid_method, "use PUT or GET");
+        return error_response (405, command::INVERT_HASH, problem::invalid_method, "use PUT or GET");
 
     // Required if method is PUT, optional otherwise.
     hash_function HashFunction {hash_function::invalid};
@@ -163,21 +163,21 @@ net::HTTP::response handle_invert_hash (server &p,
             case digest_format::BASE64: {
                 digest = encoding::base64::read (*digest_string);
             } break;
-            default: return error_response (400, method::INVERT_HASH, problem::missing_parameter, "missing required parameter 'digest_format'");
+            default: return error_response (400, command::INVERT_HASH, problem::missing_parameter, "missing required parameter 'digest_format'");
         }
 
-        if (!bool (digest)) return error_response (400, method::INVERT_HASH, problem::invalid_parameter, "invalid parameter 'digest'");
+        if (!bool (digest)) return error_response (400, command::INVERT_HASH, problem::invalid_parameter, "invalid parameter 'digest'");
     }
 
     if (!bool (content_type)) {
         if (http_method == net::HTTP::method::put)
-            return error_response (400, method::INVERT_HASH, problem::invalid_query, "data to hash should be provided in body");
+            return error_response (400, command::INVERT_HASH, problem::invalid_query, "data to hash should be provided in body");
     } else if (*content_type != net::HTTP::content::type::application_octet_stream && *content_type != net::HTTP::content::type::text_plain) {
-        return error_response (400, method::INVERT_HASH, problem::invalid_content_type, "either plain text or bytes");
+        return error_response (400, command::INVERT_HASH, problem::invalid_content_type, "either plain text or bytes");
     } else if (http_method == net::HTTP::method::get) {
-        return error_response (400, method::INVERT_HASH, problem::invalid_query, "body provided with GET");
+        return error_response (400, command::INVERT_HASH, problem::invalid_query, "body provided with GET");
     } else if (HashFunction == hash_function::invalid) {
-        return error_response (400, method::INVERT_HASH, problem::invalid_query, "Body provided with invalid hash function");
+        return error_response (400, command::INVERT_HASH, problem::invalid_query, "Body provided with invalid hash function");
     } else {
         std::function<bytes (const bytes &)> hash;
 
@@ -207,7 +207,7 @@ net::HTTP::response handle_invert_hash (server &p,
                 hash = get_hash_fn (&data::crypto::Bitcoin_160);
             } break;
             default: {
-                return error_response (501, method::INVERT_HASH, problem::unimplemented, 
+                return error_response (501, command::INVERT_HASH, problem::unimplemented,
                     string::write ("hash function ", HashFunction, " is unimplemented"));
             }
         }
@@ -216,24 +216,24 @@ net::HTTP::response handle_invert_hash (server &p,
 
         if (!bool (digest)) digest = hash_digest;
         else if (hash_digest != *digest)
-            return error_response (400, method::INVERT_HASH, problem::invalid_query, 
+            return error_response (400, command::INVERT_HASH, problem::invalid_query,
                 "provided hash digest does not match calculated");
         
     }
 
-    if (!bool (digest)) return error_response (400, method::INVERT_HASH, problem::invalid_query, "No digest provided");
+    if (!bool (digest)) return error_response (400, command::INVERT_HASH, problem::invalid_query, "No digest provided");
 
     if (http_method == net::HTTP::method::put) {
         if (p.DB.set_invert_hash (*digest, HashFunction, body)) return ok_response ();
-        return error_response (500, method::INVERT_HASH, problem::failed, "could not create key");
+        return error_response (500, command::INVERT_HASH, problem::failed, "could not create key");
     } else {
         maybe<tuple<Cosmos::hash_function, bytes>> inverted = p.DB.get_invert_hash (*digest);
-        if (!bool (inverted)) return error_response (404, method::INVERT_HASH, problem::failed, "Hash digest not found");
+        if (!bool (inverted)) return error_response (404, command::INVERT_HASH, problem::failed, "Hash digest not found");
 
         Cosmos::hash_function return_hash_function = std::get<0> (*inverted);
 
         if (HashFunction != Cosmos::hash_function::invalid && std::get<0> (*inverted) != HashFunction)
-            return error_response (500, method::INVERT_HASH, problem::failed, "inconsestent hash function");
+            return error_response (500, command::INVERT_HASH, problem::failed, "inconsestent hash function");
 
         return data_response (std::get<1> (*inverted));
     }
