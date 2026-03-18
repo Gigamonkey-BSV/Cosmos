@@ -57,6 +57,8 @@ template <typename X> using set = data::set<X>;
 
 using JSON = data::JSON;
 
+using N = data::N;
+
 using exception = data::exception;
 
 namespace Cosmos {

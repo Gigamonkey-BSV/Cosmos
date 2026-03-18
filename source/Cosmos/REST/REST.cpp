@@ -32,7 +32,7 @@ namespace Cosmos {
 
         dispatch<UTF8, UTF8> q {};
 
-        using entry = data::entry<UTF8, UTF8>;
+        using entry = data::entry<const UTF8, UTF8>;
 
         if (o.Key)
             q <<= entry ("key", string::write (*o.Key));

@@ -127,8 +127,8 @@ namespace Cosmos {
         if (spend_val_with_fee > dropped.SpentValue) throw data::exception {3} <<
             "could not satisfy input selection requirements because " << spend_val_with_fee << " > " << dropped.SpentValue;
 
-        list<entry<Bitcoin::outpoint, redeemable>> selected_outputs;
-        for (const auto &[key, value] : dropped.Result) selected_outputs <<= data::entry<Bitcoin::outpoint, redeemable> {key, value};
+        dispatch<Bitcoin::outpoint, redeemable> selected_outputs;
+        for (const auto &[key, value] : dropped.Result) selected_outputs <<= data::entry<const Bitcoin::outpoint, redeemable> {key, value};
 
         // shuffle before returning.
         return shuffle (selected_outputs, r);

@@ -32,14 +32,14 @@ namespace Cosmos {
 
     // the effect of a single transaction on an account.
     struct account_diff {
-        Bitcoin::TXID TXID {};
+        Bitcoin::TxID TxID {};
         map<Bitcoin::index, redeemable> Insert {};
         // outpoints that need to be removed and the index of the inpoint that removes them.
         map<Bitcoin::index, Bitcoin::outpoint> Remove {};
 
         account_diff () {}
-        account_diff (const Bitcoin::TXID &txid, map<Bitcoin::index, redeemable> ins, map<Bitcoin::index, Bitcoin::outpoint> ree) :
-            TXID {txid}, Insert {ins}, Remove {ree} {}
+        account_diff (const Bitcoin::TxID &txid, map<Bitcoin::index, redeemable> ins, map<Bitcoin::index, Bitcoin::outpoint> ree) :
+            TxID {txid}, Insert {ins}, Remove {ree} {}
 
     };
 

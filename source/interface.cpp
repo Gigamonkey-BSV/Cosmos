@@ -83,11 +83,11 @@ namespace Cosmos {
         if (!bool (txdb) || !bool (w) || !bool (p)) throw exception {"could not connect to network and database"};
 
         // all txs that have been updated with merkle proofs.
-        list<Bitcoin::TXID> mined;
+        list<Bitcoin::TxID> mined;
         auto unconfirmed = txdb->unconfirmed ();
 
         std::cout << " found " << unconfirmed.size () << " unconfirmed txs." << std::endl;
-        for (const Bitcoin::TXID &txid : unconfirmed) if ((*txdb)[txid]->confirmed ()) mined <<= txid;
+        for (const Bitcoin::TxID &txid : unconfirmed) if ((*txdb)[txid]->confirmed ()) mined <<= txid;
         std::cout << " of these " << mined.size () << " were mined since the last time the program was run." << std::endl;
 
         // update the unconfirmed txs in history.
@@ -98,9 +98,9 @@ namespace Cosmos {
         map<string, payments::offer> new_proposals {};
         for (const auto &proposal : p->Proposals) {
             bool broadcast = true;
-            list<Bitcoin::TXID> ids;
+            list<Bitcoin::TxID> ids;
             for (const auto diff : proposal.Value.Diff)
-                if (synced (&cached_remote_TXDB::import_transaction, txdb, diff.TXID)) {
+                if (synced (&cached_remote_TXDB::import_transaction, txdb, diff.TxID)) {
                     // catching an error means that we have already accounted for this tx in our account.
                     try {
                         pruned_account <<= diff;
@@ -108,9 +108,9 @@ namespace Cosmos {
                         continue;
                     }
 
-                    ids <<= diff.TXID;
+                    ids <<= diff.TxID;
 
-                    auto v = (*txdb)[diff.TXID];
+                    auto v = (*txdb)[diff.TxID];
 
                     events e;
                     for (const auto &[i, _]: diff.Remove) e <<= event {v, i, direction::in};

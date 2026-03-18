@@ -43,24 +43,24 @@ namespace Cosmos {
 
     namespace {
         const ptr<const entry<N, Bitcoin::header>> import_header (local_TXDB &local, network &net, const N &n) {
-            auto block = net.WhatsOnChain.block ();
-            auto header = data::synced (&whatsonchain::blocks::get_header_by_height, &block, n);
+            auto block = net.WhatsOnChain.blocks ();
+            auto header = data::synced (&WhatsOnChain::blocks::get_header_by_height, &block, n);
             return local.insert (header.Height, header.Header);
         }
 
         const ptr<const entry<N, Bitcoin::header>> import_header (local_TXDB &local, network &net, const digest256 &d) {
-            auto block = net.WhatsOnChain.block ();
-            auto header = data::synced (&whatsonchain::blocks::get_header_by_hash, &block, d);
+            auto block = net.WhatsOnChain.blocks ();
+            auto header = data::synced (&WhatsOnChain::blocks::get_header_by_hash, &block, d);
             return local.insert (header.Height, header.Header);
         }
     }
 
-    awaitable<bool> cached_remote_TXDB::import_transaction (const Bitcoin::TXID &txid) {
+    awaitable<bool> cached_remote_TXDB::import_transaction (const Bitcoin::TxID &txid) {
 
         maybe<bytes> tx = co_await Net.get_transaction (txid);
         if (!bool (tx)) co_return false;
 
-        auto proof = co_await Net.WhatsOnChain.transaction ().get_merkle_proof (txid);
+        auto proof = co_await Net.WhatsOnChain.transactions ().get_merkle_proof (txid);
 
         if (!bool (proof)) {
             Local.insert (Bitcoin::transaction {*tx});
@@ -78,11 +78,11 @@ namespace Cosmos {
         auto x = Local.by_address (a);
         if (!data::empty (x) && x.valid ()) return x;
 
-        auto address = Net.WhatsOnChain.address ();
-        list<Bitcoin::TXID> ids = synced (&whatsonchain::addresses::get_history, &address, a);
+        auto address = Net.WhatsOnChain.addresses ();
+        list<Bitcoin::TxID> ids = synced (&WhatsOnChain::addresses::get_history, &address, a);
 
         int i = 0;
-        for (const Bitcoin::TXID &txid : ids) {
+        for (const Bitcoin::TxID &txid : ids) {
             if (!synced (&cached_remote_TXDB::import_transaction, this, txid))
                 // we just print the error because we may be in the middle of an
                 // operation and then what do we do? This would require the user
@@ -98,12 +98,14 @@ namespace Cosmos {
         auto x = Local.by_script_hash (z);
         if (data::empty (x)) return x;
 
-        auto scripts = Net.WhatsOnChain.script ();
-        auto ids = synced (&whatsonchain::scripts::get_history, &scripts, z);
-        for (const Bitcoin::TXID &txid : ids) {
+        auto scripts = Net.WhatsOnChain.scripts ();
+        auto ids = synced (&WhatsOnChain::scripts::get_history, &scripts, z);
+
+        for (const Bitcoin::TxID &txid : ids) {
             if (!synced (&cached_remote_TXDB::import_transaction, this, txid))
                 std::cout << "error importing txid " << txid << std::endl;
         }
+
         return Local.by_script_hash (z);
     }
 
@@ -114,7 +116,7 @@ namespace Cosmos {
         return Local.redeeming (o);
     }
 
-    SPV::database::tx cached_remote_TXDB::transaction (const Bitcoin::TXID &xd) {
+    SPV::database::tx cached_remote_TXDB::transaction (const Bitcoin::TxID &xd) {
         auto p = Local.transaction (xd);
         if (p.valid () && p.confirmed ()) return p;
         if (!synced (&cached_remote_TXDB::import_transaction, this, xd))
@@ -241,14 +243,14 @@ namespace Cosmos {
         return Index <=> Index;
     }
 
-    ptr<vertex> TXDB::operator [] (const Bitcoin::TXID &id) {
+    ptr<vertex> TXDB::operator [] (const Bitcoin::TxID &id) {
         SPV::database::tx tx = this->transaction (id);
         if (!tx.valid ()) return {};
         if (tx.confirmed ()) {
             auto ext = SPV::extend (*this, *tx.Transaction);
             if (!bool (ext)) return {};
             return std::make_shared<vertex> (*ext,
-                entry<Bitcoin::TXID, SPV::proof::tree> {id, SPV::proof::tree (tx.Confirmation)});
+                entry<Bitcoin::TxID, SPV::proof::tree> {id, SPV::proof::tree (tx.Confirmation)});
         }
 
         maybe<SPV::proof> p = SPV::generate_proof (*this, {*tx.Transaction});
@@ -256,7 +258,7 @@ namespace Cosmos {
 
         return std::make_shared<vertex> (
             SPV::extended_transaction (p->Payment[0], p->Proof),
-            entry<Bitcoin::TXID, SPV::proof::tree> {id, SPV::proof::tree (p->Proof)});
+            entry<Bitcoin::TxID, SPV::proof::tree> {id, SPV::proof::tree (p->Proof)});
     }
 
     when when_from_JSON (const JSON &j) {

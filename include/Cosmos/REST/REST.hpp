@@ -32,6 +32,36 @@ namespace Cosmos {
         }
     };
 
+    struct import_request_options {
+        import_request_options () {}
+
+        import_request_options (const args::parsed &) {
+            throw data::method::unimplemented {"parsed -> import_request_options"};
+        }
+
+        import_request_options (Diophant::symbol wallet_name, map<UTF8, UTF8> query);
+    };
+
+    struct spend_request_options : Cosmos::spend_options {
+        spend_request_options () {}
+
+        spend_request_options (const args::parsed &) {
+            throw data::method::unimplemented {"parsed -> spend_request_options"};
+        }
+
+        spend_request_options (Diophant::symbol wallet_name, map<UTF8, UTF8> query);
+    };
+
+    struct split_request_options {
+        split_request_options () {}
+
+        split_request_options (const args::parsed &) {
+            throw data::method::unimplemented {"parsed -> split_request_options"};
+        }
+
+        split_request_options (Diophant::symbol wallet_name, map<UTF8, UTF8> query);
+    };
+
     struct REST : net::HTTP::REST {
         using net::HTTP::REST::REST;
 
@@ -43,9 +73,15 @@ namespace Cosmos {
 
         net::HTTP::request request_value (const Diophant::symbol &wallet_name) const;
 
+        net::HTTP::request request (const import_request_options &) const {
+            throw data::method::unimplemented {"import request"};
+        }
+
         net::HTTP::request request (const next_request_options &) const;
         net::HTTP::request request (const generate_request_options &) const;
         net::HTTP::request request (const restore_request_options &) const;
+        net::HTTP::request request (const spend_request_options &) const;
+        net::HTTP::request request (const split_request_options &) const;
 
     };
 
@@ -90,14 +126,16 @@ namespace Cosmos {
     }
 
     inline next_request_options::next_request_options (const args::parsed &p) {
-        auto [name, sequence_name, _] = args::validate (p,
+        auto validated = args::validate (p,
             args::command {
                 set<std::string> {},
-                schema::list::empty (), // TODO this is incorrect
-                schema::map::key<Diophant::symbol> ("name") &&
-                *schema::map::key<Diophant::symbol> ("sequence") && command::call_options ()}).Options;
+                schema::list::value<std::string> () +
+                    schema::list::value<command::method> () +
+                    schema::list::value<Diophant::symbol> (),
+                *schema::map::key<Diophant::symbol> ("sequence") && command::call_options ()});
+        auto [sequence_name, _] = validated.Options;
 
-        Name = name;
+        Name = std::get<2> (validated.Arguments);
         Sequence = sequence_name;
     }
 

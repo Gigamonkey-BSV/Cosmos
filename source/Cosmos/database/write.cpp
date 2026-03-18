@@ -25,7 +25,7 @@ namespace Cosmos {
         list<string_view> z = data::split (x, ":");
         if (z.size () != 2) throw data::exception {} << "invalid outpoint format: " << x;
         Bitcoin::outpoint o;
-        o.Digest = read_TXID (z[0]);
+        o.Digest = read_TxID (z[0]);
         o.Index = strtoul (std::string {z[1]}.c_str (), nullptr, 10);
         return o;
     }

@@ -65,8 +65,8 @@ namespace Cosmos {
     // the tx appropriately in the database.
     struct broadcast_tree_result : broadcast_multiple_result {
         using broadcast_multiple_result::broadcast_multiple_result;
-        map<Bitcoin::TXID, broadcast_single_result> Sub;
-        broadcast_tree_result (const broadcast_multiple_result &r, map<Bitcoin::TXID, broadcast_single_result> nodes = {}):
+        map<Bitcoin::TxID, broadcast_single_result> Sub;
+        broadcast_tree_result (const broadcast_multiple_result &r, map<Bitcoin::TxID, broadcast_single_result> nodes = {}):
         broadcast_multiple_result {r}, Sub {nodes} {}
     };
 

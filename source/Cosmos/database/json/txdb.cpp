@@ -99,19 +99,19 @@ namespace Cosmos {
             if (last != nullptr && last->Header->Key + 1 == e->Header->Key) e->Previous = last;
             last = e;
             txdb.ByHeight[e->Header->Key] = e;
-            for (const auto &d: e->Paths.keys ()) txdb.ByTXID[d] = e;
+            for (const auto &d: e->Paths.keys ()) txdb.ByTxID[d] = e;
         }
 
         txdb.Latest = last;
 
         for (const auto &[hash, height] : by_hash->items ())
-            txdb.ByHash[read_TXID (hash)] = txdb.ByHeight [read_N (height)];
+            txdb.ByHash[read_TxID (hash)] = txdb.ByHeight [read_N (height)];
 
         for (const auto &[root, height] : by_root->items ())
-            txdb.ByHash[read_TXID (root)] = txdb.ByHeight [read_N (height)];
+            txdb.ByHash[read_TxID (root)] = txdb.ByHeight [read_N (height)];
 
         for (const auto &[txid, tx] : txs->items ())
-            txdb.Transactions[read_TXID (txid)] = ptr<Bitcoin::transaction> {
+            txdb.Transactions[read_TxID (txid)] = ptr<Bitcoin::transaction> {
                 new Bitcoin::transaction {*encoding::base64::read (std::string (tx))}};
 
         // optional field because I forgot to put it in at one point.
@@ -119,7 +119,7 @@ namespace Cosmos {
         const auto unconfirmed = j.find ("unconfirmed");
         if (unconfirmed != j.end ()) {
             if (!unconfirmed->is_array ()) throw data::exception {} << "invalid JSON SPV database format: unconfirmed";
-            for (const auto &jj : *unconfirmed) txdb.Pending = txdb.Pending.insert (read_TXID (std::string (jj)));
+            for (const auto &jj : *unconfirmed) txdb.Pending = txdb.Pending.insert (read_TxID (std::string (jj)));
         }
 
     }
@@ -149,7 +149,7 @@ namespace Cosmos {
         for (const auto &[key, value] : scripts.items ()) {
             list<Bitcoin::outpoint> outpoints;
             for (const auto &k : value) outpoints <<= read_outpoint (std::string (k));
-            digest256 script_hash = read_TXID (key);
+            digest256 script_hash = read_TxID (key);
             this->ScriptIndex[script_hash] = outpoints;
         }
 
@@ -190,7 +190,7 @@ namespace Cosmos {
             this->AddressIndex[Bitcoin::address (std::string (key))] = script_hashes;
         } else for (const auto &[key, value] : addresses.items ()) {
             list<digest256> script_hashes;
-            for (const auto &k : value) script_hashes <<= read_TXID (std::string (k));
+            for (const auto &k : value) script_hashes <<= read_TxID (std::string (k));
             this->AddressIndex[Bitcoin::address (std::string (key))] = script_hashes;
         }
     }

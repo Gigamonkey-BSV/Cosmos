@@ -40,10 +40,10 @@ namespace Cosmos {
 
     struct vertex {
         extended_transaction Transaction;
-        entry<Bitcoin::TXID, SPV::proof::tree> Proof;
+        entry<Bitcoin::TxID, SPV::proof::tree> Proof;
 
         vertex ();
-        vertex (const extended_transaction &tx, const entry<Bitcoin::TXID, SPV::proof::tree> &pr);
+        vertex (const extended_transaction &tx, const entry<Bitcoin::TxID, SPV::proof::tree> &pr);
 
         bool operator == (const vertex &tx) const;
         std::partial_ordering operator <=> (const vertex &tx) const;
@@ -93,7 +93,7 @@ namespace Cosmos {
             return static_cast<const ptr<vertex> &> (*this) != nullptr;
         }
 
-        const Bitcoin::TXID &id () const {
+        const Bitcoin::TxID &id () const {
             return (*this)->Proof.Key;
         }
 
@@ -108,7 +108,7 @@ namespace Cosmos {
     // with complete SPV proofs.
     struct TXDB : public virtual SPV::database {
 
-        ptr<vertex> operator [] (const Bitcoin::TXID &id);
+        ptr<vertex> operator [] (const Bitcoin::TxID &id);
 
         // all events for a given address.
         virtual events by_address (const Bitcoin::address &) = 0;
@@ -150,8 +150,8 @@ namespace Cosmos {
     // the tx appropriately in the database.
     struct broadcast_tree_result : broadcast_multiple_result {
         using broadcast_multiple_result::broadcast_multiple_result;
-        map<Bitcoin::TXID, broadcast_single_result> Sub;
-        broadcast_tree_result (const broadcast_multiple_result &r, map<Bitcoin::TXID, broadcast_single_result> nodes = {}):
+        map<Bitcoin::TxID, broadcast_single_result> Sub;
+        broadcast_tree_result (const broadcast_multiple_result &r, map<Bitcoin::TxID, broadcast_single_result> nodes = {}):
             broadcast_multiple_result {r}, Sub {nodes} {}
     };
 
@@ -172,20 +172,20 @@ namespace Cosmos {
         ptr<const entry<N, Bitcoin::header>> header (const digest256 &) final override;
 
         // do we have a tx or merkle proof for a given tx?
-        SPV::database::tx transaction (const Bitcoin::TXID &) final override;
+        SPV::database::tx transaction (const Bitcoin::TxID &) final override;
 
-        set<Bitcoin::TXID> unconfirmed () final override;
+        set<Bitcoin::TxID> unconfirmed () final override;
 
         events by_address (const Bitcoin::address &) final override;
         events by_script_hash (const digest256 &) final override;
         event redeeming (const Bitcoin::outpoint &) final override;
 
-        awaitable<bool> import_transaction (const Bitcoin::TXID &);
+        awaitable<bool> import_transaction (const Bitcoin::TxID &);
 
         awaitable<broadcast_tree_result> broadcast (SPV::proof);
     };
 
-    set<Bitcoin::TXID> inline cached_remote_TXDB::unconfirmed () {
+    set<Bitcoin::TxID> inline cached_remote_TXDB::unconfirmed () {
         return Local.unconfirmed ();
     }
 
@@ -193,9 +193,9 @@ namespace Cosmos {
         return Local.latest ();
     }
 
-    inline vertex::vertex (): Transaction {}, Proof {Bitcoin::TXID {}, {}} {}
+    inline vertex::vertex (): Transaction {}, Proof {Bitcoin::TxID {}, {}} {}
 
-    inline vertex::vertex (const extended_transaction &tx, const entry<Bitcoin::TXID, SPV::proof::tree> &pr):
+    inline vertex::vertex (const extended_transaction &tx, const entry<Bitcoin::TxID, SPV::proof::tree> &pr):
         Transaction {tx}, Proof {pr} {}
 
     bool inline vertex::valid () const {

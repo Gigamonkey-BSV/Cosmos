@@ -67,26 +67,26 @@ invert_hash_request_options::operator net::HTTP::request () const {
 
     data::dispatch<UTF8, UTF8> query;
 
-    if (Function != ::hash_function::invalid) query <<= entry<UTF8, UTF8> {UTF8 {"function"}, string::write (Function)};
+    if (Function != ::hash_function::invalid) query <<= entry<const UTF8, UTF8> {UTF8 {"function"}, string::write (Function)};
 
     // if a digest is provided, then a digest format must be provided.
     if (bool (Digest)) {
-        query <<= entry<UTF8, UTF8> {UTF8 {"format"}, string::write (Format)};
+        query <<= entry<const UTF8, UTF8> {UTF8 {"format"}, string::write (Format)};
 
         if (Digest->is<std::string> ()) {
-            query <<= entry<UTF8, UTF8> {"digest", Digest->get<std::string> ()};
+            query <<= entry<const UTF8, UTF8> {"digest", Digest->get<std::string> ()};
         } else {
             switch (Format) {
                 case digest_format::HEX: {
-                    query <<= entry<UTF8, UTF8> {UTF8 {"digest"}, encoding::hex::write (Digest->get<bytes> ())};
+                    query <<= entry<const UTF8, UTF8> {UTF8 {"digest"}, encoding::hex::write (Digest->get<bytes> ())};
                     break;
                 }
                 case digest_format::BASE58_CHECK: {
-                    query <<= entry<UTF8, UTF8> {UTF8 {"digest"}, UTF8 {base58::check (Base58CheckVersion, Digest->get<bytes> ())}};
+                    query <<= entry<const UTF8, UTF8> {UTF8 {"digest"}, UTF8 {base58::check (Base58CheckVersion, Digest->get<bytes> ())}};
                     break;
                 }
                 case digest_format::BASE64: {
-                    query <<= entry<UTF8, UTF8> {UTF8 {"digest"}, encoding::base64::write (Digest->get<bytes> ())};
+                    query <<= entry<const UTF8, UTF8> {UTF8 {"digest"}, encoding::base64::write (Digest->get<bytes> ())};
                     break;
                 }
                 default: throw data::exception {} << "No digest format provided for method invert_hash";

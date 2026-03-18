@@ -103,7 +103,7 @@ namespace Cosmos::command {
     auto inline wallet_method () {
         return args::command (set<std::string> {},
             schema::list::value<std::string> () +
-                schema::list::value<method> () +
+                schema::list::value<command::method> () +
                 schema::list::value<Diophant::symbol> (),
             call_options ());
     }

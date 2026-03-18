@@ -129,7 +129,7 @@ awaitable<net::HTTP::response> server::operator () (const net::HTTP::request &re
     map<UTF8, UTF8> query;
     maybe<dispatch<UTF8, UTF8>> qm = req.Target.query_map ();
     if (bool (qm)) {
-        map<UTF8, list<UTF8>> q = data::dispatch_to_map (*qm);
+        map<UTF8, list<UTF8>> q = data::to_map (*qm);
         
         for (const auto &[k, v] : q) if (v.size () != 1) 
           co_return error_response (400, m, problem::invalid_parameter, "duplicate query parameters");

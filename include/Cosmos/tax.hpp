@@ -24,7 +24,7 @@ namespace Cosmos {
         // will have to go through these and figure out
         // what needs to be reported as income.
         struct potential_income {
-            Bitcoin::TXID TXID;
+            Bitcoin::TxID TxID;
 
             // total income for this tx not counting
             // money that was moved from our own wallet.
@@ -39,7 +39,7 @@ namespace Cosmos {
             // value of the total income.
             events Incoming;
 
-            potential_income (): TXID {}, Income {0}, Price {0}, Incoming {} {}
+            potential_income (): TxID {}, Income {0}, Price {0}, Incoming {} {}
 
             friend std::ostream &operator << (std::ostream &, const potential_income &);
         };

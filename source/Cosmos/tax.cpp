@@ -21,7 +21,7 @@ namespace Cosmos {
         for (const history::tx &e : events.History) {
             // at this point we know that n != n.end ();
             potential_income potential;
-            potential.TXID = e.TXID;
+            potential.TxID = e.TxID;
             // we are assuming that we have a regular timestamp here
             // instead of unconfirmed or infinity. You'd think this would
             // be ok since people typically do taxes on past events.

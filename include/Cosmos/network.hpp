@@ -3,9 +3,13 @@
 
 #include <gigamonkey/pay/MAPI.hpp>
 #include <gigamonkey/pay/ARC.hpp>
-#include <Cosmos/network/whatsonchain.hpp>
+#include <whatsonchain.hpp>
 #include <data/io/log.hpp>
+#include <Cosmos/types.hpp>
 #include <ctime>
+
+namespace net = data::net;
+using JSON = data::JSON;
 
 using extended_transaction = Gigamonkey::extended::transaction;
 using satoshis_per_byte = Gigamonkey::satoshis_per_byte;
@@ -70,21 +74,21 @@ namespace Cosmos {
     struct network {
         data::exec IO;
         ptr<net::HTTP::SSL> SSL;
-        whatsonchain WhatsOnChain;
+        WhatsOnChain::API WhatsOnChain;
         MAPI::client Gorilla;
         net::HTTP::client CoinGecko;
         ARC::client TAAL;
 
         network (data::exec io) : IO {io}, SSL {std::make_shared<net::HTTP::SSL> (net::HTTP::SSL::tlsv12_client)},
             WhatsOnChain {SSL}, Gorilla {SSL, net::HTTP::REST {"https", "mapi.gorillapool.io"}},
-            CoinGecko {SSL, net::HTTP::REST {"https", "api.coingecko.com"}, data::tools::rate_limiter {1, data::milliseconds {10}}},
+            CoinGecko {SSL, net::HTTP::REST {"https", "api.coingecko.com"}, data::rate_limiter {1, data::millisecond {10}}},
             // TODO I don't know what to put for TAAL's rate limiter.
-            TAAL {SSL, net::HTTP::REST {"https", "arc.taal.com"}, data::tools::rate_limiter {1, data::milliseconds {10}}} {
+            TAAL {SSL, net::HTTP::REST {"https", "arc.taal.com"}, data::rate_limiter {1, data::millisecond {10}}} {
             SSL->set_default_verify_paths ();
             SSL->set_verify_mode (net::asio::ssl::verify_peer);
         }
         
-        awaitable<maybe<bytes>> get_transaction (const Bitcoin::TXID &);
+        awaitable<maybe<bytes>> get_transaction (const Bitcoin::TxID &);
         
         awaitable<satoshis_per_byte> mining_fee ();
         

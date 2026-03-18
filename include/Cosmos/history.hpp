@@ -13,7 +13,7 @@ namespace Cosmos {
 
         // All the events for a single transaction.
         struct tx {
-            Bitcoin::TXID TXID {};
+            Bitcoin::TxID TxID {};
             when When {};
 
             Bitcoin::satoshi Received {};
@@ -34,8 +34,8 @@ namespace Cosmos {
         stack<tx> Events;
 
         struct payment : payments::payment_request {
-            list<Bitcoin::TXID> Transactions;
-            payment (const string &id, const payments::request &r, list<Bitcoin::TXID> txs):
+            list<Bitcoin::TxID> Transactions;
+            payment (const string &id, const payments::request &r, list<Bitcoin::TxID> txs):
                 payments::payment_request {id, r}, Transactions {txs} {}
         };
 

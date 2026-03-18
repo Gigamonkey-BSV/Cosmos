@@ -14,7 +14,7 @@ namespace Cosmos {
         int32 since_last_used = 0;
 
         events v {};
-        std::map<Bitcoin::TXID, map<Bitcoin::index, redeemable>> a {};
+        std::map<Bitcoin::TxID, map<Bitcoin::index, redeemable>> a {};
 
         auto expected_p2pkh_size = pay_to_address::redeem_expected_size (true);
 

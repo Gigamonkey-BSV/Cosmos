@@ -65,7 +65,7 @@ namespace Cosmos {
         JSON write_tx (const history::tx &e) {
 
             JSON::object_t o;
-            o["txid"] = write (e.TXID);
+            o["txid"] = write (e.TxID);
             o["when"] = JSON (e.When);
             o["received"] = write (e.Received);
             o["spent"] = write (e.Spent);
@@ -97,7 +97,7 @@ namespace Cosmos {
             if (events == j.end () || !events->is_array ()) throw data::exception {} << "invalid event JSON format: 'events'";
 
             history::tx e {};
-            e.TXID = read_TXID (std::string (*txid));
+            e.TxID = read_TxID (std::string (*txid));
             e.When = when (*time);
             e.Received = read_satoshi (*received);
             e.Spent = read_satoshi (*spent);
@@ -111,8 +111,8 @@ namespace Cosmos {
 
         history::payment read_payment (const JSON &j) {
             payments::payment_request pr = payments::read_payment_request (j);
-            list<Bitcoin::TXID> txs;
-            for (const auto &tt : j["txs"]) txs <<= read_TXID (std::string (tt));
+            list<Bitcoin::TxID> txs;
+            for (const auto &tt : j["txs"]) txs <<= read_TxID (std::string (tt));
             return history::payment {pr.Key, pr.Value, txs};
         }
 
@@ -220,7 +220,7 @@ namespace Cosmos {
 
             if (data::size (next_event.Events) == 0) return *this;
 
-            next_event.TXID = next.id ();
+            next_event.TxID = next.id ();
             next_event.When = next->when ();
 
             Bitcoin::satoshi received = 0;

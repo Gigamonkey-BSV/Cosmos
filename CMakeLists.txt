@@ -185,6 +185,8 @@ find_package (gigamonkey CONFIG REQUIRED)
 
 find_package (diophant CONFIG REQUIRED)
 
+#find_package (whatsonchain CONFIG REQUIRED)
+
 add_library (
     cosmos_lib
 
@@ -196,7 +198,6 @@ add_library (
     source/Cosmos/database/memory/txdb.cpp
     source/Cosmos/database/json/txdb.cpp
     source/Cosmos/database/json/price_data.cpp
-    source/Cosmos/network/whatsonchain.cpp
     source/Cosmos/math/log_triangular_distribution.cpp
     source/Cosmos/network.cpp
     source/Cosmos/files.cpp
@@ -223,6 +224,7 @@ target_link_libraries (
   PUBLIC
 
   diophant
+  whatsonchain
   Gigamonkey::gigamonkey
   Data::io
   Data::crypto

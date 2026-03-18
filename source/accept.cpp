@@ -13,13 +13,13 @@
 
 namespace Cosmos {
     struct request_integrator {
-        map<Bitcoin::TXID, Bitcoin::transaction> Payment;
+        map<Bitcoin::TxID, Bitcoin::transaction> Payment;
 
         using imap = map<Bitcoin::index, redeemable>;
 
         // all outputs that will be ours if we accept this payment.
         // TODO we can make things easier later on by making this a
-        map<Bitcoin::TXID, imap> Out;
+        map<Bitcoin::TxID, imap> Out;
 
         list<tuple<string, payments::request, Bitcoin::satoshi>> RequestsSatisfied;
 
@@ -146,9 +146,9 @@ void command_accept (const arg_parser &p) {
     bool already_broadcast = false;
 
     // first we try to read a txid.
-    if (Bitcoin::TXID input_txid {*payment_string}; input_txid.valid ()) {
+    if (Bitcoin::TxID input_txid {*payment_string}; input_txid.valid ()) {
         // In this case we assume the tx is already broadcast and we search for it on the network.
-        throw exception {} << "You have entered a TXID. Unfortunately, this option is not yet supported";
+        throw exception {} << "You have entered a TxID. Unfortunately, this option is not yet supported";
         // TODO
         goto ready;
     }
@@ -220,7 +220,7 @@ void command_accept (const arg_parser &p) {
             throw exception {} << "Broadcast failed with error " << success;
 
         // TODO put these in history.
-        data::stack<Bitcoin::TXID> txids = data::stack<Bitcoin::TXID> (tg.Out.keys ());
+        data::stack<Bitcoin::TxID> txids = data::stack<Bitcoin::TxID> (tg.Out.keys ());
         for (const auto &[id, a, b] : tg.RequestsSatisfied) {
             u.history ()->Payments <<= history::payment {id, a, txids};
             requests = requests.remove (id);

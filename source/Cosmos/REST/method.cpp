@@ -143,19 +143,19 @@ namespace Cosmos::command {
     }
 
     template <> net::HTTP::request make_request<IMPORT> (const args::parsed &p) {
-        throw data::method::unimplemented {"make_request<IMPORT>"};
+        return REST {read_authority (p)}.request (import_request_options {p});
     }
 
     template <> net::HTTP::request make_request<SPEND> (const args::parsed &p) {
-        throw data::method::unimplemented {"make_request<SPEND>"};
+        return REST {read_authority (p)}.request (spend_request_options {p});
+    }
+
+    template <> net::HTTP::request make_request<SPLIT> (const args::parsed &p) {
+        return REST {read_authority (p)}.request (split_request_options {p});
     }
 
     template <> net::HTTP::request make_request<BOOST> (const args::parsed &p) {
         throw data::method::unimplemented {"make_request<BOOST>"};
-    }
-
-    template <> net::HTTP::request make_request<SPLIT> (const args::parsed &p) {
-        throw data::method::unimplemented {"make_request<SPLIT>"};
     }
 
     template <> net::HTTP::request make_request<TAXES> (const args::parsed &p) {

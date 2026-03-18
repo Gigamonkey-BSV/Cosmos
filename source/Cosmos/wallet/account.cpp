@@ -12,7 +12,7 @@ namespace Cosmos {
             a = a.remove (o);
         }
 
-        for (const auto &e: d.Insert) a = a.insert (Bitcoin::outpoint {d.TXID, e.Key}, e.Value);
+        for (const auto &e: d.Insert) a = a.insert (Bitcoin::outpoint {d.TxID, e.Key}, e.Value);
         return a;
     }
 

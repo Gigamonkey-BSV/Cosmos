@@ -443,7 +443,7 @@ namespace Cosmos::SQLite {
 
     struct Event {
         int id;
-        Bitcoin::TXID tx;
+        Bitcoin::TxID tx;
         uint32_t when;
         int64_t received;
         int64_t spent;
@@ -688,7 +688,7 @@ namespace Cosmos::SQLite {
 
         }
 
-        void move_txid_to_pending (const Bitcoin::TXID &txid) {
+        void move_txid_to_pending (const Bitcoin::TxID &txid) {
 
             storage.update_all (
                 sqlite_orm::set (
@@ -747,7 +747,7 @@ namespace Cosmos::SQLite {
         }
 
         // do we have a tx or merkle proof for a given tx?
-        tx transaction (const Bitcoin::TXID &txid) final override {
+        tx transaction (const Bitcoin::TxID &txid) final override {
             // Step 1: Get the transaction by hash
             auto tx_opt = storage.get_optional<Transaction> (txid);
             if (!tx_opt) return {};
@@ -865,12 +865,12 @@ namespace Cosmos::SQLite {
         }
 
         // get txids for transactions without Merkle proofs.
-        data::set<Bitcoin::TXID> unconfirmed () final override {
+        data::set<Bitcoin::TxID> unconfirmed () final override {
             auto rows = storage.select (
                 columns (&Transaction::hash),
                     where (is_equal (&Transaction::status, Transaction::pending)));
 
-            data::set<Bitcoin::TXID> unconf {};
+            data::set<Bitcoin::TxID> unconf {};
             for (const auto &row : rows) unconf = unconf.insert (std::get<0> (row));
             return unconf;
         }
@@ -944,7 +944,7 @@ namespace Cosmos::SQLite {
         }
 
         // can only remove txs in pending.
-        void remove (const Bitcoin::TXID &hash) final override {
+        void remove (const Bitcoin::TxID &hash) final override {
             auto rows = storage.select (
                 columns (&Transaction::tx, &Transaction::status),
                 where (is_equal (&Transaction::hash, hash)), limit (1));

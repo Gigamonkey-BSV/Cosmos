@@ -110,13 +110,13 @@ namespace Cosmos {
 
     }
 
-    awaitable<maybe<bytes>> network::get_transaction (const Bitcoin::TXID &txid) {
-        static map<Bitcoin::TXID, bytes> cache;
+    awaitable<maybe<bytes>> network::get_transaction (const Bitcoin::TxID &txid) {
+        static map<Bitcoin::TxID, bytes> cache;
 
         auto known = cache.contains (txid);
         if (known) co_return maybe<bytes> {*known};
 
-        bytes tx = co_await WhatsOnChain.transaction ().get_raw (txid);
+        bytes tx = co_await WhatsOnChain.transactions ().get_raw (txid);
 
         if (tx == bytes {})
             co_return maybe<bytes> {};
@@ -127,10 +127,10 @@ namespace Cosmos {
     }
 
     // transactions by txid
-    map<Bitcoin::TXID, bytes> Transaction;
+    map<Bitcoin::TxID, bytes> Transaction;
 
     // script histories by script hash
-    map<digest256, list<Bitcoin::TXID>> History;
+    map<digest256, list<Bitcoin::TxID>> History;
 
     awaitable<satoshis_per_byte> network::mining_fee () {
         std::lock_guard<std::mutex> lock (Mutex);
@@ -153,10 +153,11 @@ namespace Cosmos {
 
         string date = ss.str ();
 
-        auto request = CoinGecko.REST.GET ("/api/v3/coins/bitcoin-cash-sv/history", {
-            entry<data::UTF8, data::UTF8> {"date", date },
-            entry<data::UTF8, data::UTF8> {"localization", "false" }
-        });
+        auto request = CoinGecko.REST.GET ("/api/v3/coins/bitcoin-cash-sv/history",
+            dispatch<UTF8, UTF8> {
+                entry<const data::UTF8, data::UTF8> {"date", date },
+                entry<const data::UTF8, data::UTF8> {"localization", "false" }
+            });
 
         // the rate limitation for this call is hard to understand.
         // If it doesn't work we wait 30 seconds.
