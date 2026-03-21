@@ -58,7 +58,7 @@ namespace Cosmos {
 
         restore_request_options () noexcept {};
         restore_request_options (
-            Diophant::symbol wallet_name, map<UTF8, UTF8> query,
+            Diophant::symbol wallet_name, dispatch<UTF8, UTF8> query,
             const maybe<net::HTTP::content> &content_type,
             const data::bytes &body);
 

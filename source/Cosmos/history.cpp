@@ -51,10 +51,10 @@ namespace Cosmos {
                 auto output = j.find ("output");
 
                 if (output != j.end ()) {
-                    point = read_outpoint (j["outpoint"]);
+                    point = read_outpoint (std::string (j["outpoint"]));
                     dir = direction::out;
                 } else {
-                    point = read_outpoint (j["inpoint"]);
+                    point = read_outpoint (std::string (j["inpoint"]));
                     dir = direction::in;
                 }
             }

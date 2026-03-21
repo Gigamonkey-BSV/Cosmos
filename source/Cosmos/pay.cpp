@@ -74,7 +74,7 @@ namespace Cosmos {
             d.Insert = d.Insert.insert (uint32 (jj[0]), redeemable {jj[1]});
 
         for (const auto &jj : j["remove"])
-            d.Remove = d.Remove.insert (uint32 (jj[0]), read_outpoint (jj[1]));
+            d.Remove = d.Remove.insert (uint32 (jj[0]), read_outpoint (std::string (jj[1])));
 
         return d;
     }

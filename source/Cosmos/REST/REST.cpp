@@ -32,31 +32,29 @@ namespace Cosmos {
 
         dispatch<UTF8, UTF8> q {};
 
-        using entry = data::entry<const UTF8, UTF8>;
-
         if (o.Key)
-            q <<= entry ("key", string::write (*o.Key));
+            q <<= {"key", string::write (*o.Key)};
 
         if (o.MaxLookAhead)
-            q <<= entry ("max_look_ahead", string::write (*o.MaxLookAhead));
+            q <<= {"max_look_ahead", string::write (*o.MaxLookAhead)};
 
         if (o.Mnemonic)
-            q <<= entry ("mnemonic", string::write (*o.Mnemonic));
+            q <<= {"mnemonic", string::write (*o.Mnemonic)};
 
         if (o.Entropy)
-            q <<= entry ("entropy", string::write (*o.Entropy));
+            q <<= {"entropy", string::write (*o.Entropy)};
 
         if (o.MasterKeyType)
-            q <<= entry ("master_key_type", string::write (*o.MasterKeyType));
+            q <<= {"master_key_type", string::write (*o.MasterKeyType)};
 
         if (o.CoinTypeDerivationParameter)
-            q <<= entry ("coin_type", string::write (*o.CoinTypeDerivationParameter));
+            q <<= {"coin_type", string::write (*o.CoinTypeDerivationParameter)};
 
         if (o.RestoreWalletStyle != Cosmos::restore_wallet_style::unset)
-            q <<= entry ("style", string::write (o.RestoreWalletStyle));
+            q <<= {"style", string::write (o.RestoreWalletStyle)};
 
         if (o.DerivationStyle != Cosmos::derivation_style::unset)
-            q <<= entry ("derivation_style", string::write (o.DerivationStyle));
+            q <<= {"derivation_style", string::write (o.DerivationStyle)};
 
         return this->operator () (net::HTTP::method::put, string::write ("/restore/", o.name ())).query_map (q);
     }

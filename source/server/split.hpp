@@ -6,7 +6,7 @@
 
 
 net::HTTP::response handle_split (
-    server &p, net::HTTP::method http_method, map<UTF8, UTF8> query,
+    server &p, net::HTTP::method http_method, dispatch<UTF8, UTF8> query,
     const maybe<net::HTTP::content> &content_type, const data::bytes &body);
 
 #endif

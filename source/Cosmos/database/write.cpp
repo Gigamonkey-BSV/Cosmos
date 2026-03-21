@@ -1,6 +1,27 @@
 
 #include <Cosmos/database/write.hpp>
 
+namespace data::encoding {
+    maybe<Bitcoin::transaction> read<Bitcoin::transaction>::operator () (string_view x) const {
+        maybe<bytes> b = hex::read (x);
+        if (!b) return {};
+        Bitcoin::transaction t {*b};
+        if (!t.valid ()) return {};
+        return t;
+    }
+
+    maybe<Bitcoin::outpoint> read<Bitcoin::outpoint>::operator () (string_view x) const {
+        list<string_view> z = data::split (x, ":");
+        if (z.size () != 2) throw data::exception {} << "invalid outpoint format: " << x;
+        Bitcoin::outpoint o;
+        auto dig = read<Bitcoin::TxID> {} (z[0]);
+        throw data::exception {} << "invalid outpoint format: " << x;
+        o.Digest = *dig;
+        o.Index = strtoul (std::string {z[1]}.c_str (), nullptr, 10);
+        return o;
+    }
+}
+
 namespace Cosmos {
 
     JSON write_path (HD::BIP_32::path p) {
@@ -19,15 +40,6 @@ namespace Cosmos {
             p <<= uint32 (jj);
         }
         return p;
-    }
-
-    Bitcoin::outpoint read_outpoint (const string &x) {
-        list<string_view> z = data::split (x, ":");
-        if (z.size () != 2) throw data::exception {} << "invalid outpoint format: " << x;
-        Bitcoin::outpoint o;
-        o.Digest = read_TxID (z[0]);
-        o.Index = strtoul (std::string {z[1]}.c_str (), nullptr, 10);
-        return o;
     }
 
     JSON write (const Bitcoin::output &j) {

@@ -294,7 +294,7 @@ error try_with_method (command::method m, const args::parsed &p) {
         }
     } catch (const schema::invalid_entry &x) {
         return error {error::code {3},
-            string::write ("invalid value ", p.Options[x.Key], " for option ", x.Key)};
+            string::write ("invalid value ", x.Value, " for option ", x.Key)};
     } catch (const schema::missing_key &x) {
         return error {error::code {3},
             string::write ("missing expected option ", x.Key)};
@@ -400,6 +400,19 @@ std::ostream &help (std::ostream &o, command::method meth) {
             "\narguments for method next:"
             "\n\t<string> (wallet name)"
             "\n\t" R"((--sequence=) (sequence name))";
+        case command::IMPORT :
+            return o << "arguments for method import not yet available."
+                "\narguments for method next:"
+                "\n\t<string> (wallet name)"
+                "\n\t" R"(--key=<a private key>)"
+                "\n\t" R"(--tx=<txid, hex tx, or BEEF>)"
+                "\n\t" R"(--outpoint=<txid:uint32>)"
+                "\n\t" R"(--index=<uint32>)"
+                "\nAt least one of `key`, `tx`, or `outpoint` must be present. Multiple values of each of these is allowed."
+                "\nIf `index` is present, then outpoint must not be present and only one tx is allowed."
+                "\nIf no keys are given, we try to find the right keys in the database and it's an error not to find any."
+                "\nIf no outpoints are given, we check every output of every transaction provided and it's an error if nothing works."
+                "\nIf a txid is provided with no transaction, we search for it online.";
         case command::REQUEST :
             return o << "Generate a new payment request."
                 "\narguments for method request:"
@@ -426,8 +439,6 @@ std::ostream &help (std::ostream &o, command::method meth) {
             "\n\t(--payment=)<payment tx in BEEF or SPV envelope>";
         case command::SIGN :
             return o << "arguments for method sign not yet available.";
-        case command::IMPORT :
-            return o << "arguments for method import not yet available.";
         case command::SEND :
             return o << "This method is DEPRICATED";
         case command::SPEND :

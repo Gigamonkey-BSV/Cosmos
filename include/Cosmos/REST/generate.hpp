@@ -169,7 +169,7 @@ namespace Cosmos {
 
         // read from a generate request.
         generate_request_options (
-            Diophant::symbol wallet_name, map<UTF8, UTF8> query,
+            Diophant::symbol wallet_name, dispatch<UTF8, UTF8> query,
             const maybe<net::HTTP::content> &content_type,
             const data::bytes &body);
 
@@ -184,7 +184,7 @@ namespace Cosmos {
     generate_error generate (database &DB, const std::string &words, const generate_request_options &);
 
     net::HTTP::response handle_generate (database &DB,
-        Diophant::symbol wallet_name, map<UTF8, UTF8> query,
+        Diophant::symbol wallet_name, dispatch<UTF8, UTF8> query,
         const maybe<net::HTTP::content> &content_type,
         const data::bytes &body);
 

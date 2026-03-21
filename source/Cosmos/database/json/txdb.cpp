@@ -154,7 +154,7 @@ namespace Cosmos {
         }
 
         for (const auto &[key, value] : redeems.items ())
-            this->RedeemIndex[read_outpoint (key)] = inpoint {read_outpoint (value)};
+            this->RedeemIndex[read_outpoint (key)] = inpoint {read_outpoint (std::string (value))};
 
         // Here is another issue relating to changes in format.
         // We used to have a map address => outpoint

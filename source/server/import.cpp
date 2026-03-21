@@ -7,7 +7,7 @@ using namespace Cosmos;
 
 net::HTTP::response handle_import (
     server &p, const Diophant::symbol &wallet_name,
-    map<UTF8, UTF8> query,
+    dispatch<UTF8, UTF8> query,
     const maybe<net::HTTP::content> &content_type,
     const data::bytes &body) {
 

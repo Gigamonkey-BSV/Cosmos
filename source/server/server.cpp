@@ -1,4 +1,4 @@
-#include "server.hpp"
+
 #include "../Cosmos.hpp"
 #include "invert_hash.hpp"
 #include "key.hpp"
@@ -29,7 +29,7 @@ net::HTTP::response process_method (
     server &,
     net::HTTP::method,
     Cosmos::command::method,
-    map<UTF8, UTF8> query,
+    dispatch<UTF8, UTF8> query,
     const maybe<net::HTTP::content> &,
     const data::bytes &);
 
@@ -38,7 +38,7 @@ net::HTTP::response process_wallet_method (
     server &p, net::HTTP::method http_method,
     Cosmos::command::method m,
     Diophant::symbol wallet_name,
-    map<UTF8, UTF8> query,
+    dispatch<UTF8, UTF8> query,
     const maybe<net::HTTP::content> &content,
     const data::bytes &body);
 
@@ -126,14 +126,11 @@ awaitable<net::HTTP::response> server::operator () (const net::HTTP::request &re
 
     // we checked the methods that don't take any parameters. 
     // now we get the parameters from the query. 
-    map<UTF8, UTF8> query;
-    maybe<dispatch<UTF8, UTF8>> qm = req.Target.query_map ();
-    if (bool (qm)) {
-        map<UTF8, list<UTF8>> q = data::to_map (*qm);
-        
-        for (const auto &[k, v] : q) if (v.size () != 1) 
-          co_return error_response (400, m, problem::invalid_parameter, "duplicate query parameters");
-        else query = query.insert (k, v[0]);
+    dispatch<UTF8, UTF8> query;
+
+    {
+        maybe<dispatch<UTF8, UTF8>> qm = req.Target.query_map ();
+        if (bool (qm)) query = *qm;
     }
 
     UTF8 fragment {};
@@ -178,7 +175,7 @@ net::HTTP::response process_method (
     server &p,
     net::HTTP::method http_method,
     command::method m,
-    map<UTF8, UTF8> query,
+    dispatch<UTF8, UTF8> query,
     const maybe<net::HTTP::content> &content_type,
     const data::bytes &body) {
 
@@ -194,7 +191,7 @@ net::HTTP::response process_wallet_method (
     net::HTTP::method http_method,
     command::method m,
     Diophant::symbol wallet_name,
-    map<UTF8, UTF8> query,
+    dispatch<UTF8, UTF8> query,
     const maybe<net::HTTP::content> &content_type,
     const data::bytes &body) {
 
@@ -324,7 +321,6 @@ net::HTTP::response process_wallet_method (
             return error_response (405, m, problem::invalid_method, "use put");
 
         return handle_import (p, wallet_name, query, content_type, body);
-
     }
 
     if (m == command::SPEND) {
@@ -359,7 +355,7 @@ net::HTTP::response process_wallet_method (
         Bitcoin::address pay_to_address;
         HD::BIP_32::pubkey pay_to_xpub;
 
-        const UTF8 *pay_to_param = query.contains ("pay_to");
+        auto pay_to_param = data::get_value (query, UTF8 {"pay_to"});
         if (bool (pay_to_param)) {
             pay_to_address = Bitcoin::address {*pay_to_param};
             pay_to_xpub = HD::BIP_32::pubkey {*pay_to_param};
@@ -470,7 +466,7 @@ net::HTTP::response favicon () {
 }
 
 net::HTTP::response handle_generate (server &p,
-    Diophant::symbol wallet_name, map<UTF8, UTF8> query,
+    Diophant::symbol wallet_name, dispatch<UTF8, UTF8> query,
     const maybe<net::HTTP::content> &content_type,
     const data::bytes &body) {
 
@@ -535,7 +531,7 @@ X inline set_with_default (const maybe<X> &opt, const X &def) {
 }
 
 net::HTTP::response handle_restore (server &p,
-    Diophant::symbol wallet_name, map<UTF8, UTF8> query,
+    Diophant::symbol wallet_name, dispatch<UTF8, UTF8> query,
     const maybe<net::HTTP::content> &content_type,
     const data::bytes &body) {
 

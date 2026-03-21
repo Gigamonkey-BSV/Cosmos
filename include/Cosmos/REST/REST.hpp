@@ -7,6 +7,7 @@
 #include <Cosmos/REST/problem.hpp>
 #include <Cosmos/REST/generate.hpp>
 #include <Cosmos/REST/restore.hpp>
+#include <Cosmos/REST/import.hpp>
 
 namespace schema = data::schema;
 
@@ -17,7 +18,7 @@ namespace Cosmos {
         maybe<Diophant::symbol> Sequence;
         next_request_options () {}
         next_request_options (const args::parsed &);
-        next_request_options (Diophant::symbol wallet_name, map<UTF8, UTF8> query):
+        next_request_options (Diophant::symbol wallet_name, dispatch<UTF8, UTF8> query):
         Name {wallet_name}, Sequence {schema::validate<> (query,
             *schema::map::key<Diophant::symbol> ("sequence"))} {}
 
@@ -32,16 +33,6 @@ namespace Cosmos {
         }
     };
 
-    struct import_request_options {
-        import_request_options () {}
-
-        import_request_options (const args::parsed &) {
-            throw data::method::unimplemented {"parsed -> import_request_options"};
-        }
-
-        import_request_options (Diophant::symbol wallet_name, map<UTF8, UTF8> query);
-    };
-
     struct spend_request_options : Cosmos::spend_options {
         spend_request_options () {}
 
@@ -49,7 +40,7 @@ namespace Cosmos {
             throw data::method::unimplemented {"parsed -> spend_request_options"};
         }
 
-        spend_request_options (Diophant::symbol wallet_name, map<UTF8, UTF8> query);
+        spend_request_options (Diophant::symbol wallet_name, dispatch<UTF8, UTF8> query);
     };
 
     struct split_request_options {
@@ -59,7 +50,7 @@ namespace Cosmos {
             throw data::method::unimplemented {"parsed -> split_request_options"};
         }
 
-        split_request_options (Diophant::symbol wallet_name, map<UTF8, UTF8> query);
+        split_request_options (Diophant::symbol wallet_name, dispatch<UTF8, UTF8> query);
     };
 
     struct REST : net::HTTP::REST {

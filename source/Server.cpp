@@ -314,7 +314,11 @@ std::ostream &help (std::ostream &o, command::method method) {
         case command::SIGN :
             return o << "arguments for method sign not yet available.";
         case command::IMPORT :
-            return o << "arguments for method import not yet available.";
+            return o << "Import data into the wallet"
+                "\n\t(--name=)<wallet name>";
+                "\n\t(--txs=<beef>)"
+                "\n\t(--outpoint=<txid:index>)"
+                "\n\t(--key=<private key>)";
         case command::SEND :
             return o << "This method is DEPRICATED";
         case command::SPEND :

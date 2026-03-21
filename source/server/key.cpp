@@ -73,7 +73,7 @@ key_request_options::operator net::HTTP::request () const {
 
 net::HTTP::response handle_key (server &p,
     const Diophant::symbol &wallet_name,
-    net::HTTP::method http_method, map<UTF8, UTF8> query,
+    net::HTTP::method http_method, dispatch<UTF8, UTF8> query,
     const maybe<net::HTTP::content> &post_key,
     const data::bytes &body) {
 

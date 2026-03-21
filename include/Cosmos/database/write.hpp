@@ -2,11 +2,30 @@
 #define COSMOS_DATABASE_WRITE
 
 #include <data/net/JSON.hpp>
+#include <data/encoding/read.hpp>
 
 #include <gigamonkey/timechain.hpp>
 #include <gigamonkey/schema/hd.hpp>
 
 #include <Cosmos/network.hpp>
+
+namespace data::encoding {
+    template <> struct read<Bitcoin::transaction> {
+        maybe<Bitcoin::transaction> operator () (string_view x) const;
+    };
+
+    template <> struct read<Bitcoin::outpoint> {
+        maybe<Bitcoin::outpoint> operator () (string_view x) const;
+    };
+
+    template <> struct read<Bitcoin::TxID> {
+        maybe<Bitcoin::TxID> operator () (string_view x) const {
+            Bitcoin::TxID t {std::string {x}};
+            if (!t.valid ()) return {};
+            return t;
+        }
+    };
+}
 
 // provide standard ways of converting certain types into strings and back.
 namespace Cosmos {
@@ -17,7 +36,7 @@ namespace Cosmos {
     std::string write (const Bitcoin::TxID &);
     Bitcoin::TxID read_TxID (string_view);
     std::string write (const Bitcoin::outpoint &);
-    Bitcoin::outpoint read_outpoint (const string &);
+    Bitcoin::outpoint read_outpoint (string_view);
     std::string write (const N &);
     N read_N (const string &);
 
@@ -58,9 +77,15 @@ namespace Cosmos {
     }
 
     Bitcoin::TxID inline read_TxID (string_view x) {
-        Bitcoin::TxID t {std::string {x}};
-        if (!t.valid ()) throw data::exception {} << "invalid txid " << x;
-        return t;
+        maybe<Bitcoin::TxID> t = data::encoding::read<Bitcoin::TxID> {} (x);
+        if (!t) throw data::exception {} << "invalid txid " << x;
+        return *t;
+    }
+
+    Bitcoin::outpoint inline read_outpoint (string_view x) {
+        maybe<Bitcoin::outpoint> t = data::encoding::read<Bitcoin::outpoint> {} (x);
+        if (!t) throw data::exception {} << "invalid outpoint " << x;
+        return *t;
     }
 
     JSON inline write (const Bitcoin::satoshi &j) {
@@ -76,7 +101,8 @@ namespace Cosmos {
     }
 
     Bitcoin::input inline read_input (const JSON &j) {
-        return Bitcoin::input {read_outpoint (j["reference"]), *encoding::hex::read (std::string (j["script"])), uint32 (j["sequence"])};
+        return Bitcoin::input {read_outpoint (std::string (j["reference"])),
+            *encoding::hex::read (std::string (j["script"])), uint32 (j["sequence"])};
     }
 
     JSON inline write (const Bitcoin::prevout &p) {

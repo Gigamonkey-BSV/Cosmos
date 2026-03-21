@@ -57,12 +57,12 @@ net::HTTP::response favicon ();
 net::HTTP::response HTML_JS_UI_response ();
 
 net::HTTP::response handle_generate (server &p,
-    Diophant::symbol wallet_name, map<UTF8, UTF8> query,
+    Diophant::symbol wallet_name, dispatch<UTF8, UTF8> query,
     const maybe<net::HTTP::content> &content_type,
     const data::bytes &body);
 
 net::HTTP::response handle_restore (server &p,
-    Diophant::symbol wallet_name, map<UTF8, UTF8> query,
+    Diophant::symbol wallet_name, dispatch<UTF8, UTF8> query,
     const maybe<net::HTTP::content> &content_type,
     const data::bytes &body);
 
