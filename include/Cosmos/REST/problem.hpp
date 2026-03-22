@@ -1,9 +1,9 @@
 #ifndef SERVER_PROBLEM
 #define SERVER_PROBLEM
 
-#include <iostream>
+#include "method.hpp"
 
-namespace Cosmos {
+namespace Cosmos::command {
 
     enum class problem {
         unknown,
@@ -23,6 +23,12 @@ namespace Cosmos {
     };
 
     std::ostream &operator << (std::ostream &, problem);
+
+    struct exception : data::exception::base<exception> {
+        problem Problem;
+        method Method;
+        exception (int code, problem p, method m) : data::exception::base<exception> {code}, Problem {p}, Method {m} {}
+    };
 }
 
 #endif

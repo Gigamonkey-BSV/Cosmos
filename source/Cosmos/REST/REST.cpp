@@ -58,6 +58,51 @@ namespace Cosmos {
 
         return this->operator () (net::HTTP::method::put, string::write ("/restore/", o.name ())).query_map (q);
     }
+
+    net::HTTP::request REST::request (const import_request_options &r) const {
+        dispatch<UTF8, UTF8> query;
+
+        for (const Bitcoin::WIF &k : r.Keys) query <<= {"key", UTF8 (k)};
+
+        // raw and BEEF style transactions can be written as a byte stream.
+        // the txid will be written in the query in hex.
+        bytes body;
+        {
+            data::lazy_bytes_writer w {body};
+
+            for (const auto &t : r.Txs) t.visit ([&](const auto &n) {
+                if constexpr (std::is_same_v<std::decay_t<decltype (n)>, Bitcoin::TxID>)
+                    query <<= {"tx", write (n)};
+                else w << n;
+            });
+        }
+
+        // now all tx data has been written to query or body.
+
+        // If we only have one tx and one outpoint, we don't need to repeat the txid.
+        if (size (r.Txs) == 1 && size (r.Outpoints) == 1) {
+            first (r.Txs).visit ([&](const auto &n) {
+                if constexpr (std::is_same_v<std::decay_t<decltype (n)>, BEEF>) {
+                    if (data::last (n.Transactions).id () != first (r.Outpoints).Digest) {
+                        query <<= {"outpoint", UTF8 (write (first (r.Outpoints)))};
+                        return;
+                    }
+                }
+
+                query <<= {"index", UTF8 (std::to_string (first (r.Outpoints).Index))};
+            });
+
+        } else for (const Bitcoin::outpoint &o : r.Outpoints) query <<= {"outpoint", write (o)};
+
+        auto req = (*this) (net::HTTP::method::post, string::write ("/import/", r.Name));
+
+        if (query.size () > 0) req = req.query_map (query);
+
+        if (body.size () > 0) req = req.body (body);
+
+        return req;
+
+    }
 }
 
 namespace Cosmos::command {

@@ -74,31 +74,31 @@ awaitable<net::HTTP::response> server::operator () (const net::HTTP::request &re
 
     command::method m = command::read_method (path[0]);
 
-    if (m == command::UNSET) co_return error_response (400, m, problem::unknown_method, path[0]);
+    if (m == command::UNSET) co_return error_response (400, m, command::problem::unknown_method, path[0]);
 
     if (m == command::VERSION) {
         if (req.Method != net::HTTP::method::get)
-            co_return error_response (405, command::VERSION, problem::invalid_method, "use get");
+            co_return error_response (405, command::VERSION, command::problem::invalid_method, "use get");
 
         co_return version_response ();
     }
 
     if (m == command::HELP) {
         if (req.Method != net::HTTP::method::get)
-            co_return error_response (405, command::HELP, problem::invalid_method, "use get with method help");
+            co_return error_response (405, command::HELP, command::problem::invalid_method, "use get with method help");
 
         if (path.size () == 1) co_return help_response ();
         else {
             command::method help_with_method = command::read_method (path[1]);
             if (help_with_method == command::UNSET)
-                co_return error_response (400, command::HELP, problem::unknown_method, path[1]);
+                co_return error_response (400, command::HELP, command::problem::unknown_method, path[1]);
             co_return help_response (help_with_method);
         }
     }
 
     if (m == command::SHUTDOWN) {
         if (req.Method != net::HTTP::method::put)
-            co_return error_response (405, command::SHUTDOWN, problem::invalid_method, "use put with method shutdown");
+            co_return error_response (405, command::SHUTDOWN, command::problem::invalid_method, "use put with method shutdown");
 
         Shutdown = true;
         co_return ok_response ();
@@ -106,7 +106,7 @@ awaitable<net::HTTP::response> server::operator () (const net::HTTP::request &re
 
     if (m == command::ADD_ENTROPY) {
         if (req.Method != net::HTTP::method::post)
-            co_return error_response (405, command::ADD_ENTROPY, problem::invalid_method,
+            co_return error_response (405, command::ADD_ENTROPY, command::problem::invalid_method,
                 "use post with method add_entropy");
 
         // request was already proccessed into the user entropy.
@@ -116,7 +116,7 @@ awaitable<net::HTTP::response> server::operator () (const net::HTTP::request &re
 
     if (m == command::LIST_WALLETS) {
         if (req.Method != net::HTTP::method::get)
-            co_return error_response (405, m, problem::invalid_method, "use get");
+            co_return error_response (405, m, command::problem::invalid_method, "use get");
         JSON::array_t names;
         for (const std::string &name : DB.list_wallet_names ())
             names.push_back (name);
@@ -137,7 +137,7 @@ awaitable<net::HTTP::response> server::operator () (const net::HTTP::request &re
     maybe<UTF8> fm = req.Target.fragment ();
     if (bool (fm)) fragment = *fm;
 
-    if (fragment != "") co_return error_response (400, m, problem::invalid_target, "We don't use the fragment");
+    if (fragment != "") co_return error_response (400, m, command::problem::invalid_target, "We don't use the fragment");
 
     try {
 
@@ -146,28 +146,30 @@ awaitable<net::HTTP::response> server::operator () (const net::HTTP::request &re
 
         // make sure the wallet name is a valid string.
         Diophant::symbol wallet_name {path[1]};
-        if (!data::valid (wallet_name)) co_return error_response (400, m, problem::invalid_wallet_name);
+        if (!data::valid (wallet_name)) co_return error_response (400, m, command::problem::invalid_wallet_name);
 
         co_return process_wallet_method (*this, req.Method, m, wallet_name, query, req.content_type (), req.Body);
 
+    } catch (const command::exception &e) {
+        co_return error_response (e.Code, e.Method, e.Problem, std::string {e.what ()});
     } catch (const data::random::source::fail &) {
-        co_return error_response (500, m, problem::need_entropy);
+        co_return error_response (500, m, command::problem::need_entropy);
     } catch (const Diophant::parse_error &w) {
         co_return error_response (400, m,
-            problem::invalid_expression,
+            command::problem::invalid_expression,
             // this is a pretty unhelpful message. However, hopefully we won't throw this in the future.
             string::write ("an invalid Diophant expression was generated: ", w.what ()));
     } catch (schema::missing_key mk) {
-        co_return error_response (400, m, problem::missing_parameter, string::write ("missing parameter ", mk.Key));
+        co_return error_response (400, m, command::problem::missing_parameter, string::write ("missing parameter ", mk.Key));
     } catch (schema::invalid_entry iv) {
-        co_return error_response (400, m, problem::invalid_parameter, string::write ("invalid parameter ", iv.Key));
+        co_return error_response (400, m, command::problem::invalid_parameter, string::write ("invalid parameter ", iv.Key));
     } catch (schema::unknown_key uk) {
-        co_return error_response (400, m, problem::invalid_query, string::write ("unknown parameter ", uk.Key));
+        co_return error_response (400, m, command::problem::invalid_query, string::write ("unknown parameter ", uk.Key));
     } catch (schema::incomplete_match uk) {
-        co_return error_response (400, m, problem::unexpected_parameter,
+        co_return error_response (400, m, command::problem::unexpected_parameter,
             string::write ("unexpected parameter ", uk.Key));
     } catch (data::method::unimplemented un) {
-        co_return error_response (501, m, problem::unimplemented, un.what ());
+        co_return error_response (501, m, command::problem::unimplemented, un.what ());
     }
 }
 
@@ -183,7 +185,7 @@ net::HTTP::response process_method (
 
     if (m == command::TO_PRIVATE) return handle_to_private (p, http_method, query, content_type, body);
 
-    return error_response (500, m, problem::invalid_wallet_name, "wallet method called without wallet name");
+    return error_response (500, m, command::problem::invalid_wallet_name, "wallet method called without wallet name");
 }
 
 net::HTTP::response process_wallet_method (
@@ -196,18 +198,18 @@ net::HTTP::response process_wallet_method (
     const data::bytes &body) {
 
     // make sure the wallet name is a valid string.
-    if (!wallet_name.valid ()) return error_response (400, m, problem::invalid_wallet_name, "wallet name argument must be alpha alnum+");
+    if (!wallet_name.valid ()) return error_response (400, m, command::problem::invalid_wallet_name, "wallet name argument must be alpha alnum+");
 
     // Associate a secret key with a name. The key could be anything; private, public, or symmetric.
     if (m == command::KEY) return handle_key (p, wallet_name, http_method, query, content_type, body);
 
     if (m == command::CREATE_WALLET) {
         if (http_method != net::HTTP::method::post)
-            return error_response (405, m, problem::invalid_method, "use post");
+            return error_response (405, m, command::problem::invalid_method, "use post");
 
         bool created = p.DB.make_wallet (wallet_name);
         if (created) return ok_response ();
-        else return error_response (500, m, problem::failed, "could not create wallet");
+        else return error_response (500, m, command::problem::failed, "could not create wallet");
     }
 
     if (m == command::KEY_SEQUENCE) {
@@ -220,27 +222,27 @@ net::HTTP::response process_wallet_method (
 
         // make sure the name is a valid symbol name
         if (!data::valid (name))
-            return error_response (400, m, problem::invalid_parameter,
+            return error_response (400, m, command::problem::invalid_parameter,
                 "key_name parameter must be alpha alnum+");
 
         if (post_key_sequence) {
             if (http_method != net::HTTP::method::post)
-                return error_response (405, m, problem::invalid_method, "use POST");
+                return error_response (405, m, command::problem::invalid_method, "use POST");
 
             auto [key, derivation, index_param] = *post_key_sequence;
             uint32 index = bool (index_param) ? *index_param : 0;
 
             if (!key.valid ())
-                return error_response (400, m, problem::invalid_parameter,
+                return error_response (400, m, command::problem::invalid_parameter,
                     "name parameter must be alpha alnum+");
 
             if (!data::valid (derivation))
-                return error_response (400, m, problem::invalid_parameter,
+                return error_response (400, m, command::problem::invalid_parameter,
                     "name parameter must be alpha alnum+");
 
             if (!p.DB.set_wallet_sequence (wallet_name, name,
                 Cosmos::key_sequence {key, derivation}, index))
-                return error_response (400, m, problem::invalid_parameter,
+                return error_response (400, m, command::problem::invalid_parameter,
                     string::write ("wallet ", wallet_name, " does not exist."));
 
             return ok_response ();
@@ -248,10 +250,10 @@ net::HTTP::response process_wallet_method (
         }
 
         if (http_method != net::HTTP::method::get)
-            return error_response (405, m, problem::invalid_method, "use GET");
+            return error_response (405, m, command::problem::invalid_method, "use GET");
 
         auto seq = p.DB.get_wallet_sequence (wallet_name, name);
-        if (!seq) return error_response (404, m, problem::failed,
+        if (!seq) return error_response (404, m, command::problem::failed,
             string::write ("Could not find sequence ", wallet_name, ".", name));
 
         return string_response (std::string (*seq));
@@ -259,14 +261,14 @@ net::HTTP::response process_wallet_method (
 
     if (m == command::VALUE) {
         if (http_method != net::HTTP::method::get)
-            return error_response (405, m, problem::invalid_method, "use get");
+            return error_response (405, m, command::problem::invalid_method, "use get");
 
         return value_response (p.DB.get_wallet_account (wallet_name).value ());
     }
 
     if (m == command::DETAILS) {
         if (http_method != net::HTTP::method::get)
-            return error_response (405, m, problem::invalid_method, "use get");
+            return error_response (405, m, command::problem::invalid_method, "use get");
 
         return JSON_response (p.DB.get_wallet_account (wallet_name).details ());
     }
@@ -274,31 +276,31 @@ net::HTTP::response process_wallet_method (
     if (m == command::GENERATE) {
 
         if (http_method != net::HTTP::method::post)
-            return error_response (405, m, problem::invalid_method, "use post");
+            return error_response (405, m, command::problem::invalid_method, "use post");
 
         return handle_generate (p, wallet_name, query, content_type, body);
     }
 
     if (m == command::NEXT) {
         if (http_method != net::HTTP::method::post)
-            return error_response (405, m, problem::invalid_method, "use post");
+            return error_response (405, m, command::problem::invalid_method, "use post");
 
         if (!data::contains (p.DB.list_wallet_names (), static_cast<const std::string &> (wallet_name)))
-            return error_response (400, m, problem::invalid_parameter,
+            return error_response (400, m, command::problem::invalid_parameter,
                 string::write ("cannot find wallet named ", wallet_name));
 
         next_request_options opts (wallet_name, query);
 
         // in the future we will look for a default sequence name, but for now we don't.
         if (!opts.Sequence || !opts.Sequence->valid ())
-            return error_response (400, m, problem::invalid_parameter, "sequence");
+            return error_response (400, m, command::problem::invalid_parameter, "sequence");
         
         // do we have a sequence by this name? 
         Cosmos::key_source sequence;
 
         {
             maybe<Cosmos::key_source> seq = p.DB.get_wallet_sequence (wallet_name, *opts.Sequence);
-            if (!bool (seq)) return error_response (400, m, problem::invalid_query, string::write ("no key named ", *opts.Sequence));
+            if (!bool (seq)) return error_response (400, m, command::problem::invalid_query, string::write ("no key named ", *opts.Sequence));
             sequence = *seq;
         }
 
@@ -306,7 +308,7 @@ net::HTTP::response process_wallet_method (
         Cosmos::key_expression next_key {*sequence};
 
         if (!next_key.valid ())
-            return error_response (500, command::NEXT, problem::failed);
+            return error_response (500, command::NEXT, command::problem::failed);
 
         // make an unused reference to put in the database for later.
         p.DB.set_wallet_unused (wallet_name, database::unused {next_key, sequence.Sequence.Key});
@@ -318,14 +320,14 @@ net::HTTP::response process_wallet_method (
 
     if (m == command::IMPORT) {
         if (http_method != net::HTTP::method::put)
-            return error_response (405, m, problem::invalid_method, "use put");
+            return error_response (405, m, command::problem::invalid_method, "use put");
 
         return handle_import (p, wallet_name, query, content_type, body);
     }
 
     if (m == command::SPEND) {
         if (http_method != net::HTTP::method::post)
-            return error_response (405, m, problem::invalid_method, "use post");
+            return error_response (405, m, command::problem::invalid_method, "use post");
 
         auto [to, value, fee_rate, min_change_value, unit,
             map_redeem_proportion, min_reedeem_proportion,
@@ -347,7 +349,7 @@ net::HTTP::response process_wallet_method (
 
         if (unit != "Bitcoin" && unit != "BSV")
             if (http_method != net::HTTP::method::put)
-                return error_response (405, m, problem::invalid_query,
+                return error_response (405, m, command::problem::invalid_query,
                     "We do not support units other than Bitcoin SV for now.");
 
         // now we try to read who we are sending to.
@@ -359,7 +361,7 @@ net::HTTP::response process_wallet_method (
         if (bool (pay_to_param)) {
             pay_to_address = Bitcoin::address {*pay_to_param};
             pay_to_xpub = HD::BIP_32::pubkey {*pay_to_param};
-        } else return error_response (400, m, problem::invalid_query, "required parameter 'pay_to' not present");
+        } else return error_response (400, m, command::problem::invalid_query, "required parameter 'pay_to' not present");
 /*
         if (pay_to_address.valid ()) {
 
@@ -374,77 +376,77 @@ net::HTTP::response process_wallet_method (
 
     if (m == command::RESTORE) {
         if (http_method != net::HTTP::method::put)
-            return error_response (405, m, problem::invalid_method, "use put");
+            return error_response (405, m, command::problem::invalid_method, "use put");
 
         return handle_restore (p, wallet_name, query, content_type, body);
     }
 
-    return error_response (501, m, problem::unimplemented);
+    return error_response (501, m, command::problem::unimplemented);
 
     if (m == command::BOOST) {
         if (http_method != net::HTTP::method::post)
-            return error_response (405, m, problem::invalid_method, "use post");
+            return error_response (405, m, command::problem::invalid_method, "use post");
 
-        return error_response (501, m, problem::unimplemented);
+        return error_response (501, m, command::problem::unimplemented);
     }
 
     if (m == command::SPLIT) {
         if (http_method != net::HTTP::method::post)
-            return error_response (405, m, problem::invalid_method, "use post");
+            return error_response (405, m, command::problem::invalid_method, "use post");
 
-        return error_response (501, m, problem::unimplemented);
+        return error_response (501, m, command::problem::unimplemented);
     }
 
     if (m == command::TAXES) {
         if (http_method != net::HTTP::method::get)
-            return error_response (405, m, problem::invalid_method, "use get");
+            return error_response (405, m, command::problem::invalid_method, "use get");
 
-        return error_response (501, m, problem::unimplemented);
+        return error_response (501, m, command::problem::unimplemented);
     }
 
     if (m == command::ENCRYPT_KEY) {
         if (http_method != net::HTTP::method::post)
-            return error_response (405, m, problem::invalid_method, "use post");
+            return error_response (405, m, command::problem::invalid_method, "use post");
 
-        return error_response (501, m, problem::unimplemented);
+        return error_response (501, m, command::problem::unimplemented);
     }
 
     if (m == command::DECRYPT_KEY) {
         if (http_method != net::HTTP::method::post)
-            return error_response (405, m, problem::invalid_method, "use post");
+            return error_response (405, m, command::problem::invalid_method, "use post");
 
-        return error_response (501, m, problem::unimplemented);
+        return error_response (501, m, command::problem::unimplemented);
     }
 
     if (m == command::IMPORT_DB) {
         if (http_method != net::HTTP::method::put)
-            return error_response (405, m, problem::invalid_method, "use put");
+            return error_response (405, m, command::problem::invalid_method, "use put");
 
-        return error_response (501, m, problem::unimplemented);
+        return error_response (501, m, command::problem::unimplemented);
     }
 
     if (m == command::EXPORT_DB) {
         if (http_method != net::HTTP::method::put)
-            return error_response (405, m, problem::invalid_method, "use post");
+            return error_response (405, m, command::problem::invalid_method, "use post");
 
-        return error_response (501, m, problem::unimplemented);
+        return error_response (501, m, command::problem::unimplemented);
     }
 
     if (m == command::IMPORT_WALLET) {
         if (http_method != net::HTTP::method::put)
-            return error_response (405, m, problem::invalid_method, "use put");
+            return error_response (405, m, command::problem::invalid_method, "use put");
 
-        return error_response (501, m, problem::unimplemented);
+        return error_response (501, m, command::problem::unimplemented);
     }
 
     if (m == command::EXPORT_WALLET) {
         if (http_method != net::HTTP::method::put)
-            return error_response (405, m, problem::invalid_method, "use post");
+            return error_response (405, m, command::problem::invalid_method, "use post");
 
-        return error_response (501, m, problem::unimplemented);
+        return error_response (501, m, command::problem::unimplemented);
     }
 
-    return error_response (501, m, problem::unimplemented);
+    return error_response (501, m, command::problem::unimplemented);
 }
 
 net::HTTP::response favicon () {
@@ -477,25 +479,31 @@ net::HTTP::response handle_generate (server &p,
     if (checked != generate_error::valid)
         switch (checked) {
             case generate_error::words_vs_mnemonic_style:
-                return error_response (400, command::GENERATE, problem::invalid_parameter,
+                return error_response (400, command::GENERATE, command::problem::invalid_parameter,
                     "If derivation_style is BIP_44, then coin_type must be povided and not be 'none'");
+
             case generate_error::centbee_vs_coin_type:
-                return error_response (400, command::GENERATE, problem::invalid_parameter,
+                return error_response (400, command::GENERATE, command::problem::invalid_parameter,
                     "If derivation_style is CentBee, then coin_type, if provided, must be 'none'");
+
             case generate_error::neither_style_nor_coin_type:
-                return error_response (400, command::GENERATE, problem::invalid_parameter,
+                return error_response (400, command::GENERATE, command::problem::invalid_parameter,
                     "Either derivation_style or coin_type must be provided");
+
             case generate_error::mnemonic_vs_number_of_words:
-                return error_response (400, command::GENERATE, problem::invalid_parameter,
+                return error_response (400, command::GENERATE, command::problem::invalid_parameter,
                     "if mnemonic is none, then number_of_words must not be present");
+
             case generate_error::invalid_number_of_words:
-                return error_response (400, command::GENERATE, problem::invalid_parameter,
+                return error_response (400, command::GENERATE, command::problem::invalid_parameter,
                     string::write ("'number_of_words' should be either 12 or 24 and instead is ", gen.number_of_words ()));
+
             case generate_error::zero_accounts:
-                return error_response (400, command::GENERATE, problem::invalid_parameter,
+                return error_response (400, command::GENERATE, command::problem::invalid_parameter,
                     "cannot have zero accounts");
+
             default:
-                return error_response (500, command::GENERATE, problem::failed);
+                return error_response (500, command::GENERATE, command::problem::failed);
         }
 
 
@@ -512,10 +520,10 @@ net::HTTP::response handle_generate (server &p,
     if (result != generate_error::valid)
         switch (result) {
             case generate_error::wallet_already_exists:
-                return error_response (500, command::GENERATE, problem::failed,
+                return error_response (500, command::GENERATE, command::problem::failed,
                     string::write ("wallet ", gen.name (), " already exists"));
             default:
-                return error_response (500, command::GENERATE, problem::failed);
+                return error_response (500, command::GENERATE, command::problem::failed);
         }
 
     if (gen.mnemonic_style () != ::mnemonic_style::none)
@@ -602,20 +610,20 @@ net::HTTP::response handle_restore (server &p,
                 if (bool (derivation_style_option)) {
                     if (*derivation_style_option == derivation_style::BIP_44) {
                         if (!bool (CoinType) || !bool (*CoinType))
-                            return error_response (400, command::RESTORE, problem::invalid_parameter,
+                            return error_response (400, command::RESTORE, command::problem::invalid_parameter,
                                 "If derivation_style is BIP_44, then coin_type must be povided and not be 'none'");
                     } else {
                         if (!bool (CoinType)) {
                             if (guess_coin_type)
-                                return error_response (400, command::RESTORE, problem::invalid_query,
+                                return error_response (400, command::RESTORE, command::problem::invalid_query,
                                     "Do not need to guess coin type since we have derivation_style=centbee");
                             else CoinType = coin_type {};
                         } if (bool (CoinType) && bool (*CoinType))
-                            return error_response (400, command::RESTORE, problem::invalid_parameter,
+                            return error_response (400, command::RESTORE, command::problem::invalid_parameter,
                                 "If derivation_style is CentBee, then coin_type, if provided, must be 'none'");
                     }
                 } else if (!bool (CoinType))
-                    return error_response (400, command::RESTORE, problem::invalid_parameter,
+                    return error_response (400, command::RESTORE, command::problem::invalid_parameter,
                         "Either derivation_style or coin_type must be provided");
 
                 if (bool (wallet_type_option)) WalletStyle = *wallet_type_option;
@@ -626,7 +634,7 @@ net::HTTP::response handle_restore (server &p,
 
         // if we do not know coin type at this point, then guess coin type must be set.
         if (!CoinType && !guess_coin_type)
-            return error_response (400, command::RESTORE, problem::invalid_query,
+            return error_response (400, command::RESTORE, command::problem::invalid_query,
                 "Please provide a coin_type parameter or set guess_coin_type to true");
 
         // this happens if entropy or mnemonic was provided.
@@ -668,14 +676,14 @@ net::HTTP::response handle_restore (server &p,
 
                         // must be in the correct range.
                         if (centbee_PIN > 9999)
-                            return error_response (400, command::RESTORE, problem::invalid_query, "Invalid CentBee PIN range");
+                            return error_response (400, command::RESTORE, command::problem::invalid_query, "Invalid CentBee PIN range");
 
                         password = std::to_string (centbee_PIN);
                     } break;
                     case 2: {
                         guess_CentBee_PIN = std::get<2> (*password_option);
                         if (!guess_CentBee_PIN)
-                            return error_response (400, command::RESTORE, problem::invalid_query,
+                            return error_response (400, command::RESTORE, command::problem::invalid_query,
                                 "Please set guess_centbee_pin to true and we will attempt to figure it out.");
 
                     }
@@ -683,12 +691,12 @@ net::HTTP::response handle_restore (server &p,
                     if (password_option->index () != 1) {
                         if (KeyType == master_key_type::invalid) KeyType = master_key_type::BIP44_master;
                         else if (KeyType != master_key_type::BIP44_master)
-                            return error_response (400, command::RESTORE, problem::invalid_query,
+                            return error_response (400, command::RESTORE, command::problem::invalid_query,
                                 "CentBee option implies that key_type must be BIP_44_master");
 
                         if (WalletStyle == wallet_type::invalid) WalletStyle = wallet_type::BIP_44;
                         else if (WalletStyle != wallet_type::BIP_44)
-                            return error_response (400, command::RESTORE, problem::invalid_query,
+                            return error_response (400, command::RESTORE, command::problem::invalid_query,
                                 "CentBee option implies that wallet_type must be BIP_44");
                     }
                 }
@@ -702,12 +710,12 @@ net::HTTP::response handle_restore (server &p,
                     if (derive_from_mnemonic) {
                         WalletStyle == wallet_type::BIP_44;
                         break;
-                    } else return error_response (400, command::RESTORE, problem::missing_parameter,
+                    } else return error_response (400, command::RESTORE, command::problem::missing_parameter,
                         "Need to set parameter style");
                 }
                 case wallet_type::address:
                 case wallet_type::HD_sequence:
-                    return error_response (400, command::RESTORE, problem::invalid_query,
+                    return error_response (400, command::RESTORE, command::problem::invalid_query,
                         "derivation from mnemonic is incompatible with single address or hd sequence wallet styles.");
             }
 
@@ -717,13 +725,13 @@ net::HTTP::response handle_restore (server &p,
             if (guess_CentBee_PIN) throw data::method::unimplemented {"method::RESTORE: guess centbee pin"};
             else if (MnemonicStyle == mnemonic_style::BIP_39) {
                 if (!HD::BIP_39::valid (words))
-                    return error_response (400, command::RESTORE, problem::invalid_query,
+                    return error_response (400, command::RESTORE, command::problem::invalid_query,
                         "Invalid mnemonic provided.");
 
                 seed = HD::BIP_39::read (words, password);
             } else {
                 if (!HD::Electrum_SV::valid (words))
-                    return error_response (400, command::RESTORE, problem::invalid_query,
+                    return error_response (400, command::RESTORE, command::problem::invalid_query,
                         "Invalid mnemonic provided.");
 
                 seed = HD::Electrum_SV::read (words, password);
@@ -741,7 +749,7 @@ net::HTTP::response handle_restore (server &p,
             if (Bitcoin::address perhaps_address {key_option}; perhaps_address.valid ()) {
                 if (bool (type_option)) {
                     if (*type_option != master_key_type::single_address)
-                        return error_response (400, command::RESTORE, problem::invalid_query,
+                        return error_response (400, command::RESTORE, command::problem::invalid_query,
                             "Restoring a bitcoin address is only compatible with key type single_address");
                 } else KeyType = master_key_type::single_address;
 
@@ -749,7 +757,7 @@ net::HTTP::response handle_restore (server &p,
             } else if (Bitcoin::pubkey perhaps_pubkey {key_option}; perhaps_pubkey.valid ()) {
                 if (bool (type_option)) {
                     if (*type_option != master_key_type::single_address)
-                        return error_response (400, command::RESTORE, problem::invalid_query,
+                        return error_response (400, command::RESTORE, command::problem::invalid_query,
                             "Restoring a bitcoin pubkey is only compatible with key type single_address");
                 } else KeyType = master_key_type::single_address;
 
@@ -757,7 +765,7 @@ net::HTTP::response handle_restore (server &p,
             } else if (Bitcoin::secret perhaps_WIF {key_option}; perhaps_WIF.valid ()) {
                 if (bool (type_option)) {
                     if (*type_option != master_key_type::single_address)
-                        return error_response (400, command::RESTORE, problem::invalid_query,
+                        return error_response (400, command::RESTORE, command::problem::invalid_query,
                             "Restoring a bitcoin WIF is only compatible with key type single_address");
                 } else KeyType = master_key_type::single_address;
 
@@ -765,7 +773,7 @@ net::HTTP::response handle_restore (server &p,
             } else if (HD::BIP_32::pubkey perhaps_HD_pubkey {key_option}; perhaps_HD_pubkey.valid ()) {
                 if (bool (type_option)) {
                     if (*type_option == master_key_type::single_address)
-                        return error_response (400, command::RESTORE, problem::invalid_query,
+                        return error_response (400, command::RESTORE, command::problem::invalid_query,
                             "HD pubkey is incompatible with key type single_address");
                 }
 
@@ -773,7 +781,7 @@ net::HTTP::response handle_restore (server &p,
             } else if (HD::BIP_32::secret perhaps_secret {key_option}; perhaps_secret.valid ()) {
                 if (bool (type_option)) {
                     if (*type_option == master_key_type::single_address)
-                        return error_response (400, command::RESTORE, problem::invalid_query,
+                        return error_response (400, command::RESTORE, command::problem::invalid_query,
                             "HD secret is incompatible with key type single_address");
                 }
 
@@ -793,10 +801,10 @@ net::HTTP::response handle_restore (server &p,
                 } break;
                 case wallet_type::address:
                     if (KeyType != master_key_type::single_address)
-                        return error_response (400, command::RESTORE, problem::invalid_query,
+                        return error_response (400, command::RESTORE, command::problem::invalid_query,
                             "derivation from mnemonic is incompatible with single address or hd sequence wallet styles.");
                 case wallet_type::HD_sequence:
-                    return error_response (400, command::RESTORE, problem::invalid_query,
+                    return error_response (400, command::RESTORE, command::problem::invalid_query,
                         "derivation from mnemonic is incompatible with single address or hd sequence wallet styles.");
             }
 
@@ -810,7 +818,7 @@ net::HTTP::response handle_restore (server &p,
 
     // NOTE: we do not necessarily want to make a whole new wallet every time we restore.
     if (!p.DB.make_wallet (wallet_name))
-        return error_response (500, command::RESTORE, problem::failed,
+        return error_response (500, command::RESTORE, command::problem::failed,
             string::write ("wallet ", wallet_name, " already exists"));
 
     // set master key

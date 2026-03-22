@@ -1,7 +1,7 @@
 #include <Cosmos/REST/problem.hpp>
 #include <data/io/exception.hpp>
 
-namespace Cosmos {
+namespace Cosmos::command {
 
     std::ostream &operator << (std::ostream &o, problem p) {
         switch (p) {

@@ -97,6 +97,7 @@ namespace Cosmos {
 
     // set of options provided in a http request that are
     // used to generate a new wallet.
+    // TODO we seem to use two different schemas for generate.
     struct generate_request_options {
 
         Diophant::symbol Name {};

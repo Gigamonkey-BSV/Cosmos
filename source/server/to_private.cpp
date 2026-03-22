@@ -28,28 +28,28 @@ net::HTTP::response handle_to_private (
     std::cout << "read key expression from query as " << key << std::endl;
 
     if (!key.valid ())
-        return error_response (400, command::TO_PRIVATE, problem::invalid_parameter,
+        return error_response (400, command::TO_PRIVATE, command::problem::invalid_parameter,
             "invalid parameter 'key'");
 
     if (http_method == net::HTTP::method::put) {
         if (!bool (content_type) || *content_type != net::HTTP::content::type::text_plain)
-            return error_response (400, command::TO_PRIVATE, problem::invalid_content_type, "expected content-type:text/plain");
+            return error_response (400, command::TO_PRIVATE, command::problem::invalid_content_type, "expected content-type:text/plain");
 
         key_expression value {data::string (body)};
 
         std::cout << "read key expression from body as " << value << std::endl;
 
         if (p.DB.set_to_private (key, value)) return ok_response ();
-        return error_response (500, command::TO_PRIVATE, problem::failed, "could not set private key");
+        return error_response (500, command::TO_PRIVATE, command::problem::failed, "could not set private key");
     }
 
     if (http_method == net::HTTP::method::get) {
 
         key_expression pk = p.DB.get_to_private (key);
 
-        if (!pk.valid ()) return error_response (404, command::TO_PRIVATE, problem::failed, "Could not retrieve key");
+        if (!pk.valid ()) return error_response (404, command::TO_PRIVATE, command::problem::failed, "Could not retrieve key");
         return string_response (pk);
     }
 
-    return error_response (405, command::TO_PRIVATE, problem::invalid_method, "use put or get");
+    return error_response (405, command::TO_PRIVATE, command::problem::invalid_method, "use put or get");
 }

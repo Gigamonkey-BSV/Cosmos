@@ -248,6 +248,7 @@ add_library (
     source/Cosmos/REST/problem.cpp
     source/Cosmos/REST/generate.cpp
     source/Cosmos/REST/restore.cpp
+    source/Cosmos/REST/import.cpp
     source/Cosmos/REST/REST.cpp
 )
 

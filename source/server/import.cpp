@@ -7,35 +7,51 @@ using namespace Cosmos;
 
 net::HTTP::response handle_import (
     server &p, const Diophant::symbol &wallet_name,
-    dispatch<UTF8, UTF8> query,
+    const dispatch<UTF8, UTF8> query,
     const maybe<net::HTTP::content> &content_type,
     const data::bytes &body) {
 
-        // we need to find addresses and xpubs that we need to check.
+    import_request_options opts {wallet_name, query, content_type, body};
 
-        if (!content_type)
-            return error_response (405, command::IMPORT, problem::invalid_parameter,
-                "put transaction in body");
+    // if opts is not valid, we need to return an error.
 
-        using WIF = Bitcoin::WIF;
-        using BEEF = Gigamonkey::BEEF;
+    // first we figure out how many outpoints we have been given because if there's one, it's a special case.
 
-        WIF wif;
-        BEEF beef;
+    // next we try to fill in all transactions that are not complete as BEEFs.
 
-        if (*content_type == net::HTTP::content::application_octet_stream) {
-            beef = BEEF {body};
-        } else if (*content_type == net::HTTP::content::application_json) {
-            //beef = BEEF {JSON (std::string (data::string (body)))};
-        } else return error_response (405, command::IMPORT, problem::invalid_parameter,
-                "Transaction should be BEEF format in JSON or octet stream");
+    // if there are no outpoints go through them all outputs.
 
-        // TODO go through my old code and incorporate other stuff.
-        if (!beef.valid ())
-            return error_response (405, command::IMPORT, problem::invalid_parameter,
-                "Invalid transaction.");
+    // go through all outpoints.
 
-        map<digest160, maybe<HD::BIP_32::pubkey>> unused;
+    // finally, let's examine any keys that we haven't looked at yet.
+
+
+
+    // we need to find addresses and xpubs that we need to check.
+
+    if (!content_type)
+        return error_response (405, command::IMPORT, command::problem::invalid_parameter,
+            "put transaction in body");
+
+    using WIF = Bitcoin::WIF;
+    using BEEF = Gigamonkey::BEEF;
+
+    WIF wif;
+    BEEF beef;
+
+    if (*content_type == net::HTTP::content::application_octet_stream) {
+        beef = BEEF {body};
+    } else if (*content_type == net::HTTP::content::application_json) {
+        //beef = BEEF {JSON (std::string (data::string (body)))};
+    } else return error_response (405, command::IMPORT, command::problem::invalid_parameter,
+            "Transaction should be BEEF format in JSON or octet stream");
+
+    // TODO go through my old code and incorporate other stuff.
+    if (!beef.valid ())
+        return error_response (405, command::IMPORT, command::problem::invalid_parameter,
+            "Invalid transaction.");
+
+    map<digest160, maybe<HD::BIP_32::pubkey>> unused;
 /*
         for (const database::unused &u : p.DB.get_wallet_unused (wallet_name)) {
             if (Bitcoin::address a {u}; a.valid ())
@@ -47,10 +63,10 @@ net::HTTP::response handle_import (
 
         }*/
 
-        // now go through the tx and check for these unused addresses.
+    // now go through the tx and check for these unused addresses.
 
 
-        // first we need a function that recognizes output patterns.
-        return error_response (501, command::IMPORT, problem::unimplemented);
+    // first we need a function that recognizes output patterns.
+    return error_response (501, command::IMPORT, command::problem::unimplemented);
 
 }

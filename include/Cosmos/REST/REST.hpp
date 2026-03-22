@@ -64,9 +64,7 @@ namespace Cosmos {
 
         net::HTTP::request request_value (const Diophant::symbol &wallet_name) const;
 
-        net::HTTP::request request (const import_request_options &) const {
-            throw data::method::unimplemented {"import request"};
-        }
+        net::HTTP::request request (const import_request_options &) const;
 
         net::HTTP::request request (const next_request_options &) const;
         net::HTTP::request request (const generate_request_options &) const;
@@ -117,16 +115,15 @@ namespace Cosmos {
     }
 
     inline next_request_options::next_request_options (const args::parsed &p) {
-        auto validated = args::validate (p,
+        auto [flags, args, options] = args::validate (p,
             args::command {
                 set<std::string> {},
-                schema::list::value<std::string> () +
-                    schema::list::value<command::method> () +
+                schema::list::blank () + schema::list::blank () +
                     schema::list::value<Diophant::symbol> (),
                 *schema::map::key<Diophant::symbol> ("sequence") && command::call_options ()});
-        auto [sequence_name, _] = validated.Options;
+        auto [sequence_name, rest] = options;
 
-        Name = std::get<2> (validated.Arguments);
+        Name = std::get<2> (args);
         Sequence = sequence_name;
     }
 

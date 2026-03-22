@@ -18,7 +18,7 @@ bool import_output (Cosmos::database &db, Cosmos::network &net, const Bitcoin::W
 
 net::HTTP::response handle_import (server &p,
     const Diophant::symbol &wallet_name,
-    dispatch<UTF8, UTF8> query,
+    const dispatch<UTF8, UTF8> query,
     const maybe<net::HTTP::content> &content_type,
     const data::bytes &body);
 

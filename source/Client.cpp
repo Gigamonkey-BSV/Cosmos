@@ -21,8 +21,6 @@ using error = data::io::error;
 
 error run (const args::parsed &p);
 
-using error = data::io::error;
-
 namespace data::random {
     bytes Personalization {string {"Cosmos wallet client v1alpha"}};
 }
@@ -118,6 +116,7 @@ error call_server (command::method m, const args::parsed &p) {
             return process_JSON_response (call (make_request<LIST_WALLETS> (p)));
 
         case GENERATE: {
+            // TODO we should process these errors by catching exceptions
             generate_request_options opts {p};
 
             switch (opts.check ()) {
@@ -136,30 +135,19 @@ error call_server (command::method m, const args::parsed &p) {
             auto res = call (make_request<GENERATE> (p));
 
             if (read_ok_response (res)) return {};
-            auto words = read_string_response (res);
-            if (words) {
-                std::cout << *words << std::endl;
-                return {};
-            }
-
-            return process_unexpected_response (res);
+            return process_string_response (res);
         }
 
         case RESTORE: {
-            std::cout << "method restore..." << std::endl;
-            restore_request_options opts {};
             try {
-                opts = restore_request_options {p};
+                return process_JSON_response (call (make_request<RESTORE> (p)));
             } catch (const schema::missing_key &x) {
-                std::cout << "missing key for key " << x.Key << std::endl;
                 if (x.Key == "entropy" || x.Key == "master_key" || x.Key == "mnemonic") {
                     std::cout << "We require a value for either 'mnemonic', 'entropy', or 'master_key' in order to restore a wallet." << std::endl;
                     return error {error::code {3}};
                 }
                 throw x;
             }
-
-            return process_JSON_response (call (make_request<RESTORE> (p)));
         }
 
         case VALUE: {

@@ -38,7 +38,7 @@ maybe<std::string> de_escape (string_view input) {
     return {decoded.str ()};
 }
 
-net::HTTP::response error_response (unsigned int status, Cosmos::command::method m, Cosmos::problem tt, const std::string &detail) {
+net::HTTP::response error_response (unsigned int status, Cosmos::command::method m, Cosmos::command::problem tt, const std::string &detail) {
     std::stringstream meth_string;
     meth_string << m;
     std::stringstream problem_type;

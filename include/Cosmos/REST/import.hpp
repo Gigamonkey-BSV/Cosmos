@@ -9,6 +9,8 @@
 
 namespace schema = data::schema;
 
+namespace args = data::io::args;
+
 using BEEF = Gigamonkey::BEEF;
 
 namespace Cosmos {
@@ -23,16 +25,16 @@ namespace Cosmos {
 
         import_request_options () {}
 
-        import_request_options (Diophant::symbol wallet_name, map<std::string, list<std::string>> args);
+        // read from HTTP request
+        import_request_options (
+            const Diophant::symbol &wallet_name,
+            const dispatch<UTF8, UTF8> query,
+            const maybe<net::HTTP::content> &content_type,
+            const data::bytes &body);
 
         bool valid () const;
 
-
-        import_request_options (const args::parsed &) {
-            throw data::method::unimplemented {"parsed -> import_request_options"};
-        }
-
-        import_request_options (Diophant::symbol wallet_name, map<UTF8, UTF8> query);
+        import_request_options (const args::parsed &p);
     };
 }
 

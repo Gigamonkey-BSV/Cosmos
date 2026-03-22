@@ -19,7 +19,7 @@ std::ostream &version (std::ostream &o);
 
 std::ostream &help (std::ostream &o, Cosmos::command::method meth = Cosmos::command::UNSET);
 
-net::HTTP::response error_response (unsigned int status, Cosmos::command::method m, Cosmos::problem, const std::string & = "");
+net::HTTP::response error_response (unsigned int status, Cosmos::command::method m, Cosmos::command::problem, const std::string & = "");
 
 net::HTTP::response help_response (Cosmos::command::method = Cosmos::command::UNSET);
 

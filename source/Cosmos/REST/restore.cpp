@@ -28,12 +28,12 @@ namespace Cosmos {
     }
 
     restore_request_options::restore_request_options (const args::parsed &p) {
-        std::cout << "validate restore options " << p.Options << std::endl;
         // we must have either a key and optional key type, entropy, or words.
-        auto [flags, name, opts] = args::validate (p, args::command {
-            set<std::string> {}, schema::list::value<Diophant::symbol> (), schema () && command::call_options ()});
+        auto [flags, args, opts] = args::validate (p, args::command {
+            set<std::string> {}, schema::list::blank () + schema::list::blank () +
+                schema::list::value<Diophant::symbol> (), schema () && command::call_options ()});
 
-        this->Name = name;
+        this->Name = std::get<2> (args);
 
         auto [
             derivation_options,

@@ -321,10 +321,13 @@ namespace Cosmos {
     }
 
     generate_request_options::generate_request_options (const args::parsed &p) {
-        auto [flags, name, opts] = args::validate (p, args::command {
+        auto [flags, args, opts] = args::validate (p, args::command {
             set<std::string> {"words", "no_words"},
-            schema::list::value<Diophant::symbol> (),
-                *schema::map::key<Cosmos::mnemonic_style> ("mnemonic_style") &&
+            // the first two args are the original command and the method.
+            schema::list::blank () + schema::list::blank () +
+                // this is the name of the wallet.
+                schema::list::value<Diophant::symbol> (),
+            *schema::map::key<Cosmos::mnemonic_style> ("mnemonic_style") &&
                 *schema::map::key<uint32> ("number_of_words") &&
                 *schema::map::key<Cosmos::coin_type> ("coin_type") &&
                 *schema::map::key<Cosmos::derivation_style> ("derivation_style") &&
@@ -333,7 +336,7 @@ namespace Cosmos {
                 *schema::map::key<uint32> ("accounts") &&
                 *schema::map::key<std::string> ("password") && command::call_options ()});
 
-        Name = name;
+        Name = std::get<2> (args);
 
         bool mnemonic = !flags["no_words"];
 
