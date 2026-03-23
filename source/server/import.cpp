@@ -5,6 +5,10 @@
 
 using namespace Cosmos;
 
+struct retriever {
+
+};
+
 net::HTTP::response handle_import (
     server &p, const Diophant::symbol &wallet_name,
     const dispatch<UTF8, UTF8> query,
@@ -13,11 +17,32 @@ net::HTTP::response handle_import (
 
     import_request_options opts {wallet_name, query, content_type, body};
 
+    // TODO
     // if opts is not valid, we need to return an error.
 
-    // first we figure out how many outpoints we have been given because if there's one, it's a special case.
+    // open a channel to whatsonchain.
 
-    // next we try to fill in all transactions that are not complete as BEEFs.
+    // index all txs
+    map<Bitcoin::TxID, list<size_t>> txi;
+
+    // we try to fill in all transactions that are not complete as BEEFs.
+    int ind = 0;
+    for (const auto &t : opts.Txs) t.visit ([&](const auto &n) {
+        if constexpr (std::is_same_v<std::decay_t<decltype (n)>, Bitcoin::TxID>) {
+
+        } else {
+
+        }
+    });
+
+    // add all txids in outpoints not already in the list.
+
+    // import all txs into the database.
+
+    // first we figure out how many outpoints we have been given because if there's one, it's a special case.
+    if (opts.Outpoints.size () == 1) {
+
+    }
 
     // if there are no outpoints go through them all outputs.
 

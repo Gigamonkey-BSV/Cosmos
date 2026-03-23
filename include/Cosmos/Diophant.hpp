@@ -6,7 +6,7 @@
 
 namespace Cosmos::diophant {
 
-    void initialize (ptr<database>);
+    void initialize (ptr<controller>);
     key_expression to_private (const key_expression &);
     bytes invert_hash (const bytes &digest);
 

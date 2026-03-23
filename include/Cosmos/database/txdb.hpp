@@ -155,7 +155,6 @@ namespace Cosmos {
             broadcast_multiple_result {r}, Sub {nodes} {}
     };
 
-
     // an implementation of TXDB that relies on
     // a local database and a network connection.
     struct cached_remote_TXDB final : public TXDB {

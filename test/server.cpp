@@ -19,7 +19,7 @@ constexpr const char *const arg_values[arg_count] = {"--sqlite_in_memory", "--ig
 
 bool log_init = false;
 
-ptr<database> DB;
+ptr<controller> DB;
 
 namespace data::random {
     bytes Personalization {string {"Cosmos wallet server test cases"}};
@@ -39,7 +39,7 @@ server get_test_server () {
 
     Cosmos::diophant::initialize (DB);
 
-    return server {program_options.spend_options (), *DB, nullptr, nullptr};
+    return server {program_options.spend_options (), *DB, nullptr};
 }
 
 using namespace Cosmos;

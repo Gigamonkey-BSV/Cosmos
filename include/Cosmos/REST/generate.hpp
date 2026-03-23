@@ -182,9 +182,9 @@ namespace Cosmos {
     };
 
     // return the mnemonic if the generate function succeeded
-    generate_error generate (database &DB, const std::string &words, const generate_request_options &);
+    generate_error generate (controller &DB, const std::string &words, const generate_request_options &);
 
-    net::HTTP::response handle_generate (database &DB,
+    net::HTTP::response handle_generate (controller &DB,
         Diophant::symbol wallet_name, dispatch<UTF8, UTF8> query,
         const maybe<net::HTTP::content> &content_type,
         const data::bytes &body);

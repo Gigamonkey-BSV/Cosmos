@@ -20,13 +20,12 @@ struct server {
 
     Cosmos::spend_options SpendOptions;
 
-    Cosmos::network *Net;
-    database &DB;
+    controller &DB;
 
     Cosmos::random::user_entropy *UserEntropy;
 
-    server (const Cosmos::spend_options &x, database &db, Cosmos::network *net, Cosmos::random::user_entropy *ue):
-        SpendOptions {x}, Net {net}, DB {db}, UserEntropy {ue} {}
+    server (const Cosmos::spend_options &x, controller &db, Cosmos::random::user_entropy *ue):
+        SpendOptions {x}, DB {db}, UserEntropy {ue} {}
 
     // handle an HTTP request.
     awaitable<net::HTTP::response> operator () (const net::HTTP::request &);

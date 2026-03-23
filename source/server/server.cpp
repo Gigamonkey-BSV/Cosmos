@@ -311,7 +311,7 @@ net::HTTP::response process_wallet_method (
             return error_response (500, command::NEXT, command::problem::failed);
 
         // make an unused reference to put in the database for later.
-        p.DB.set_wallet_unused (wallet_name, database::unused {next_key, sequence.Sequence.Key});
+        p.DB.set_wallet_unused (wallet_name, controller::unused {next_key, sequence.Sequence.Key});
 
         p.DB.set_wallet_sequence (wallet_name, *opts.Sequence, sequence.Sequence, sequence.Index + 1);
 

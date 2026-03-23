@@ -4,7 +4,7 @@ namespace Cosmos::diophant {
 
     maybe<Diophant::machine> machine {};
 
-    void initialize (ptr<database>) {
+    void initialize (ptr<controller>) {
         if (bool (machine)) return;
         machine = Diophant::initialize ();
 

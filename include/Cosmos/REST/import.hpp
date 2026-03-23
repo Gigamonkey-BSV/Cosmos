@@ -6,6 +6,7 @@
 #include <data/io/arg_parser.hpp>
 #include <gigamonkey/pay/BEEF.hpp>
 #include <Cosmos/Diophant.hpp>
+#include <Cosmos/network.hpp>
 
 namespace schema = data::schema;
 

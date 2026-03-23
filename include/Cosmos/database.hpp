@@ -12,7 +12,7 @@ template <typename X> using slice = data::slice<X>;
 
 namespace Cosmos {
 
-    struct database;
+    struct controller;
 
     void setup_BIP_44_wallet (const HD::BIP_32::secret &master, list<uint32> accounts = {1});
 
@@ -34,7 +34,7 @@ namespace Cosmos {
     std::ostream &operator << (std::ostream &, hash_function);
     std::istream &operator << (std::istream &, hash_function &);
 
-    struct database : local_TXDB, local_price_data {
+    struct controller : local_TXDB, local_price_data {
 
         virtual bool set_invert_hash (slice<const byte> digest, hash_function, slice<const byte> data) = 0;
         virtual maybe<tuple<hash_function, bytes>> get_invert_hash (slice<const byte>) = 0;

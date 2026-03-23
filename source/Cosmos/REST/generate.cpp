@@ -254,7 +254,7 @@ namespace Cosmos {
         return generate_error::valid;
     }
 
-    generate_error generate (database &DB, const std::string &wallet_words, const generate_request_options &gen) {
+    generate_error generate (controller &DB, const std::string &wallet_words, const generate_request_options &gen) {
 
         auto root = HD::BIP_32::secret::from_seed (HD::BIP_39::read (wallet_words));
 

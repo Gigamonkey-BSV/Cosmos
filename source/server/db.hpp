@@ -25,9 +25,9 @@ struct MongoDB_options {
 
 using db_options = either<JSON_DB_options, SQLite_options, MongoDB_options>;
 
-using database = Cosmos::database;
+using controller = Cosmos::controller;
 
-ptr<database> load_DB (const db_options &o);
+ptr<controller> load_DB (const db_options &o);
 
 namespace Cosmos {
 

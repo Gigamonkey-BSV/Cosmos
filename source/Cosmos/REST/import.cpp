@@ -52,37 +52,29 @@ namespace Cosmos {
 
     }
 
-    list<import_request_options::tx> read_body (data::reader<byte> &r) {
-        list<import_request_options::tx> txs;
-        while (true) {
-            uint32_little version;
-            try {
-                r >> version;
-            } catch (data::end_of_stream) {
-                return txs;
-            }
-
-            // this is a BEEF
-            if (version > 0xEFBE0001) {
-                BEEF h;
-                h.Version = version;
-                Bitcoin::var_sequence<BEEF::transaction>::read
-                    (Bitcoin::var_sequence<Merkle::BUMP>::read (r, h.BUMPs), h.Transactions);
-                txs <<= import_request_options::tx {h};
-            } else {
-                Bitcoin::transaction t;
-                t.Version = int32_little (version);
-                r >> Bitcoin::var_sequence<Bitcoin::input> {t.Inputs} >> Bitcoin::var_sequence<Bitcoin::output> {t.Outputs} >> t.LockTime;
-                txs <<= import_request_options::tx {t};
-            }
-        }
-    }
-
     list<import_request_options::tx> read_body (const bytes &b) {
         data::iterator_reader r {b.begin (), b.end ()};
         list<import_request_options::tx> txs;
         try {
-            txs = read_body (r);
+            while (true) {
+                if (r.empty ()) break;
+                uint32_little version;
+                r >> version;
+
+                // this is a BEEF
+                if (version > 0xEFBE0001) {
+                    BEEF h;
+                    h.Version = version;
+                    Bitcoin::var_sequence<BEEF::transaction>::read
+                    (Bitcoin::var_sequence<Merkle::BUMP>::read (r, h.BUMPs), h.Transactions);
+                    txs <<= import_request_options::tx {h};
+                } else {
+                    Bitcoin::transaction t;
+                    t.Version = int32_little (version);
+                    r >> Bitcoin::var_sequence<Bitcoin::input> {t.Inputs} >> Bitcoin::var_sequence<Bitcoin::output> {t.Outputs} >> t.LockTime;
+                    txs <<= import_request_options::tx {t};
+                }
+            }
         } catch (const data::end_of_stream &) {
             throw command::exception {400, command::problem::invalid_content_type, command::IMPORT};
         }

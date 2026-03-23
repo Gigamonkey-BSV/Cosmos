@@ -600,7 +600,7 @@ namespace Cosmos::SQLite {
         );
     }
 
-    struct db final : database {
+    struct db final : controller {
         using SPV::database::block_header;
         using SPV::database::tx;
 
@@ -1262,11 +1262,11 @@ namespace Cosmos::SQLite {
 
     };
 
-    ptr<database> load (const data::maybe<filepath> &fzf) {
+    ptr<controller> load (const data::maybe<filepath> &fzf) {
         std::string path;
         if (!bool (fzf)) path = ":memory:";
         else path = *fzf;
-        return std::static_pointer_cast<database> (std::make_shared<db> (path));
+        return std::static_pointer_cast<controller> (std::make_shared<db> (path));
     }
 
 }

@@ -65,7 +65,7 @@ namespace Cosmos {
             transaction (int32_little, list<input>, list<Bitcoin::output>, uint32_little);
 
             // attempt to retrieve all keys and sign.
-            transaction sign (database &) const;
+            transaction sign (controller &) const;
 
             // throws if signatures are not complete.
             explicit operator Bitcoin::incomplete::transaction () const;

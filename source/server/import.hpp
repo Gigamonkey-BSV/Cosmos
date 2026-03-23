@@ -13,9 +13,6 @@
 // * index       -- index of output to import.
 // * script_code -- if we are importing some weird output, there may be a script code.
 
-bool import_output (Cosmos::database &db, Cosmos::network &net, const Cosmos::redeemable &);
-bool import_output (Cosmos::database &db, Cosmos::network &net, const Bitcoin::WIF &);
-
 net::HTTP::response handle_import (server &p,
     const Diophant::symbol &wallet_name,
     const dispatch<UTF8, UTF8> query,

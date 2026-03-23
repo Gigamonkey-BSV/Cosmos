@@ -10,8 +10,8 @@ namespace Cosmos {
 
 namespace Cosmos::SQLite {
 
-    ptr<database> load (const data::maybe<filepath> &fzf);
-    ptr<database> load_and_update (const data::maybe<filepath> &fzf, const JSON_local_TXDB *);
+    ptr<controller> load (const data::maybe<filepath> &fzf);
+    ptr<controller> load_and_update (const data::maybe<filepath> &fzf, const JSON_local_TXDB *);
 
 }
 

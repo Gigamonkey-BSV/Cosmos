@@ -94,7 +94,7 @@ namespace data {
 // we use this to handle all concurrent programming.
 boost::asio::io_context IO;
 
-ptr<database> DB;
+ptr<controller> DB;
 std::unique_ptr<Cosmos::network> Network;
 
 Cosmos::random::user_entropy UserEntropy;
@@ -184,7 +184,7 @@ void run (const options &program_options) {
                 " to see the GUI.";
 
         Server = std::unique_ptr<net::HTTP::server> {new net::HTTP::server
-            (IO.get_executor (), endpoint, server {program_options.spend_options (), *DB, Network.get (), &UserEntropy})};
+            (IO.get_executor (), endpoint, server {program_options.spend_options (), *DB, &UserEntropy})};
     }
 
     // We should be able to work with multiple threads now except
