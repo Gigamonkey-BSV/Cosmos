@@ -70,7 +70,7 @@ namespace Cosmos {
                     txs <<= import_request_options::tx {h};
                 } else {
                     Bitcoin::transaction t;
-                    t.Version = int32_little (version);
+                    std::copy (version.begin (), version.end (), t.Version.begin ());
                     r >> Bitcoin::var_sequence<Bitcoin::input> {t.Inputs} >> Bitcoin::var_sequence<Bitcoin::output> {t.Outputs} >> t.LockTime;
                     txs <<= import_request_options::tx {t};
                 }

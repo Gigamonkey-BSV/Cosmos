@@ -1,5 +1,5 @@
 #include <Cosmos/REST/problem.hpp>
-#include <data/io/exception.hpp>
+#include <data/exception.hpp>
 
 namespace Cosmos::command {
 

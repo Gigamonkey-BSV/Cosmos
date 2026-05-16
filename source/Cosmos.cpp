@@ -1,7 +1,7 @@
 
 #include <regex>
 
-#include <data/io/exception.hpp>
+#include <data/exception.hpp>
 #include <data/crypto/NIST_DRBG.hpp>
 
 #include <data/io/wait_for_enter.hpp>

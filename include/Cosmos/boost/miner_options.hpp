@@ -58,7 +58,7 @@ namespace BoostPOW {
         explicit operator output_script () const;
 
         net::HTTP::request request (const UTF8 & = "localhost") {
-            throw data::method::unimplemented {"http request from boost options"};
+            throw data::unimplemented {"http request from boost options"};
         }
     };
 }
