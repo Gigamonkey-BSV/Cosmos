@@ -137,18 +137,18 @@ namespace Cosmos {
     selected select_up_biggest::operator ()
         (const account &acc, Bitcoin::satoshi value_to_spend, satoshis_per_byte fees, data::random::source &r) const {
 
-        throw data::method::unimplemented {"select_up_biggest::operator ()"};
+        throw data::unimplemented {"select_up_biggest::operator ()"};
     }
 
     selected select_up_random::operator ()
         (const account &acc, Bitcoin::satoshi value_to_spend, satoshis_per_byte fees, data::random::source &r) const {
 
-        throw data::method::unimplemented {"select_up_random::operator ()"};
+        throw data::unimplemented {"select_up_random::operator ()"};
     }
 
     selected select_up_and_down::operator ()
         (const account &acc, Bitcoin::satoshi value_to_spend, satoshis_per_byte fees, data::random::source &r) const {
 
-        throw data::method::unimplemented {"select_up_and_down::operator ()"};
+        throw data::unimplemented {"select_up_and_down::operator ()"};
     }
 }

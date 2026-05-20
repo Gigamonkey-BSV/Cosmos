@@ -1,6 +1,6 @@
 
 #include <Cosmos/math/log_triangular_distribution.hpp>
-#include <data/io/exception.hpp>
+#include <data/exception.hpp>
 
 namespace math {
 

@@ -155,26 +155,26 @@ namespace Cosmos::command {
     }
 
     template <> net::HTTP::request make_request<BOOST> (const args::parsed &p) {
-        throw data::method::unimplemented {"make_request<BOOST>"};
+        throw data::unimplemented {"make_request<BOOST>"};
     }
 
     template <> net::HTTP::request make_request<TAXES> (const args::parsed &p) {
-        throw data::method::unimplemented {"make_request<TAXES>"};
+        throw data::unimplemented {"make_request<TAXES>"};
     }
 
     template <> net::HTTP::request make_request<IMPORT_DB> (const args::parsed &p) {
-        throw data::method::unimplemented {"make_request<IMPORT_DB>"};
+        throw data::unimplemented {"make_request<IMPORT_DB>"};
     }
 
     template <> net::HTTP::request make_request<EXPORT_DB> (const args::parsed &p) {
-        throw data::method::unimplemented {"make_request<IMPORT_DB>"};
+        throw data::unimplemented {"make_request<IMPORT_DB>"};
     }
 
     template <> net::HTTP::request make_request<IMPORT_WALLET> (const args::parsed &p) {
-        throw data::method::unimplemented {"make_request<IMPORT_WALLET>"};
+        throw data::unimplemented {"make_request<IMPORT_WALLET>"};
     }
 
     template <> net::HTTP::request make_request<EXPORT_WALLET> (const args::parsed &p) {
-        throw data::method::unimplemented {"make_request<IMPORT_WALLET>"};
+        throw data::unimplemented {"make_request<IMPORT_WALLET>"};
     }
 }

@@ -13,7 +13,7 @@ namespace Cosmos::diophant {
         // * to_private
         // * invert_hash
 
-        //throw data::method::unimplemented {"initialize"};
+        //throw data::unimplemented {"initialize"};
     }
 }
 
@@ -21,12 +21,12 @@ namespace Cosmos {
 
     key_expression to_private (const key_expression &) {
         if (!bool (diophant::machine)) throw data::exception {} << "Diophant machine is not initialized";
-        throw data::method::unimplemented {"to_private"};
+        throw data::unimplemented {"to_private"};
     }
 
     bytes invert_hash (const bytes &digest) {
         if (!bool (diophant::machine)) throw data::exception {} << "Diophant machine is not initialized";
-        throw data::method::unimplemented {"invert_hash"};
+        throw data::unimplemented {"invert_hash"};
     }
 
     key_expression key_derivation::operator () (const key_expression &k, int32 i) const {
@@ -37,7 +37,7 @@ namespace Cosmos {
 
     key_source::operator std::string () const {
         if (!bool (diophant::machine)) throw data::exception {} << "Diophant machine is not initialized";
-        throw data::method::unimplemented {"key_source::operator string"};
+        throw data::unimplemented {"key_source::operator string"};
     }
 
 }

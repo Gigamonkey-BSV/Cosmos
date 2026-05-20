@@ -5,8 +5,6 @@
 #include <Cosmos/database/write.hpp>
 #include <Cosmos/network.hpp>
 
-#include <data/io/unimplemented.hpp>
-
 namespace Bitcoin = Gigamonkey::Bitcoin;
 namespace Merkle = Gigamonkey::Merkle;
 namespace SPV = Gigamonkey::SPV;
@@ -209,7 +207,7 @@ namespace Cosmos {
         if (!valid () || !tx.valid ()) throw data::exception {} << "invalid tx.";
         auto compare_tx = SPV::proof::ordering (Proof, tx.Proof);
         // TODO 
-        throw data::method::unimplemented {"vertex <=>"};
+        throw data::unimplemented {"vertex <=>"};
     }
 
     // whether a Merkle proof is included.

@@ -202,7 +202,7 @@ namespace Cosmos {
                     case Cosmos::restore_wallet_style::CentBee: {
                         CoinTypeDerivationParameter = Cosmos::coin_type {};
                     } break;
-                    default: throw data::method::unimplemented {"wallet types for GENERATE method"};
+                    default: throw data::unimplemented {"wallet types for GENERATE method"};
                 };
             } break;
             case 1: {
@@ -221,13 +221,13 @@ namespace Cosmos {
         }
 
         if (MnemonicStyle == mnemonic_style::Electrum_SV)
-            throw data::method::unimplemented {"Electrum SV mnemonic style"};
+            throw data::unimplemented {"Electrum SV mnemonic style"};
 
         if (WalletType == wallet_type::experimental)
-            throw data::method::unimplemented {"experimental wallet style"};
+            throw data::unimplemented {"experimental wallet style"};
 
         if (bool (Password))
-            throw data::method::unimplemented {"wallet with password"};
+            throw data::unimplemented {"wallet with password"};
 
         if (accounts_param) Accounts = *accounts_param;
     }
@@ -372,7 +372,7 @@ namespace Cosmos {
         }
 
         if (type) {
-            if (*type != Cosmos::wallet_type::BIP_44) throw data::method::unimplemented {"Wallet types other than bip 44"};
+            if (*type != Cosmos::wallet_type::BIP_44) throw data::unimplemented {"Wallet types other than bip 44"};
             WalletType = *type;
         }
 

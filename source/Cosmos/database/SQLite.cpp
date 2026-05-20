@@ -1257,7 +1257,7 @@ namespace Cosmos::SQLite {
         };
 
         Cosmos::account get_wallet_account (const std::string &wallet_name) final override {
-            throw data::method::unimplemented {"SQLite::get_wallet_account"};
+            throw data::unimplemented {"SQLite::get_wallet_account"};
         };
 
     };

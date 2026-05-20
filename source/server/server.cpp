@@ -168,7 +168,7 @@ awaitable<net::HTTP::response> server::operator () (const net::HTTP::request &re
     } catch (schema::incomplete_match uk) {
         co_return error_response (400, m, command::problem::unexpected_parameter,
             string::write ("unexpected parameter ", uk.Key));
-    } catch (data::method::unimplemented un) {
+    } catch (data::unimplemented un) {
         co_return error_response (501, m, command::problem::unimplemented, un.what ());
     }
 }
@@ -592,7 +592,7 @@ net::HTTP::response handle_restore (server &p,
                     case restore_wallet_style::CentBee: {
                         CoinType = coin_type {};
                     } break;
-                    default: throw data::method::unimplemented {"wallet types for GENERATE method"};
+                    default: throw data::unimplemented {"wallet types for GENERATE method"};
                 }
             } break;
             case 1: {
@@ -722,7 +722,7 @@ net::HTTP::response handle_restore (server &p,
             // now we try to generate seed from words.
             HD::seed seed;
 
-            if (guess_CentBee_PIN) throw data::method::unimplemented {"method::RESTORE: guess centbee pin"};
+            if (guess_CentBee_PIN) throw data::unimplemented {"method::RESTORE: guess centbee pin"};
             else if (MnemonicStyle == mnemonic_style::BIP_39) {
                 if (!HD::BIP_39::valid (words))
                     return error_response (400, command::RESTORE, command::problem::invalid_query,
@@ -753,7 +753,7 @@ net::HTTP::response handle_restore (server &p,
                             "Restoring a bitcoin address is only compatible with key type single_address");
                 } else KeyType = master_key_type::single_address;
 
-                throw data::method::unimplemented {"method::GENERATE, single address restore"};
+                throw data::unimplemented {"method::GENERATE, single address restore"};
             } else if (Bitcoin::pubkey perhaps_pubkey {key_option}; perhaps_pubkey.valid ()) {
                 if (bool (type_option)) {
                     if (*type_option != master_key_type::single_address)
@@ -761,7 +761,7 @@ net::HTTP::response handle_restore (server &p,
                             "Restoring a bitcoin pubkey is only compatible with key type single_address");
                 } else KeyType = master_key_type::single_address;
 
-                throw data::method::unimplemented {"method::GENERATE, single address restore"};
+                throw data::unimplemented {"method::GENERATE, single address restore"};
             } else if (Bitcoin::secret perhaps_WIF {key_option}; perhaps_WIF.valid ()) {
                 if (bool (type_option)) {
                     if (*type_option != master_key_type::single_address)
@@ -769,7 +769,7 @@ net::HTTP::response handle_restore (server &p,
                             "Restoring a bitcoin WIF is only compatible with key type single_address");
                 } else KeyType = master_key_type::single_address;
 
-                throw data::method::unimplemented {"method::GENERATE, single address restore"};
+                throw data::unimplemented {"method::GENERATE, single address restore"};
             } else if (HD::BIP_32::pubkey perhaps_HD_pubkey {key_option}; perhaps_HD_pubkey.valid ()) {
                 if (bool (type_option)) {
                     if (*type_option == master_key_type::single_address)
@@ -808,12 +808,12 @@ net::HTTP::response handle_restore (server &p,
                         "derivation from mnemonic is incompatible with single address or hd sequence wallet styles.");
             }
 
-            throw data::method::unimplemented {"what to do if mnemonic isn't provided in method::RESTORE"};
+            throw data::unimplemented {"what to do if mnemonic isn't provided in method::RESTORE"};
         }
     }
 
     if (!bool (sk)) {
-        throw data::method::unimplemented {"method RESTORE with no private key"};
+        throw data::unimplemented {"method RESTORE with no private key"};
     }
 
     // NOTE: we do not necessarily want to make a whole new wallet every time we restore.
@@ -826,10 +826,10 @@ net::HTTP::response handle_restore (server &p,
         case master_key_type::BIP44_master: {
 
         } break;
-        default: throw data::method::unimplemented {"method RESTORE: key types other than bip 44 master"};
+        default: throw data::unimplemented {"method RESTORE: key types other than bip 44 master"};
     }
 
-    if (!bool (CoinType)) throw data::method::unimplemented {"method RESTORE: guess coin type"};
+    if (!bool (CoinType)) throw data::unimplemented {"method RESTORE: guess coin type"};
 
     coin_type CoinTypeFinal = *CoinType;
 
@@ -851,7 +851,7 @@ net::HTTP::response handle_restore (server &p,
         total_accounts);
 
     if (WalletStyle == wallet_type::BIP_44_plus || WalletStyle == wallet_type::experimental)
-        throw data::method::unimplemented {"restore extended bip 44 types"};
+        throw data::unimplemented {"restore extended bip 44 types"};
 
     // generate first address
     auto first_addr = Bitcoin::address::decoded (sk->derive (root_derivation << HD::BIP_32::harden (0) << 0).to_public ());
@@ -895,6 +895,6 @@ net::HTTP::response handle_restore (server &p,
 
 
     // TODO restore the wallet
-    throw data::method::unimplemented {"method RESTORE"};
+    throw data::unimplemented {"method RESTORE"};
 
 }

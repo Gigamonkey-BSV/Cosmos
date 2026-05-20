@@ -35,7 +35,7 @@ namespace Cosmos {
 
     // throw if failure.
     key_expression read_derivation (const JSON &) {
-        throw data::method::unimplemented {"read_derivation"};
+        throw data::unimplemented {"read_derivation"};
     }
 
     redeemable::redeemable (const JSON &j) : signing {} {

@@ -9,7 +9,6 @@
 #include <Cosmos/Diophant.hpp>
 #include <Cosmos/REST/REST.hpp>
 #include <data/io/random.hpp>
-#include <gigamonkey/teranode.hpp>
 #include "gtest/gtest.h"
 
 std::atomic<bool> Shutdown {false};

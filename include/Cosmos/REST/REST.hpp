@@ -37,7 +37,7 @@ namespace Cosmos {
         spend_request_options () {}
 
         spend_request_options (const args::parsed &) {
-            throw data::method::unimplemented {"parsed -> spend_request_options"};
+            throw data::unimplemented {"parsed -> spend_request_options"};
         }
 
         spend_request_options (Diophant::symbol wallet_name, dispatch<UTF8, UTF8> query);
@@ -47,7 +47,7 @@ namespace Cosmos {
         split_request_options () {}
 
         split_request_options (const args::parsed &) {
-            throw data::method::unimplemented {"parsed -> split_request_options"};
+            throw data::unimplemented {"parsed -> split_request_options"};
         }
 
         split_request_options (Diophant::symbol wallet_name, dispatch<UTF8, UTF8> query);
