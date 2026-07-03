@@ -10,24 +10,24 @@
 #include <Cosmos/boost/miner_options.hpp>
 #include <Cosmos/Diophant.hpp>
 
-#include <data/net/URL.hpp>
+#include <net/URL.hpp>
 
-#include <data/io/random.hpp>
-#include <data/io/arg_parser.hpp>
-#include <data/io/log.hpp>
-#include <data/io/main.hpp>
+#include <io/random.hpp>
+#include <io/arg_parser.hpp>
+#include <io/log.hpp>
+#include <io/main.hpp>
 
-using error = data::io::error;
+using error = io::error;
 
 error run (const args::parsed &p);
 
-namespace data::random {
-    bytes Personalization {string {"Cosmos wallet client v1alpha"}};
+namespace io::random {
+    bytes Personalization {data::string {"Cosmos wallet client v1alpha"}};
 }
 
 using namespace Cosmos;
 
-namespace data {
+namespace io {
     void signal_handler (int signal) noexcept {
         exit (0);
     }
@@ -35,7 +35,7 @@ namespace data {
     error main (std::span<const char *const> rr) {
 
         // random number generator.
-        data::random::init ({.secure = false});
+        io::random::init ({.secure = false});
 
         try {
 
@@ -58,7 +58,7 @@ namespace data {
     }
 }
 
-net::HTTP::request read_command (const data::io::args::parsed &);
+net::HTTP::request read_command (const io::args::parsed &);
 
 net::HTTP::response call (const net::HTTP::request &req) {
     DATA_LOG (debug) << "make call with request " << req;

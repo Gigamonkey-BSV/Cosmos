@@ -4,9 +4,9 @@
 #include <laserpants/dotenv/dotenv.h>
 
 #include <data/async.hpp>
-#include <data/net/URL.hpp>
-#include <data/net/JSON.hpp>
-#include <data/net/HTTP_server.hpp>
+#include <net/URL.hpp>
+#include <net/JSON.hpp>
+#include <net/HTTP_server.hpp>
 
 // TODO: in here we have 'using namespace data' and that causes a
 // problem if the includes are in the wrong order. This should be fixed. 
@@ -16,10 +16,10 @@
 #include <Cosmos/options.hpp>
 #include <Cosmos/Diophant.hpp>
 
-#include <data/io/random.hpp>
-#include <data/io/main.hpp>
+#include <io/random.hpp>
+#include <io/main.hpp>
 
-using error = data::io::error;
+using error = io::error;
 
 void run (const options &p);
 
@@ -40,7 +40,7 @@ void shutdown () noexcept {
     if (Server != nullptr) Server->close ();
 }
 
-namespace data {
+namespace io {
     void signal_handler (int signal) {
         if (signal == SIGINT || signal == SIGTERM) {
             Shutdown = true;
@@ -60,7 +60,7 @@ args::command input_schema {
       *schema::map::key<std::string> ("nonce") &&
       *schema::map::key<std::string> ("seed")};
 
-namespace data {
+namespace io {
     error main (std::span<const char *const> rr) {
 
         try {
@@ -71,7 +71,7 @@ namespace data {
             return error {};
 
         } catch (const schema::unknown_key &k) {
-            return error {error::code::user_action, string::write ("unknown option ", k.Key)};
+            return error {error::code::user_action, data::string::write ("unknown option ", k.Key)};
         } catch (const schema::mismatch &) {
             DATA_LOG (normal) << "mismatch (we will provide more information later)";
             return error {error::code::programmer_action, "failed to generate error upon failure to read user input"};
@@ -99,15 +99,15 @@ std::unique_ptr<Cosmos::network> Network;
 
 Cosmos::random::user_entropy UserEntropy;
 
-namespace data::random {
-    bytes Personalization {string {"Cosmos wallet v1alpha, woop zoop dedoop!_^(G0899[p9.[09954g2[]]])"}};
+namespace io::random {
+    bytes Personalization {data::string {"Cosmos wallet v1alpha, woop zoop dedoop!_^(G0899[p9.[09954g2[]]])"}};
 }
 
 void init_random (const options &program_options) {
 
     auto mn = program_options.nonce ();
 
-    data::random::init ({
+    io::random::init ({
         .secure = true,
         .seed = program_options.seed (),
         .nonce = bool (mn) ? *mn : data::bytes {},

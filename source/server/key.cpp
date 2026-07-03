@@ -1,19 +1,19 @@
 #include "key.hpp"
 #include "../Cosmos.hpp"
 #include "server.hpp"
-#include <data/tools/schema.hpp>
+#include <data/schema.hpp>
 #include <data/crypto/random.hpp>
 
 using namespace Cosmos;
 
 namespace Gigamonkey::Bitcoin {
-    std::istream &operator >> (std::istream &i, net &x) {
+    std::istream &operator >> (std::istream &i, Bitcoin::network &x) {
         std::string word;
         i >> word;
         if (!i) return i;
         std::string key_type_san = command::sanitize (word);
-        if (key_type_san == "main") x = net::Main;
-        else if (key_type_san == "test") x = net::Test;
+        if (key_type_san == "main") x = network::Main;
+        else if (key_type_san == "test") x = network::Test;
         else i.setstate (std::ios::failbit);
         return i;
     }
@@ -61,7 +61,7 @@ key_request_options::operator net::HTTP::request () const {
     if (bool (KeyType)) {
         query_stream << "&type=" << *KeyType;
         if (*KeyType != key_type::unset && *KeyType != key_type::secp256k1) {
-            if (Net == Bitcoin::net::Main) query_stream << "&net=Main";
+            if (Net == Bitcoin::network::Main) query_stream << "&net=Main";
             else query_stream << "&net=Test";
         }
     }
@@ -83,7 +83,7 @@ net::HTTP::response handle_key (server &p,
     auto [KeyName, method_random] = data::schema::validate<> (query,
         data::schema::map::key<Diophant::symbol> ("name") &&
         *(data::schema::map::key<key_type> ("type") &&
-            *data::schema::map::key<Bitcoin::net> ("net") &&
+            *data::schema::map::key<Bitcoin::network> ("net") &&
             *data::schema::map::key<bool> ("compressed")));
 
     // make sure the name is a valid symbol name
@@ -137,7 +137,7 @@ net::HTTP::response handle_key (server &p,
     }
 
     bool Compressed = bool (compressed_param) ? *compressed_param : true;
-    Bitcoin::net Net = net_param ? *net_param : Bitcoin::net::Main;
+    Bitcoin::network Net = net_param ? *net_param : Bitcoin::network::Main;
 
     auto &random = data::crypto::random::get ();
     secp256k1::secret key;

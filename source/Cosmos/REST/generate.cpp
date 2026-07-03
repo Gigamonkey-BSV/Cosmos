@@ -1,9 +1,10 @@
 
-#include <Cosmos/REST/REST.hpp>
+#include <data/schema.hpp>
+#include <data/crypto/random.hpp>
 
 #include <gigamonkey/schema/bip_39.hpp>
-#include <data/tools/schema.hpp>
-#include <data/crypto/random.hpp>
+
+#include <Cosmos/REST/REST.hpp>
 
 namespace schema = data::schema;
 

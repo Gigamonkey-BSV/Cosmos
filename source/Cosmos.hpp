@@ -1,14 +1,14 @@
 #ifndef COSMOS
 #define COSMOS
 
-#include <data/io/arg_parser.hpp>
-#include <data/io/error.hpp>
-#include <data/net/URL.hpp>
+#include <net/URL.hpp>
+#include <io/arg_parser.hpp>
+#include <io/error.hpp>
 #include <Cosmos/REST/method.hpp>
 #include <Cosmos/REST/problem.hpp>
 #include <Cosmos/Diophant.hpp>
 
-namespace args = data::io::args;
+namespace args = io::args;
 namespace schema = data::schema;
 
 std::string version ();

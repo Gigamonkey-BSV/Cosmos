@@ -4,11 +4,11 @@
 #include <data/maybe.hpp>
 #include <data/bytes.hpp>
 #include <gigamonkey/schema/bip_44.hpp>
-#include <data/io/arg_parser.hpp>
+#include <io/arg_parser.hpp>
 #include <Cosmos/Diophant.hpp>
 
 namespace HD = Gigamonkey::HD;
-namespace args = data::io::args;
+namespace args = io::args;
 
 namespace Cosmos {
 

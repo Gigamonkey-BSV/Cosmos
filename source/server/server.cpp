@@ -13,7 +13,7 @@
 #include <gigamonkey/schema/electrum_sv.hpp>
 #include <gigamonkey/pay/BEEF.hpp>
 
-#include <data/tools/schema.hpp>
+#include <data/schema.hpp>
 #include <data/container.hpp>
 
 #include <Cosmos/Diophant.hpp>

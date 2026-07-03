@@ -58,7 +58,7 @@ namespace Cosmos {
 
         key_expression public_key_string {"pubkey `03cc45122542e88a92ea2e4266424a22e83292ff6a2bc17cdd7110f6d10fe32523`"};
 
-        key_expression WIF {Bitcoin::WIF::encode (Bitcoin::net::Main, secp256k1::secret {123})};
+        key_expression WIF {Bitcoin::WIF::encode (Bitcoin::network::Main, secp256k1::secret {123})};
 
         key_expression WIF_decoded {"WIF [secret 123]"};
 

@@ -3,11 +3,12 @@
 #define COSMOS_FILES
 
 #include <data/tuple.hpp>
-#include <data/net/JSON.hpp>
 #include <data/crypto/encrypted.hpp>
 #include <data/tools/base_map.hpp>
 
-using JSON = data::JSON;
+#include <net/JSON.hpp>
+
+using JSON = net::JSON;
 template <typename X> using maybe = data::maybe<X>;
 template <typename ...X> using tuple = data::tuple<X...>;
 

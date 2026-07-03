@@ -1,7 +1,7 @@
 #ifndef SERVER_SPLIT
 #define SERVER_SPLIT
 
-#include <data/net/HTTP.hpp>
+#include <net/HTTP.hpp>
 #include "server.hpp"
 
 

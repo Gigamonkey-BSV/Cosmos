@@ -5,22 +5,22 @@
 
 namespace Cosmos {
 
-    std::string inline net_string (Bitcoin::net net) {
-        if (net == Bitcoin::net::Test) return "net.Test";
-        if (net == Bitcoin::net::Main) return "net.Main";
+    std::string inline net_string (Bitcoin::network net) {
+        if (net == Bitcoin::network::Test) return "net.Test";
+        if (net == Bitcoin::network::Main) return "net.Main";
         throw data::exception {} << "invalid network";
     }
 
     std::ostream &write_Bitcoin_secret (std::ostream &o, const Bitcoin::secret &x) {
         o << "WIF [secret " << std::dec << x.Secret.Value;
-        if (x.Network != Bitcoin::net::Main || !x.Compressed) o << ", " << net_string (x.Network);
+        if (x.Network != Bitcoin::network::Main || !x.Compressed) o << ", " << net_string (x.Network);
         if (!x.Compressed) o << ", false";
         return o << "]";
     }
 
     std::ostream &write_HD_secret (std::ostream &o, const HD::BIP_32::secret &x) {
         o << "HD.secret [secret " << std::dec << x.Secret.Value << ", `" << encoding::hex::write (x.ChainCode) << "`";
-        if (x.Network != Bitcoin::net::Main || x.Depth != 0 || x.Parent != 0 || x.Sequence != 0) o << ", " << net_string (x.Network);
+        if (x.Network != Bitcoin::network::Main || x.Depth != 0 || x.Parent != 0 || x.Sequence != 0) o << ", " << net_string (x.Network);
         if (x.Depth != 0 || x.Parent != 0 || x.Sequence != 0) o << ", " << uint32 (x.Depth);
         if (x.Parent != 0 || x.Sequence != 0) o << ", " << x.Parent;
         if (x.Sequence != 0) o << ", " << x.Parent;
@@ -29,7 +29,7 @@ namespace Cosmos {
 
     std::ostream &write_HD_pubkey (std::ostream &o, const HD::BIP_32::pubkey &x) {
         o << "HD.pubkey [pubkey `" << encoding::hex::write (x.Pubkey) << "`, `" << encoding::hex::write (x.ChainCode) << "`";
-        if (x.Network != Bitcoin::net::Main || x.Depth != 0 || x.Parent != 0 || x.Sequence != 0) o << ", " << net_string (x.Network);
+        if (x.Network != Bitcoin::network::Main || x.Depth != 0 || x.Parent != 0 || x.Sequence != 0) o << ", " << net_string (x.Network);
         if (x.Depth != 0 || x.Parent != 0 || x.Sequence != 0) o << ", " << uint32 (x.Depth);
         if (x.Parent != 0 || x.Sequence != 0) o << ", " << x.Parent;
         if (x.Sequence != 0) o << ", " << x.Parent;
@@ -152,8 +152,8 @@ namespace Cosmos {
         return Bitcoin::pubkey (b);
     }
 
-    Bitcoin::net inline read_net (string_view b) {
-        return b.size () > 0 && b[0] == 'M' ? Bitcoin::net::Main : Bitcoin::net::Test;
+    Bitcoin::network inline read_net (string_view b) {
+        return b.size () > 0 && b[0] == 'M' ? Bitcoin::network::Main : Bitcoin::network::Test;
     }
 
     bool inline read_bool (string_view b) {
@@ -173,7 +173,7 @@ namespace Cosmos {
     }
 
     Bitcoin::secret make_Bitcoin_secret (extracted x) {
-        Bitcoin::net net = x.size () > 1 ? read_net (x[1]) : Bitcoin::net::Main;
+        Bitcoin::network net = x.size () > 1 ? read_net (x[1]) : Bitcoin::network::Main;
         bool compressed = x.size () > 2 ? read_bool (x[2]) : true;
         return Bitcoin::secret (net, read_secp256k1_secret (x[0]), compressed);
     }
@@ -187,7 +187,7 @@ namespace Cosmos {
     }
 
     HD::BIP_32::pubkey make_HD_pubkey_decoded (extracted x) {
-        Bitcoin::net net = x.size () > 2 ? read_net (x[2]) : Bitcoin::net::Main;
+        Bitcoin::network net = x.size () > 2 ? read_net (x[2]) : Bitcoin::network::Main;
         byte depth = x.size () > 3 ? *data::encoding::read<byte> {} (x[3]) : 0;
         uint32 parent = x.size () > 4 ? *data::encoding::read<uint32> {} (x[4]) : 0;
         uint32 sequence = x.size () > 5 ? *data::encoding::read<uint32> {} (x[5]) : 0;
@@ -195,7 +195,7 @@ namespace Cosmos {
     }
 
     HD::BIP_32::secret make_HD_secret_decoded (extracted x) {
-        Bitcoin::net net = x.size () > 2 ? read_net (x[2]) : Bitcoin::net::Main;
+        Bitcoin::network net = x.size () > 2 ? read_net (x[2]) : Bitcoin::network::Main;
         byte depth = x.size () > 3 ? *data::encoding::read<byte> {} (x[3]) : 0;
         uint32 parent = x.size () > 4 ? *data::encoding::read<uint32> {} (x[4]) : 0;
         uint32 sequence = x.size () > 5 ? *data::encoding::read<uint32> {} (x[5]) : 0;
@@ -207,7 +207,7 @@ namespace Cosmos {
     }
 
     Bitcoin::address::decoded inline make_Bitcoin_address_decoded (extracted x) {
-        Bitcoin::net net = x.size () > 1 ? read_net (x[1]) : Bitcoin::net::Main;
+        Bitcoin::network net = x.size () > 1 ? read_net (x[1]) : Bitcoin::network::Main;
         return Bitcoin::address::decoded (net, Gigamonkey::digest160 {x[0]});
     }
 
@@ -223,13 +223,13 @@ namespace Cosmos {
         if (auto x = extract_Bitcoin_address_decoded (*this); !x.empty ())
             return make_Bitcoin_address_decoded (x);
         if (auto x = extract_secp256k1_pubkey (*this); !x.empty ())
-            return Bitcoin::address::decoded {Bitcoin::net::Main, make_Bitcoin_pubkey (x).address_hash ()};
+            return Bitcoin::address::decoded {Bitcoin::network::Main, make_Bitcoin_pubkey (x).address_hash ()};
         if (auto x = extract_HD_pubkey_string (*this); !x.empty ())
             return make_HD_pubkey_string (x).address ();
         if (auto x = extract_HD_pubkey_decoded (*this); !x.empty ())
             return make_HD_pubkey_decoded (x).address ();
         if (auto x = extract_secp256k1_secret (*this); !x.empty ())
-            return Bitcoin::address::decoded {Bitcoin::net::Main, Bitcoin::pubkey {make_secp256k1_secret (x).to_public ()}.address_hash ()};
+            return Bitcoin::address::decoded {Bitcoin::network::Main, Bitcoin::pubkey {make_secp256k1_secret (x).to_public ()}.address_hash ()};
         if (auto x = extract_WIF_string (*this); !x.empty ())
             return make_WIF_string (x).decode ().address ();
         if (auto x = extract_WIF_decoded (*this); !x.empty ())

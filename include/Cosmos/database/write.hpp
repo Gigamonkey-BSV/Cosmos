@@ -1,8 +1,8 @@
 #ifndef COSMOS_DATABASE_WRITE
 #define COSMOS_DATABASE_WRITE
 
-#include <data/net/JSON.hpp>
 #include <data/encoding/read.hpp>
+#include <net/JSON.hpp>
 
 #include <gigamonkey/timechain.hpp>
 #include <gigamonkey/schema/hd.hpp>

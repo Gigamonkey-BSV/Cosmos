@@ -1,6 +1,6 @@
 
 #include <Cosmos/REST/REST.hpp>
-#include <data/tools/schema.hpp>
+#include <data/schema.hpp>
 
 #include <gigamonkey/wif.hpp>
 #include <gigamonkey/schema/electrum_sv.hpp>

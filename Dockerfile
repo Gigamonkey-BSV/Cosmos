@@ -1,6 +1,6 @@
 # to build, use 'docker build -t cosmos .'.
 
-FROM gigamonkey/gigamonkey-lib:v2.5 AS build
+FROM gigamonkey/gigamonkey-lib:v2.7 AS build
 
 # Bitcoin Calculator
 WORKDIR /tmp

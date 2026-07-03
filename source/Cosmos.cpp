@@ -4,7 +4,7 @@
 #include <data/exception.hpp>
 #include <data/crypto/NIST_DRBG.hpp>
 
-#include <data/io/wait_for_enter.hpp>
+#include <io/wait_for_enter.hpp>
 
 #include <gigamonkey/timestamp.hpp>
 #include <gigamonkey/script/pattern/pay_to_address.hpp>

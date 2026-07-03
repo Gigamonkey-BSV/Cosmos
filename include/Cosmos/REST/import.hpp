@@ -3,14 +3,17 @@
 
 #include <data/maybe.hpp>
 #include <data/bytes.hpp>
-#include <data/io/arg_parser.hpp>
+
+#include <io/arg_parser.hpp>
+
 #include <gigamonkey/pay/BEEF.hpp>
+
 #include <Cosmos/Diophant.hpp>
 #include <Cosmos/network.hpp>
 
 namespace schema = data::schema;
 
-namespace args = data::io::args;
+namespace args = io::args;
 
 using BEEF = Gigamonkey::BEEF;
 

@@ -4,11 +4,12 @@
 #include "../source/server/invert_hash.hpp"
 #include "../source/server/options.hpp"
 #include "../source/server/to_private.hpp"
-#include <data/net/JSON.hpp>
-#include <data/net/error.hpp>
+
+#include <net/JSON.hpp>
+#include <net/error.hpp>
 #include <Cosmos/Diophant.hpp>
 #include <Cosmos/REST/REST.hpp>
-#include <data/io/random.hpp>
+#include <io/random.hpp>
 #include "gtest/gtest.h"
 
 std::atomic<bool> Shutdown {false};
@@ -20,16 +21,16 @@ bool log_init = false;
 
 ptr<controller> DB;
 
-namespace data::random {
-    bytes Personalization {string {"Cosmos wallet server test cases"}};
+namespace io::random {
+    bytes Personalization {data::string {"Cosmos wallet server test cases"}};
 }
 
 server get_test_server () {
-    if (!log_init) data::log::init ({.threshold = data::log::normal});
+    if (!log_init) io::log::init ({.threshold = io::log::normal});
     Shutdown = false;
     DATA_LOG (normal) << "about to setup program options";
     options program_options {args::parsed {arg_count, arg_values}};
-    data::random::init ({
+    io::random::init ({
         .seed = bytes (data::hex_string {"ffffffffffffffffedcba98765432100"}),
         .nonce = bytes (data::hex_string {"0123abcd4567fe98"})});
     DATA_LOG (normal) << "about to create test server ";
@@ -266,7 +267,7 @@ TEST (Server, Key) {
 
 }
 
-using JSON = data::JSON;
+using JSON = net::JSON;
 
 net::HTTP::request inline make_next_request (const std::string &wallet_name, const std::string &sequence_name = "receive") {
     return rest.request (next_request_options {}.name (wallet_name).sequence (sequence_name));

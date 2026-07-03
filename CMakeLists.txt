@@ -112,7 +112,7 @@ endif ()
 # Dependencies
 # ---------------------------------------------------------
 
-find_package (Boost 1.86 COMPONENTS thread chrono log_setup log REQUIRED)
+find_package (Boost 1.86 COMPONENTS process thread chrono log_setup log REQUIRED)
 # if we do not have boost
 #   * linux:
 #     * go to the boost website, download and extract the latest version.
@@ -181,6 +181,10 @@ FetchContent_MakeAvailable (dotenv)
 
 find_package (data CONFIG REQUIRED)
 
+find_package (net CONFIG REQUIRED)
+
+find_package (io CONFIG REQUIRED)
+
 find_package (gigamonkey CONFIG REQUIRED)
 
 find_package (diophant CONFIG REQUIRED)
@@ -226,9 +230,9 @@ target_link_libraries (
   diophant
   whatsonchain
   Gigamonkey::gigamonkey
-  Data::io
+  Io::io
+  Net::net
   Data::crypto
-  Data::net
   Data::data
   nlohmann_json
   argh

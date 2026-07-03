@@ -2,9 +2,13 @@
 #include <data/crypto/block.hpp>
 #include <data/crypto/block/cryptopp.hpp>
 #include <data/crypto/PKCS5_PBKDF2_HMAC.hpp>
-#include <data/io/wait_for_enter.hpp>
+
 #include <Cosmos/files.hpp>
+
 #include <data/random.hpp>
+
+#include <io/wait_for_enter.hpp>
+
 #include <filesystem>
 #include <fstream>
 
@@ -61,7 +65,7 @@ namespace Cosmos {
 
     crypto::symmetric_key<32> get_user_key_from_password () {
         return crypto::PKCS5_PBKDF2_HMAC<32, CryptoPP::SHA256> (
-            data::get_user_password ("Please provide the password to decript your keys"), 2048);
+            io::get_user_password ("Please provide the password to decript your keys"), 2048);
     }
 
     file read_from_file (const std::string &filename, crypto::symmetric_key<32> (*get_key) ()) {

@@ -1,15 +1,18 @@
 #ifndef COSMOS_NETWORK
 #define COSMOS_NETWORK
 
-#include <gigamonkey/pay/MAPI.hpp>
-#include <gigamonkey/pay/ARC.hpp>
-#include <whatsonchain.hpp>
-#include <data/io/log.hpp>
-#include <Cosmos/types.hpp>
 #include <ctime>
 
-namespace net = data::net;
-using JSON = data::JSON;
+#include <gigamonkey/pay/MAPI.hpp>
+#include <gigamonkey/pay/ARC.hpp>
+
+#include <whatsonchain.hpp>
+
+#include <io/log.hpp>
+
+#include <Cosmos/types.hpp>
+
+using JSON = net::JSON;
 
 using extended_transaction = Gigamonkey::extended::transaction;
 using satoshis_per_byte = Gigamonkey::satoshis_per_byte;
@@ -79,7 +82,7 @@ namespace Cosmos {
         net::HTTP::client CoinGecko;
         ARC::client TAAL;
 
-        network (data::exec io) : IO {io}, SSL {std::make_shared<net::HTTP::SSL> (net::HTTP::SSL::tlsv12_client)},
+        network (data::exec io) : IO {io}, SSL {net::HTTP::get_SSL ()},
             WhatsOnChain {SSL}, Gorilla {SSL, net::HTTP::REST {"https", "mapi.gorillapool.io"}},
             CoinGecko {SSL, net::HTTP::REST {"https", "api.coingecko.com"}, data::rate_limiter {1, data::millisecond {10}}},
             // TODO I don't know what to put for TAAL's rate limiter.

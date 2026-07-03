@@ -1,6 +1,6 @@
 
 #include <Cosmos/network.hpp>
-#include <data/io/wait_for_enter.hpp>
+#include <io/wait_for_enter.hpp>
 #include <mutex>
 #include <iomanip>
 
@@ -51,7 +51,7 @@ namespace Cosmos {
     awaitable<broadcast_single_result> network::broadcast (const extended_transaction &tx) {
 
         std::cout << "attempting to broadcast tx " << tx.id () << std::endl;
-        data::wait_for_enter ();
+        io::wait_for_enter ();
 
         ARC::submit_response response;
         try {
@@ -82,7 +82,7 @@ namespace Cosmos {
 
         std::cout << "attempting to broadcast " << std::endl;
         for (const auto &tx: txs) std::cout << "\t" << tx.id () << std::endl;
-        data::wait_for_enter ();
+        io::wait_for_enter ();
 
         ARC::submit_txs_response response;
         try {

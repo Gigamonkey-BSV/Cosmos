@@ -5,10 +5,10 @@
 
 #include <gigamonkey/p2p/checksum.hpp>
 
-#include <data/net/REST.hpp>
+#include <net/REST.hpp>
 #include <data/crypto/hash.hpp>
 
-#include <data/tools/schema.hpp>
+#include <data/schema.hpp>
 
 using hash_function = Cosmos::hash_function;
 

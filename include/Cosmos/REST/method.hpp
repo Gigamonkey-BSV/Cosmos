@@ -2,14 +2,14 @@
 #define SERVER_COMMAND
 
 #include <Cosmos/Diophant.hpp>
-#include <data/net/REST.hpp>
-#include <data/io/arg_parser.hpp>
 
-namespace net = data::net;
+#include <net/REST.hpp>
+
+#include <io/arg_parser.hpp>
 
 namespace schema = data::schema;
 
-namespace args = data::io::args;
+namespace args = io::args;
 
 namespace Cosmos::command {
 
@@ -73,7 +73,7 @@ namespace Cosmos::command {
     template <> net::HTTP::request make_request<IMPORT_WALLET> (const args::parsed &);
     template <> net::HTTP::request make_request<EXPORT_WALLET> (const args::parsed &);
 
-    using authority = data::net::authority;
+    using authority = net::authority;
 
     authority read_authority (const args::parsed &p);
 

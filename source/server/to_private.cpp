@@ -1,7 +1,7 @@
 #include "to_private.hpp"
 #include "../Cosmos.hpp"
 
-#include <data/tools/schema.hpp>
+#include <data/schema.hpp>
 
 using namespace Cosmos;
 

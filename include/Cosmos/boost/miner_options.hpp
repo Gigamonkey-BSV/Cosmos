@@ -4,13 +4,13 @@
 
 #include <string>
 #include <optional>
-#include <data/io/arg_parser.hpp>
+#include <io/arg_parser.hpp>
 #include <gigamonkey/boost/boost.hpp>
 #include <Cosmos/types.hpp>
 
 namespace BoostPOW {
     using namespace Gigamonkey::Boost;
-    using args = data::io::args::parsed;
+    using args = io::args::parsed;
 
     struct script_options {
         // Content is what is to be boosted. Could be a hash or

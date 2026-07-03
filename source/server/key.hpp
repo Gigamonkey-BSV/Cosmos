@@ -3,7 +3,7 @@
 
 #include <data/maybe.hpp>
 #include <data/bytes.hpp>
-#include <data/net/HTTP.hpp>
+#include <net/HTTP.hpp>
 #include "server.hpp"
 
 net::HTTP::response handle_key (server &p,
@@ -35,7 +35,7 @@ struct key_request_options {
 
     maybe<net::HTTP::method> HTTPMethod {};
     maybe<key_expression> Body {};
-    Bitcoin::net Net {Bitcoin::net::Main};
+    Bitcoin::network Net {Bitcoin::network::Main};
 
     key_request_options (const std::string &wallet_name, const std::string &key_name);
 
@@ -44,7 +44,7 @@ struct key_request_options {
 
     key_request_options &key_type (::key_type);
     key_request_options &body (const key_expression &k);
-    key_request_options &net (Bitcoin::net);
+    key_request_options &net (Bitcoin::network);
 
     key_request_options &compressed (bool = true);
     key_request_options &uncompressed ();

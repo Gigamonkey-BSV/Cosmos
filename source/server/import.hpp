@@ -3,7 +3,7 @@
 
 #include <data/maybe.hpp>
 #include <data/bytes.hpp>
-#include <data/net/HTTP.hpp>
+#include <net/HTTP.hpp>
 #include "server.hpp"
 #include <Cosmos/network.hpp>
 

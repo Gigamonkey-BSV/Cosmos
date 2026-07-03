@@ -1,5 +1,5 @@
 #include <Cosmos/database/price_data.hpp>
-#include <data/io/wait_for_enter.hpp>
+#include <io/wait_for_enter.hpp>
 
 namespace Cosmos {
 
@@ -23,6 +23,6 @@ namespace Cosmos {
     maybe<double> ask_for_price_data::get_price (monetary_unit u, const Bitcoin::timestamp &t) {
         std::stringstream ss;
         ss << "What was BSV/USD on " << t << std::endl;
-        return data::read_decimal (ss.str ());
+        return io::read_decimal (ss.str ());
     }
 }

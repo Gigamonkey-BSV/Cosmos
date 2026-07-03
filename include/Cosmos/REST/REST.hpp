@@ -1,7 +1,7 @@
 #ifndef COSMOS_REST_REST
 #define COSMOS_REST_REST
 
-#include <data/net/REST.hpp>
+#include <net/REST.hpp>
 
 #include <Cosmos/REST/method.hpp>
 #include <Cosmos/REST/problem.hpp>

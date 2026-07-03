@@ -1,10 +1,12 @@
 #ifndef COSMOS_NETWORK_BROADCAST
 #define COSMOS_NETWORK_BROADCAST
 
+#include <net/error.hpp>
+
 #include <gigamonkey/pay/MAPI.hpp>
 #include <gigamonkey/pay/ARC.hpp>
 #include <gigamonkey/SPV.hpp>
-#include <data/net/error.hpp>
+
 #include <Cosmos/types.hpp>
 
 namespace Cosmos {
