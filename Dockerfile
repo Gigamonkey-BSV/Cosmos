@@ -11,6 +11,14 @@ RUN cmake -G Ninja -B build -S . -DPACKAGE_TESTS=OFF -DCMAKE_BUILD_TYPE=Release
 RUN cmake --build build -j 10
 RUN cmake --install build
 
+# Whatsonchain API
+WORKDIR /tmp
+RUN git clone --depth 1 --branch master https://github.com/Gigamonkey-BSV/WhatsOnChain_API.git
+WORKDIR /tmp/WhatsOnChain
+RUN cmake -G Ninja -B build -S . -DPACKAGE_TESTS=OFF -DCMAKE_BUILD_TYPE=Release
+RUN cmake --build build -j 10
+RUN cmake --install build
+
 COPY . /home/cosmos
 WORKDIR /home/cosmos
 RUN chmod -R 777 .
