@@ -189,7 +189,7 @@ find_package (gigamonkey CONFIG REQUIRED)
 
 find_package (diophant CONFIG REQUIRED)
 
-#find_package (whatsonchain CONFIG REQUIRED)
+find_package (whatsonchain CONFIG REQUIRED)
 
 add_library (
     cosmos_lib

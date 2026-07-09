@@ -2,19 +2,19 @@
 
 FROM gigamonkey/gigamonkey-lib:v2.7 AS build
 
+# Whatsonchain API
+WORKDIR /tmp
+RUN git clone --depth 1 --branch master https://github.com/Gigamonkey-BSV/WhatsOnChain_API.git
+WORKDIR /tmp/WhatsOnChain_API
+RUN cmake -G Ninja -B build -S . -DPACKAGE_TESTS=OFF -DCMAKE_BUILD_TYPE=Release
+RUN cmake --build build -j 10
+RUN cmake --install build
+
 # Bitcoin Calculator
 WORKDIR /tmp
 ADD https://api.github.com/repos/Gigamonkey-BSV/BitcoinCalculator/git/refs/heads/master /root/bitcoin_calculator_version.json
 RUN git clone --depth 1 --branch master https://github.com/Gigamonkey-BSV/BitcoinCalculator.git
 WORKDIR /tmp/BitcoinCalculator
-RUN cmake -G Ninja -B build -S . -DPACKAGE_TESTS=OFF -DCMAKE_BUILD_TYPE=Release
-RUN cmake --build build -j 10
-RUN cmake --install build
-
-# Whatsonchain API
-WORKDIR /tmp
-RUN git clone --depth 1 --branch master https://github.com/Gigamonkey-BSV/WhatsOnChain_API.git
-WORKDIR /tmp/WhatsOnChain
 RUN cmake -G Ninja -B build -S . -DPACKAGE_TESTS=OFF -DCMAKE_BUILD_TYPE=Release
 RUN cmake --build build -j 10
 RUN cmake --install build
